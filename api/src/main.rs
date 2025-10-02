@@ -1,10 +1,12 @@
 mod schema;
 mod i18n;
+mod models;
 
 use crate::schema::*;
 use crate::i18n::{init_translations, negotiate_language, get_message};
+use crate::models::{User, NewUser, NewBuilding, Building, NewApartment, Apartment};
 use actix_web::{web, App, HttpResponse, HttpServer, Responder, HttpRequest};
-use serde::{Serialize, Deserialize};
+use serde::Serialize;
 use std::env;
 use diesel::mysql::MysqlConnection;
 use diesel::r2d2::{self, ConnectionManager};
@@ -22,87 +24,76 @@ struct HealthResponse {
 }
 
 async fn health(req: HttpRequest) -> impl Responder {
-    // Get the preferred language from the Accept-Language header
-    let accept_language = req.headers().get("Accept-Language")
-        .and_then(|header| header.to_str().ok());
+    let accept_language = req.headers().get("Accept-Language").and_then(|h| h.to_str().ok());
     let lang = negotiate_language(accept_language);
-
-    // Get translated message
     let message = get_message(&lang, "health-ok");
 
-    web::Json(HealthResponse { 
-        status: "ok".to_string(),
-        message
-    })
-}
-
-#[derive(Queryable, Selectable, Serialize, Debug)]
-#[diesel(table_name = users)]
-#[diesel(check_for_backend(diesel::mysql::Mysql))]
-pub struct User {
-    pub id: u64,
-    pub email: String,
-    pub name: String,
-    pub password_hash: String,
-    pub created_at: Option<chrono::NaiveDateTime>,
-}
-
-#[derive(Queryable, Debug)]
-#[diesel(table_name = roles)]
-pub struct Role {
-    pub id: u64,
-    pub name: String,
-}
-
-#[derive(Queryable, Debug)]
-#[diesel(table_name = user_roles)]
-pub struct UserRole {
-    pub user_id: u64,
-    pub role_id: u64,
-}
-
-#[derive(Deserialize)]
-pub struct NewUser {
-    pub email: String,
-    pub name: String,
-    pub password_hash: String,
-}
-
-#[derive(Insertable)]
-#[diesel(table_name = users)]
-pub struct NewUserDB<'a> {
-    pub email: &'a str,
-    pub name: &'a str,
-    pub password_hash: &'a str,
+    web::Json(HealthResponse { status: "ok".into(), message })
 }
 
 async fn list_users(pool: web::Data<DbPool>) -> impl Responder {
     use crate::schema::users::dsl::*;
     let mut conn = pool.get().expect("couldn't get db connection from pool");
-    let result = users.select(User::as_select()).load(&mut conn);
-    match result {
+    match users.select(User::as_select()).load(&mut conn) {
         Ok(user_list) => HttpResponse::Ok().json(user_list),
-        Err(e) => {
-            eprintln!("Error loading users: {}", e);
-            HttpResponse::InternalServerError().finish()
-        },
+        Err(e) => { eprintln!("Error loading users: {}", e); HttpResponse::InternalServerError().finish() }
     }
 }
 
 async fn create_user(pool: web::Data<DbPool>, item: web::Json<NewUser>) -> impl Responder {
-    use crate::schema::users;
+    use crate::schema::users::dsl as users_dsl;
     let mut conn = pool.get().expect("couldn't get db connection from pool");
-    let new_user = NewUserDB {
-        email: &item.email,
-        name: &item.name,
-        password_hash: &item.password_hash,
-    };
-    let inserted = diesel::insert_into(users::table)
-        .values(&new_user)
-        .execute(&mut conn);
-    match inserted {
+    match diesel::insert_into(users_dsl::users).values(&*item).execute(&mut conn) {
         Ok(_) => HttpResponse::Created().finish(),
-        Err(_) => HttpResponse::InternalServerError().finish(),
+        Err(e) => { eprintln!("Failed to insert user: {}", e); HttpResponse::InternalServerError().finish() }
+    }
+}
+
+// Buildings handlers
+async fn list_buildings(pool: web::Data<DbPool>) -> impl Responder {
+    use crate::schema::buildings::dsl::*;
+    let mut conn = pool.get().expect("db pool");
+    match buildings.select(Building::as_select()).load(&mut conn) {
+        Ok(list) => HttpResponse::Ok().json(list),
+        Err(e) => { eprintln!("Error loading buildings: {}", e); HttpResponse::InternalServerError().finish() }
+    }
+}
+
+async fn create_building(pool: web::Data<DbPool>, item: web::Json<NewBuilding>) -> impl Responder {
+    use crate::schema::buildings::dsl as b_dsl;
+    let mut conn = pool.get().expect("db pool");
+    match diesel::insert_into(b_dsl::buildings).values(&*item).execute(&mut conn) {
+        Ok(_) => HttpResponse::Created().finish(),
+        Err(e) => { eprintln!("Failed to insert building: {}", e); HttpResponse::InternalServerError().finish() }
+    }
+}
+
+// Apartments handlers
+async fn list_apartments(pool: web::Data<DbPool>) -> impl Responder {
+    use crate::schema::apartments::dsl::*;
+    let mut conn = pool.get().expect("db pool");
+    match apartments.select(Apartment::as_select()).load(&mut conn) {
+        Ok(list) => HttpResponse::Ok().json(list),
+        Err(e) => { eprintln!("Error loading apartments: {}", e); HttpResponse::InternalServerError().finish() }
+    }
+}
+
+async fn list_building_apartments(path: web::Path<u64>, pool: web::Data<DbPool>) -> impl Responder {
+    use crate::schema::apartments::dsl::*;
+    let building = path.into_inner();
+    let mut conn = pool.get().expect("db pool");
+    match apartments.filter(building_id.eq(building)).select(Apartment::as_select()).load(&mut conn) {
+        Ok(list) => HttpResponse::Ok().json(list),
+        Err(e) => { eprintln!("Error loading apartments: {}", e); HttpResponse::InternalServerError().finish() }
+    }
+}
+
+async fn create_apartment(pool: web::Data<DbPool>, item: web::Json<NewApartment>) -> impl Responder {
+    use crate::schema::apartments::dsl as a_dsl;
+    let mut conn = pool.get().expect("db pool");
+    match diesel::insert_into(a_dsl::apartments).values(&*item).execute(&mut conn) {
+        Ok(_) => HttpResponse::Created().finish(),
+        Err(e) => { eprintln!("Failed to insert apartment: {}", e); HttpResponse::InternalServerError().finish() }
     }
 }
 
@@ -124,16 +115,22 @@ async fn main() -> std::io::Result<()> {
     }
 
     // Initialize translations
-    println!("Initializing translations...");
     init_translations();
-    println!("Translations initialized successfully.");
 
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(pool.clone()))
-            .route("/health", web::get().to(health))
-            .route("/users", web::get().to(list_users))
-            .route("/users", web::post().to(create_user))
+            .service(
+                web::scope("/api/v1")
+                    .route("/health", web::get().to(health))
+                    .route("/users", web::get().to(list_users))
+                    .route("/users", web::post().to(create_user))
+                    .route("/buildings", web::get().to(list_buildings))
+                    .route("/buildings", web::post().to(create_building))
+                    .route("/apartments", web::get().to(list_apartments))
+                    .route("/apartments", web::post().to(create_apartment))
+                    .route("/buildings/{id}/apartments", web::get().to(list_building_apartments))
+            )
     })
     .bind(addr)?
     .run()

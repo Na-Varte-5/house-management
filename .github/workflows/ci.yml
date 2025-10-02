@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: house_management
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -ppassword"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+      - name: Install trunk
+        run: |
+          cargo install trunk || true
+          rustup target add wasm32-unknown-unknown
+      - name: Wait for MySQL
+        run: |
+          for i in {1..30}; do
+            if mysqladmin ping -h 127.0.0.1 -uroot -ppassword --silent; then
+              break
+            fi
+            sleep 2
+          done
+      - name: Backend - set env and run migrations
+        working-directory: api
+        env:
+          DATABASE_URL: mysql://root:password@127.0.0.1:3306/house_management
+        run: |
+          echo "API_PORT=8080" >> .env
+          echo "DATABASE_URL=$DATABASE_URL" >> .env
+          cargo install diesel_cli --no-default-features --features mysql || true
+          diesel setup
+          diesel migration run
+      - name: Backend - fmt, clippy, test, build
+        working-directory: api
+        env:
+          DATABASE_URL: mysql://root:password@127.0.0.1:3306/house_management
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+          cargo build --release
+      - name: Frontend - build
+        working-directory: frontend
+        run: |
+          trunk build

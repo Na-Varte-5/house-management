@@ -57,10 +57,20 @@ For detailed information about the project design, architecture, and features, p
    cd api
    cargo run
    ```
-4. Run the frontend:
+4. Run the frontend (option A):
    ```
    cd frontend
    trunk serve
+   ```
+
+5. Or run both backend and frontend together (option B):
+   ```
+   ./scripts/dev.sh
+   ```
+
+6. Run checks/build locally:
+   ```
+   ./scripts/test.sh
    ```
 
 ## License

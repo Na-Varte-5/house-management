@@ -184,3 +184,31 @@ The system will implement a role-based access control (RBAC) system where:
 - Advanced reporting and analytics
 - Document management system
 - Integration with payment processors
+
+## Current Implementation Status (MVP)
+
+- Backend
+  - Actix-web server with versioned API at /api/v1
+  - Endpoints:
+    - GET /api/v1/health (i18n-aware)
+    - GET/POST /api/v1/users (basic user list/create)
+    - GET/POST /api/v1/buildings
+    - GET/POST /api/v1/apartments
+    - GET /api/v1/buildings/{id}/apartments
+  - Diesel migrations: users, roles, user_roles, buildings, apartments
+  - Structure encourages small modules and can be expanded with middleware (JWT/RBAC)
+
+- Frontend
+  - Yew SPA with yew-router
+  - Pages: Home (health), Buildings (list/create), Apartments in a building (list/create)
+  - Bootstrap included via CDN; components organized to keep files short
+
+- Tooling
+  - Dev script to run API and Frontend together (scripts/dev.sh)
+  - Test script (scripts/test.sh) runs fmt, clippy, tests, and trunk build
+  - GitHub Actions CI builds and tests backend and builds frontend
+
+- Next steps
+  - Add authentication (JWT) and RBAC enforcement per design
+  - Expand domain models: maintenance requests, financials, events, voting, documents, messaging, visitors
+  - Implement frontend auth and i18n switching
