@@ -212,3 +212,13 @@ The system will implement a role-based access control (RBAC) system where:
   - Add authentication (JWT) and RBAC enforcement per design
   - Expand domain models: maintenance requests, financials, events, voting, documents, messaging, visitors
   - Implement frontend auth and i18n switching
+
+
+## Implementation Preferences (Updated)
+
+- Documents storage: Local filesystem under STORAGE_DIR (default: api/storage). Configure via env STORAGE_DIR. Access controlled by JWT/RBAC.
+- Messaging: REST endpoints first; WebSocket endpoint planned and tracked in TODO and instructions.
+- Financials currencies: Support CZK and EUR in initial implementation. Billing formulas to be implemented as real calculations (per-person, area-based, equal split, and custom).
+- Voting: Include weighted voting in addition to simple majority. Weighted by apartment attributes (e.g., size/share) as configured.
+- Events recurrence: Support one-off events and recurring rules including yearly recurrence and every X days interval.
+- Docker: Backend Dockerfile provided (api/Dockerfile) for containerized deployment.

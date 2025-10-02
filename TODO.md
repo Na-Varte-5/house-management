@@ -9,15 +9,15 @@ Legend: [ ] planned, [x] done, [~] in progress, [!] blocked
 - [x] Add i18n scaffolding (backend + frontend placeholders)
 - [x] Add scripts: scripts/dev.sh (runs API + FE), scripts/test.sh (fmt/clippy/test + trunk build)
 - [x] CI: GitHub Actions building backend and frontend
-- [ ] Docker files for backend (optional)
+- [x] Docker files for backend
 
 ## Backend (Actix + Diesel)
 - [x] Health endpoint with i18n message
 - [x] Users basic CRUD (list, create)
-- [~] Buildings: list/create, Diesel models + migrations
-- [~] Apartments: list/create, list by building, Diesel models + migrations
-- [ ] RBAC roles and permissions enforcement (middleware, route guards)
-- [ ] Authentication (JWT) with registration/login endpoints
+- [x] Buildings: list/create, Diesel models + migrations
+- [x] Apartments: list/create, list by building, Diesel models + migrations
+- [x] RBAC roles and permissions enforcement (middleware, route guards) (initial enforcement on mutating endpoints)
+- [x] Authentication (JWT) with registration/login endpoints
 - [ ] Maintenance Requests: models, endpoints, status workflow
 - [ ] Financials: bills, payments, reports
 - [ ] Events/Calendar: models, CRUD, filters
@@ -31,7 +31,7 @@ Legend: [ ] planned, [x] done, [~] in progress, [!] blocked
 ## Database (MySQL + Diesel)
 - [x] Users, roles, user_roles migrations
 - [x] Buildings, apartments migrations
-- [ ] Apartment owners join table (apartment_owners)
+- [x] Apartment owners join table (apartment_owners)
 - [ ] Maintenance-related tables
 - [ ] Financial tables: bills, payments, accounts
 - [ ] Events tables
@@ -45,11 +45,13 @@ Legend: [ ] planned, [x] done, [~] in progress, [!] blocked
 - [x] Home page displaying health
 - [x] Buildings page (list/create)
 - [x] Apartments page per building (list/create)
-- [ ] Login page and auth state (JWT)
+- [x] Integrate Bootstrap 5 via CDN and set up base layout (Navbar, Footer)
+- [x] Refactor into modular components/pages structure (components/, pages/, utils/, routes.rs)
+- [x] Login via Navbar dropdown with inline Register; auth state persisted in LocalStorage (JWT)
+- [x] Fix dropdown closing on Create account (use data-bs-auto-close="outside" + stopPropagation)
 - [ ] Global state (user, token, language)
 - [ ] i18n implementation and language switcher
 - [ ] UI pages for maintenance, financials, events, voting, documents, messaging, visitors
-- [ ] Reusable components (tables, forms, modals)
 - [ ] Charts (analytics)
 
 ## Documentation
@@ -61,4 +63,4 @@ Legend: [ ] planned, [x] done, [~] in progress, [!] blocked
 ## Notes
 - Keep modules/components small. Split handlers by domain and avoid monolithic files.
 - Prefer async DB operations via thread pool (r2d2 is already set up).
-- Next priority suggested: Authentication + RBAC to protect mutating endpoints.
+- Next priority suggested: Frontend auth (login), global state, and i18n; then maintenance module.

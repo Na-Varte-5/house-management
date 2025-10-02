@@ -1,6 +1,36 @@
 ### Health check
 GET http://localhost:8080/api/v1/health
 
+### Register (first user becomes Admin)
+POST http://localhost:8080/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "name": "Admin User",
+  "password": "ChangeMe123!"
+}
+
+### Login (get JWT token)
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "ChangeMe123!"
+}
+
+### Example: Create a building (requires Bearer token, Admin or Manager)
+# Replace <TOKEN> with the value from the login response
+POST http://localhost:8080/api/v1/buildings
+Content-Type: application/json
+Authorization: Bearer <TOKEN>
+
+{
+  "address": "456 Elm St",
+  "construction_year": 1999
+}
+
 ### List all users
 GET http://localhost:8080/api/v1/users
 
@@ -32,12 +62,30 @@ GET http://localhost:8080/api/v1/buildings/1/apartments
 ### Create an apartment
 POST http://localhost:8080/api/v1/apartments
 Content-Type: application/json
+Authorization: Bearer <TOKEN>
 
 {
   "building_id": 1,
   "number": "1A",
   "size_sq_m": 55.5
 }
+
+### Apartment owners
+# List owners for apartment 1
+GET http://localhost:8080/api/v1/apartments/1/owners
+
+# Assign an owner (Admin/Manager only)
+POST http://localhost:8080/api/v1/apartments/1/owners
+Content-Type: application/json
+Authorization: Bearer <TOKEN>
+
+{
+  "user_id": 1
+}
+
+# Remove an owner (Admin/Manager only)
+DELETE http://localhost:8080/api/v1/apartments/1/owners/1
+Authorization: Bearer <TOKEN>
 
 ### Instructions
 // To execute these requests:

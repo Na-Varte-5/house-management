@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
+use crate::schema::{apartment_owners, apartments, buildings, users};
 use diesel::prelude::*;
-use crate::schema::{users, roles, user_roles, buildings, apartments};
+use serde::{Deserialize, Serialize};
 
 #[derive(Queryable, Selectable, Serialize, Debug)]
 #[diesel(table_name = users)]
@@ -23,6 +23,7 @@ pub struct NewUser {
 
 #[derive(Queryable, Debug, Serialize)]
 #[diesel(table_name = roles)]
+#[allow(dead_code)]
 pub struct Role {
     pub id: u64,
     pub name: String,
@@ -30,6 +31,7 @@ pub struct Role {
 
 #[derive(Queryable, Debug)]
 #[diesel(table_name = user_roles)]
+#[allow(dead_code)]
 pub struct UserRole {
     pub user_id: u64,
     pub role_id: u64,
@@ -73,4 +75,31 @@ pub struct NewApartment {
     pub size_sq_m: Option<f64>,
     pub bedrooms: Option<i32>,
     pub bathrooms: Option<i32>,
+}
+
+#[derive(Queryable, Insertable, Associations, Identifiable, Debug)]
+#[diesel(table_name = apartment_owners)]
+#[diesel(primary_key(apartment_id, user_id))]
+#[diesel(belongs_to(Apartment, foreign_key = apartment_id))]
+#[diesel(belongs_to(User, foreign_key = user_id))]
+pub struct ApartmentOwner {
+    pub apartment_id: u64,
+    pub user_id: u64,
+}
+
+#[derive(Serialize)]
+pub struct PublicUser {
+    pub id: u64,
+    pub email: String,
+    pub name: String,
+}
+
+impl From<User> for PublicUser {
+    fn from(u: User) -> Self {
+        PublicUser {
+            id: u.id,
+            email: u.email,
+            name: u.name,
+        }
+    }
 }

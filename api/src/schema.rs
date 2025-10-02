@@ -16,6 +16,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    apartment_owners (apartment_id, user_id) {
+        apartment_id -> Unsigned<Bigint>,
+        user_id -> Unsigned<Bigint>,
+    }
+}
+
+diesel::table! {
     users (id) {
         id -> Unsigned<Bigint>,
         #[max_length = 255]
@@ -54,10 +61,13 @@ diesel::table! {
 diesel::joinable!(user_roles -> roles (role_id));
 diesel::joinable!(user_roles -> users (user_id));
 diesel::joinable!(apartments -> buildings (building_id));
+diesel::joinable!(apartment_owners -> apartments (apartment_id));
+diesel::joinable!(apartment_owners -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     roles,
     user_roles,
+    apartment_owners,
     users,
     buildings,
     apartments,

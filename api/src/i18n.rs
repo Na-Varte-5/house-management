@@ -1,10 +1,10 @@
 use fluent::{FluentBundle, FluentResource};
-use fluent_langneg::{negotiate_languages, NegotiationStrategy};
+use fluent_langneg::{NegotiationStrategy, negotiate_languages};
 use once_cell::sync::Lazy;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::cell::RefCell;
 use unic_langid::LanguageIdentifier;
 
 // Define supported languages
@@ -39,9 +39,10 @@ pub fn init_translations() {
             let path = format!("locales/{}/common.ftl", lang);
             if let Ok(source) = read_file(&path) {
                 let resource = FluentResource::try_new(source)
-                    .expect(&format!("Failed to parse {}", path));
-                bundle.add_resource(resource)
-                    .expect(&format!("Failed to add resource for {}", path));
+                    .unwrap_or_else(|_| panic!("Failed to parse {}", path));
+                bundle
+                    .add_resource(resource)
+                    .unwrap_or_else(|_| panic!("Failed to add resource for {}", path));
             }
 
             // Add more domain-specific translations here if needed
@@ -89,6 +90,7 @@ pub fn negotiate_language(accept_language: Option<&str>) -> String {
 }
 
 // Get translation for a message ID
+#[allow(clippy::collapsible_if)]
 pub fn get_message(lang: &str, message_id: &str) -> String {
     BUNDLES.with(|bundles_cell| {
         let bundles = bundles_cell.borrow();

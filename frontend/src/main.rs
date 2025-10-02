@@ -1,3 +1,17 @@
+pub mod routes;
+pub mod components {
+    pub mod auth_dropdown;
+    pub mod navbar;
+}
+pub mod pages {
+    pub mod building_apartments;
+    pub mod buildings;
+    pub mod home;
+    pub mod login;
+}
+pub mod utils {
+    pub mod auth;
+}
 mod app;
 mod i18n;
 
