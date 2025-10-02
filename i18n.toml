@@ -1,0 +1,15 @@
+# i18n configuration file for the frontend
+
+# The fallback language to use when a translation is missing
+fallback_language = "en"
+
+# The directory where the translation files are stored
+assets_dir = "locales/"
+
+# The format of the translation files
+locales = ["en", "cs"]
+
+[fluent]
+# The Fluent resources to load
+resources = ["common.ftl", "frontend.ftl"]
+assets_dir = "locales/"

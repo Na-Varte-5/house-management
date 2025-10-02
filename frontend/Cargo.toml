@@ -1,0 +1,18 @@
+[package]
+name = "frontend"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+yew = { version="0.21", features=["csr"] }
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = ["Navigator", "Window", "HtmlSelectElement", "HtmlDocument", "HtmlHtmlElement", "Location", "console"] }
+js-sys = "0.3"
+fluent = "0.16"
+fluent-bundle = "0.15"
+i18n-embed = { version = "0.13", features = ["fluent-system", "web-sys-requester", "desktop-requester"] }
+i18n-embed-fl = "0.6"
+rust-embed = "6.6"
+unic-langid = "0.9"
+once_cell = "1.18"
+serde = { version = "1", features = ["derive"] }

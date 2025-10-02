@@ -1,0 +1,33 @@
+### Health check
+GET http://localhost:8080/health
+
+### List all users
+GET http://localhost:8080/users
+
+### Create a new user
+POST http://localhost:8080/users
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "name": "Test User",
+  "password_hash": "hashed_password_here"
+}
+
+### Instructions
+// To execute these requests:
+// 1. Make sure your API server is running
+// 2. If using an IDE like IntelliJ/WebStorm/RustRover with HTTP Client plugin, click the "Run" button next to each request
+// 3. Alternatively, you can use tools like curl, Postman, or Insomnia with the same endpoint and payload
+
+### Additional Information
+// For command line testing, you can use curl:
+//
+// Health check:
+// curl http://localhost:8080/health
+//
+// List users:
+// curl http://localhost:8080/users
+//
+// Create user:
+// Use curl with the POST method, Content-Type header, and a JSON payload containing email, name, and password_hash
