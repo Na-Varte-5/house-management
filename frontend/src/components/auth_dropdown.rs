@@ -1,6 +1,7 @@
+use crate::utils::api::api_url;
 use crate::utils::auth::set_token;
 use serde::Deserialize;
-use yew::prelude::*;
+use yew::prelude::*; // added
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 struct LoginResponse {
@@ -40,7 +41,7 @@ pub fn auth_dropdown() -> Html {
                         "name": name_v,
                         "password": pass_v,
                     });
-                    match reqwasm::http::Request::post("/api/v1/auth/register")
+                    match reqwasm::http::Request::post(&api_url("/api/v1/auth/register"))
                         .header("Content-Type", "application/json")
                         .body(payload.to_string())
                         .send()
@@ -54,7 +55,7 @@ pub fn auth_dropdown() -> Html {
                                     "password": payload["password"].as_str().unwrap_or_default(),
                                 });
                                 if let Ok(login_resp) =
-                                    reqwasm::http::Request::post("/api/v1/auth/login")
+                                    reqwasm::http::Request::post(&api_url("/api/v1/auth/login"))
                                         .header("Content-Type", "application/json")
                                         .body(login_payload.to_string())
                                         .send()
@@ -89,7 +90,7 @@ pub fn auth_dropdown() -> Html {
                         "email": email_v,
                         "password": pass_v,
                     });
-                    match reqwasm::http::Request::post("/api/v1/auth/login")
+                    match reqwasm::http::Request::post(&api_url("/api/v1/auth/login"))
                         .header("Content-Type", "application/json")
                         .body(payload.to_string())
                         .send()

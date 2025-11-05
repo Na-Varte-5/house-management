@@ -8,9 +8,12 @@ pub mod pages {
     pub mod buildings;
     pub mod home;
     pub mod login;
+    pub mod admin; // added
+    pub mod manage; // added
 }
 pub mod utils {
-    pub mod auth;
+    pub mod api;
+    pub mod auth; // added
 }
 mod app;
 mod i18n;

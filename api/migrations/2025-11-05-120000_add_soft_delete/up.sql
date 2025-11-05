@@ -1,0 +1,2 @@
+ALTER TABLE buildings ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0 AFTER created_at;
+ALTER TABLE apartments ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0 AFTER created_at;

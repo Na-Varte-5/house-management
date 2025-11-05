@@ -45,6 +45,7 @@ pub struct Building {
     pub address: String,
     pub construction_year: Option<i32>,
     pub created_at: Option<chrono::NaiveDateTime>,
+    pub is_deleted: bool,
 }
 
 #[derive(Insertable, Deserialize)]
@@ -65,6 +66,7 @@ pub struct Apartment {
     pub bedrooms: Option<i32>,
     pub bathrooms: Option<i32>,
     pub created_at: Option<chrono::NaiveDateTime>,
+    pub is_deleted: bool,
 }
 
 #[derive(Insertable, Deserialize)]

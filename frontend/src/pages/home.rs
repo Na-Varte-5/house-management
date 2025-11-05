@@ -1,3 +1,4 @@
+use crate::utils::api::api_url;
 use serde::Deserialize;
 use yew::prelude::*;
 
@@ -14,7 +15,10 @@ pub fn home() -> Html {
         let state = state.clone();
         use_effect_with((), move |_| {
             wasm_bindgen_futures::spawn_local(async move {
-                match reqwasm::http::Request::get("/api/v1/health").send().await {
+                match reqwasm::http::Request::get(&api_url("/api/v1/health"))
+                    .send()
+                    .await
+                {
                     Ok(resp) => {
                         if let Ok(json) = resp.json::<HealthResponse>().await {
                             state.set(Some(json));

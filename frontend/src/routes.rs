@@ -10,4 +10,8 @@ pub enum Route {
     BuildingApartments { id: u64 },
     #[at("/login")]
     Login,
+    #[at("/admin")]
+    Admin,
+    #[at("/manage")]
+    Manage,
 }

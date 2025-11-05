@@ -146,3 +146,22 @@ Auth Flow: On login, save JWT (e.g. in LocalStorage). Include it in the Authoriz
 Documentation & Comments: Add clear module and function comments so Copilot (or future developers) can understand intended behavior. For example, use /// doc comments above each handler describing its purpose and expected data.
 
 CI/CD: Set up automated tests for both backend (using cargo test) and frontend. Consider GitHub Actions to lint, build, and deploy. Containerize the backend (Dockerfile) if deploying to cloud.
+
+Use cargo-mcp for building and testing.
+
+## Current Implementation Status (Session Sync)
+
+The repository now includes:
+
+- Soft-delete (is_deleted flag) for `buildings` and `apartments` with list + restore endpoints.
+- Endpoints added: `/buildings/deleted`, `/buildings/{id}/restore`, `/apartments/deleted`, `/apartments/{id}/restore` plus DELETE routes performing soft-delete.
+- Manager page in Yew consolidates: building creation, apartment creation, owner assignment (searchable list of public users), deletion confirmation modal, show deleted toggle, restore buttons, and loading spinners.
+- Owner assignment uses `GET /api/v1/apartments/{id}/owners`, `POST /api/v1/apartments/{id}/owners`, `DELETE /api/v1/apartments/{id}/owners/{user_id}`; duplicates are ignored gracefully.
+- UI shows spinners for buildings/apartments/owners/deleted lists and updates in-place after delete/restore.
+- Role-based access enforced (Admin/Manager) for create, delete, restore, and owner assignment endpoints.
+
+When proposing future code:
+- Prefer adding tests for soft-delete/restore flows and RBAC guards.
+- Preserve separation of active vs deleted entities in UI.
+- Avoid permanent deletes; continue using logical deletion unless explicitly changed.
+- Suggest debounced search, pagination, and optimistic updates only after current behavior covered by tests.

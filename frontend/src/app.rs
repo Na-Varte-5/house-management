@@ -2,10 +2,12 @@ use yew::prelude::*;
 use yew_router::prelude::*;
 
 use crate::components::navbar::Navbar;
+use crate::pages::admin::AdminPage;
 use crate::pages::building_apartments::BuildingApartmentsPage;
 use crate::pages::buildings::BuildingsPage;
 use crate::pages::home::Home;
 use crate::pages::login::LoginPage;
+use crate::pages::manage::ManagePage;
 use crate::routes::Route;
 
 #[function_component(App)]
@@ -18,6 +20,8 @@ pub fn app() -> Html {
                 Route::Buildings => html!{<BuildingsPage />},
                 Route::BuildingApartments { .. } => html!{<BuildingApartmentsPage />},
                 Route::Login => html!{<LoginPage />},
+                Route::Admin => html!{<AdminPage />},
+                Route::Manage => html!{<ManagePage />},
             }} />
             <footer class="app-footer py-4 mt-5 border-top">
                 <div class="container d-flex justify-content-between small">

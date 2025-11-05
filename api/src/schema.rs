@@ -42,6 +42,7 @@ diesel::table! {
         address -> Varchar,
         construction_year -> Nullable<Integer>,
         created_at -> Nullable<Timestamp>,
+        is_deleted -> Bool,
     }
 }
 
@@ -55,6 +56,7 @@ diesel::table! {
         bedrooms -> Nullable<Integer>,
         bathrooms -> Nullable<Integer>,
         created_at -> Nullable<Timestamp>,
+        is_deleted -> Bool,
     }
 }
 
