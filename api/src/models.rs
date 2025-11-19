@@ -1,6 +1,7 @@
-use crate::schema::{apartment_owners, apartments, buildings, users};
+use crate::schema::{apartment_owners, apartments, buildings, users, maintenance_requests, maintenance_request_attachments, maintenance_request_history, proposals, votes, proposal_results};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use bigdecimal::BigDecimal; // for voting weights
 
 #[derive(Queryable, Selectable, Serialize, Debug)]
 #[diesel(table_name = users)]
@@ -89,6 +90,133 @@ pub struct ApartmentOwner {
     pub user_id: u64,
 }
 
+#[derive(Queryable, Selectable, Serialize, Debug)]
+#[diesel(table_name = maintenance_requests)]
+#[diesel(check_for_backend(diesel::mysql::Mysql))]
+pub struct MaintenanceRequest {
+    pub id: u64,
+    pub apartment_id: u64,
+    pub created_by: u64,
+    pub assigned_to: Option<u64>,
+    pub request_type: String,
+    pub priority: String,
+    pub title: String,
+    pub description: String,
+    pub status: String,
+    pub resolution_notes: Option<String>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub updated_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Insertable, Deserialize)]
+#[diesel(table_name = maintenance_requests)]
+pub struct NewMaintenanceRequest {
+    pub apartment_id: u64,
+    pub request_type: String,
+    pub priority: String,
+    pub title: String,
+    pub description: String,
+}
+
+#[derive(Queryable, Selectable, Serialize, Debug)]
+#[diesel(table_name = maintenance_request_attachments)]
+#[diesel(check_for_backend(diesel::mysql::Mysql))]
+pub struct MaintenanceRequestAttachment {
+    pub id: u64,
+    pub request_id: u64,
+    pub original_filename: String,
+    pub stored_filename: String,
+    pub mime_type: String,
+    pub size_bytes: u64,
+    pub is_deleted: bool,
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Queryable, Selectable, Serialize, Debug)]
+#[diesel(table_name = maintenance_request_history)]
+#[diesel(check_for_backend(diesel::mysql::Mysql))]
+pub struct MaintenanceRequestHistory {
+    pub id: u64,
+    pub request_id: u64,
+    pub from_status: Option<String>,
+    pub to_status: String,
+    pub note: Option<String>,
+    pub changed_by: u64,
+    pub changed_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Queryable, Selectable, Serialize, Debug)]
+#[diesel(table_name = proposals)]
+pub struct Proposal {
+    pub id: u64,
+    pub title: String,
+    pub description: String,
+    pub created_by: u64,
+    pub start_time: chrono::NaiveDateTime,
+    pub end_time: chrono::NaiveDateTime,
+    pub voting_method: String,
+    pub eligible_roles: String,
+    pub status: String,
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Insertable, Deserialize)]
+#[diesel(table_name = proposals)]
+pub struct NewProposal {
+    pub title: String,
+    pub description: String,
+    pub start_time: chrono::NaiveDateTime,
+    pub end_time: chrono::NaiveDateTime,
+    pub voting_method: String,
+    pub eligible_roles: String,
+    pub status: String,
+}
+
+#[derive(Queryable, Selectable, Serialize, Debug)]
+#[diesel(table_name = votes)]
+pub struct Vote {
+    pub id: u64,
+    pub proposal_id: u64,
+    pub user_id: u64,
+    pub weight_decimal: BigDecimal,
+    pub choice: String,
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Queryable, Selectable, Serialize, Debug)]
+#[diesel(table_name = proposal_results)]
+pub struct ProposalResult {
+    pub id: u64,
+    pub proposal_id: u64,
+    pub passed: bool,
+    pub yes_weight: BigDecimal,
+    pub no_weight: BigDecimal,
+    pub abstain_weight: BigDecimal,
+    pub total_weight: BigDecimal,
+    pub tallied_at: Option<chrono::NaiveDateTime>,
+    pub method_applied_version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum VotingMethod {
+    SimpleMajority,
+    WeightedArea,
+    PerSeat,
+    Consensus,
+}
+impl std::fmt::Display for VotingMethod { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{}", match self { Self::SimpleMajority => "SimpleMajority", Self::WeightedArea => "WeightedArea", Self::PerSeat => "PerSeat", Self::Consensus => "Consensus" }) } }
+impl std::str::FromStr for VotingMethod { type Err = (); fn from_str(s: &str) -> Result<Self, Self::Err> { Ok(match s { "SimpleMajority" => Self::SimpleMajority, "WeightedArea" => Self::WeightedArea, "PerSeat" => Self::PerSeat, "Consensus" => Self::Consensus, _ => return Err(()), }) } }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum VoteChoice { Yes, No, Abstain }
+impl std::fmt::Display for VoteChoice { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{}", match self { Self::Yes => "Yes", Self::No => "No", Self::Abstain => "Abstain" }) } }
+impl std::str::FromStr for VoteChoice { type Err = (); fn from_str(s: &str) -> Result<Self, Self::Err> { Ok(match s { "Yes" => Self::Yes, "No" => Self::No, "Abstain" => Self::Abstain, _ => return Err(()), }) } }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ProposalStatus { Scheduled, Open, Closed, Tallied }
+impl std::fmt::Display for ProposalStatus { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{}", match self { Self::Scheduled => "Scheduled", Self::Open => "Open", Self::Closed => "Closed", Self::Tallied => "Tallied" }) } }
+impl std::str::FromStr for ProposalStatus { type Err = (); fn from_str(s: &str) -> Result<Self, Self::Err> { Ok(match s { "Scheduled" => Self::Scheduled, "Open" => Self::Open, "Closed" => Self::Closed, "Tallied" => Self::Tallied, _ => return Err(()), }) } }
+
 #[derive(Serialize)]
 pub struct PublicUser {
     pub id: u64,
@@ -104,4 +232,67 @@ impl From<User> for PublicUser {
             name: u.name,
         }
     }
+}
+
+use crate::schema::{announcements, announcements_comments};
+
+#[derive(Queryable, Selectable, Serialize, Debug)]
+#[diesel(table_name = announcements)]
+#[diesel(check_for_backend(diesel::mysql::Mysql))]
+pub struct Announcement {
+    pub id: u64,
+    pub title: String,
+    pub body_md: String,
+    pub body_html: String,
+    pub author_id: u64,
+    pub public: bool,
+    pub pinned: bool,
+    pub roles_csv: Option<String>,
+    pub building_id: Option<u64>,
+    pub apartment_id: Option<u64>,
+    pub comments_enabled: bool,
+    pub publish_at: Option<chrono::NaiveDateTime>,
+    pub expire_at: Option<chrono::NaiveDateTime>,
+    pub is_deleted: bool,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub updated_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Insertable, Deserialize)]
+#[diesel(table_name = announcements)]
+pub struct NewAnnouncement {
+    pub title: String,
+    pub body_md: String,
+    pub body_html: String,
+    pub author_id: u64,
+    pub public: bool,
+    pub pinned: bool,
+    pub roles_csv: Option<String>,
+    pub building_id: Option<u64>,
+    pub apartment_id: Option<u64>,
+    pub comments_enabled: bool,
+    pub publish_at: Option<chrono::NaiveDateTime>,
+    pub expire_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Queryable, Selectable, Serialize, Debug)]
+#[diesel(table_name = announcements_comments)]
+#[diesel(check_for_backend(diesel::mysql::Mysql))]
+pub struct AnnouncementComment {
+    pub id: u64,
+    pub announcement_id: u64,
+    pub user_id: u64,
+    pub body_md: String,
+    pub body_html: String,
+    pub is_deleted: bool,
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Insertable, Deserialize)]
+#[diesel(table_name = announcements_comments)]
+pub struct NewAnnouncementComment {
+    pub announcement_id: u64,
+    pub user_id: u64,
+    pub body_md: String,
+    pub body_html: String,
 }

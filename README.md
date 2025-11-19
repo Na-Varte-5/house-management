@@ -32,6 +32,25 @@ The following features were added or refined in the current development session:
 - Role-based visibility: building and apartment creation restricted to Admin/Manager; other roles see access denied message.
 - Immediate in-place refresh after delete/restore (no full page reload required).
 
+### Upcoming (In Progress)
+- Maintenance Requests module: request submission (Open/InProgress/Resolved), status updates with audit history, file attachments (images/PDF) stored server-side.
+- Voting groundwork: flexible weight strategies (per seat, by apartment size, or custom override table).
+- Test harness: backend integration tests for soft-delete/RBAC and new maintenance workflows.
+
+## RBAC Summary
+Roles currently recognized: Admin, Manager, Homeowner, Renter, HOA Member.
+
+| Action | Allowed Roles (current enforcement) |
+|--------|-------------------------------------|
+| Create/Soft-delete/Restore Building | Admin, Manager |
+| Create/Soft-delete/Restore Apartment | Admin, Manager |
+| Assign/Remove Apartment Owner | Admin, Manager |
+| Submit Maintenance Request (planned) | Homeowner, Renter, Admin, Manager |
+| Update Maintenance Status (planned) | Admin, Manager |
+| Upload Maintenance Attachment (planned) | Request creator, Admin, Manager |
+
+RBAC checks are centralized via `AuthContext.has_any_role` and enforced in handlers. Upcoming tests will assert denial for unauthorized roles.
+
 ## Soft Delete & Restoration
 
 Instead of permanently removing records, delete operations set `is_deleted = true`. Active queries filter on `is_deleted = false`. Restoration endpoints flip the flag back to false. This provides:
@@ -124,12 +143,46 @@ For detailed information about the project design, architecture, and features, p
 | Add apartment owner (Admin/Manager) | POST | /api/v1/apartments/{id}/owners |
 | Remove apartment owner (Admin/Manager) | DELETE | /api/v1/apartments/{id}/owners/{user_id} |
 
+## Maintenance Requests (Planned Implementation)
+Will introduce three tables:
+- `maintenance_requests`: core request data (apartment_id, created_by, request_type, priority, status, resolution_notes)
+- `maintenance_request_attachments`: uploaded files metadata (original_filename, stored_filename, mime_type, size_bytes, is_deleted)
+- `maintenance_request_history`: audit trail of status transitions (from_status, to_status, note)
+
+Endpoints (initial set):
+- POST /api/v1/requests
+- GET /api/v1/requests (list, role-filtered)
+- GET /api/v1/requests/{id}
+- PUT /api/v1/requests/{id}/status
+- POST /api/v1/requests/{id}/attachments (multipart)
+- GET /api/v1/requests/{id}/attachments
+- GET /api/v1/requests/{id}/attachments/{attachment_id}
+- DELETE /api/v1/requests/{id}/attachments/{attachment_id}
+
+Attachment constraints: max 10MB, allowed types: image/*, application/pdf (extensible). Files stored under STORAGE_DIR (default: ./storage) with UUID filenames.
+
+## Voting Weights (Roadmap)
+Voting proposals will specify a `weight_strategy`:
+- `PerSeat`: each eligible voter counts as weight 1
+- `ByApartmentSize`: weight derived from apartment `size_sq_m`
+- `Custom`: weights looked up in a proposal-specific override table
+
+Result calculation will aggregate weights of yes/no votes; majority and consensus rules implemented incrementally.
+
+## Feature Progress Map
+Implemented: Buildings, Apartments, Owner assignment, Soft delete + restore, Auth/JWT, Basic RBAC.
+In Progress (next sprint): Maintenance Requests + Attachments, RBAC tests, Voting strategy scaffolding, Global frontend state & i18n.
+Planned: Financials, Events/Calendar, Documents, Messaging (REST + WebSocket), Visitors, Analytics Dashboard.
+
 ## Testing Roadmap (Planned)
 
-Upcoming additions:
-- Unit tests for soft-delete & restore handlers.
-- Frontend integration tests (Yew) for Manager page list updates and owner assignment.
-- RBAC authorization tests ensuring only permitted roles access management endpoints.
+Updated upcoming additions:
+- Backend tests: soft-delete & restore flows (buildings/apartments)
+- Backend tests: RBAC guard denial cases
+- Backend tests: maintenance request create/list/status transitions + history records
+- Backend tests: attachment upload constraints (size/type)
+- Frontend integration tests (Yew): Manager page list updates, maintenance list filtering
+- RBAC matrix tests for new maintenance endpoints
 
 ## License
 

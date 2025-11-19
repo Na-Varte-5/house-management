@@ -1,7 +1,9 @@
 use yew::prelude::*;
 use crate::utils::auth::current_user;
 use crate::utils::api::api_url;
+use crate::components::spinner::Spinner;
 use serde::Deserialize;
+use crate::components::announcements::AnnouncementsManage;
 
 #[derive(Deserialize, Clone, PartialEq)]
 struct Building { id: u64, address: String, construction_year: Option<i32> }
@@ -358,7 +360,7 @@ pub fn manage_page() -> Html {
                 match req.send().await {
                     Ok(resp) => {
                         if resp.ok() {
-                            let mut rb = reqwasm::http::Request::get(&api_url("/api/v1/buildings"));
+                            let rb = reqwasm::http::Request::get(&api_url("/api/v1/buildings"));
                             if let Ok(r2) = rb.send().await { if r2.ok() { if let Ok(list) = r2.json::<Vec<Building>>().await { buildings_state2.set(list); } } }
                             if *show_deleted_state2 {
                                 let mut rd = reqwasm::http::Request::get(&api_url("/api/v1/buildings/deleted"));
@@ -404,7 +406,7 @@ pub fn manage_page() -> Html {
     let deleted_buildings_section: Html = {
         if *show_deleted {
             if *loading_deleted {
-                html!{<div class="border rounded p-2 bg-light"><h6 class="mb-2 text-muted">{"Deleted Buildings"}</h6><div class="text-center my-2"><div class="spinner-border spinner-border-sm text-secondary" role="status"><span class="visually-hidden">{"Loading"}</span></div></div></div>}
+                html!{<div class="border rounded p-2 bg-light"><h6 class="mb-2 text-muted">{"Deleted Buildings"}</h6><Spinner center={true} /></div>}
             } else if deleted_buildings.is_empty() {
                 html!{<div class="border rounded p-2 bg-light"><h6 class="mb-2 text-muted">{"Deleted Buildings"}</h6><div class="small text-muted">{"None"}</div></div>}
             } else {
@@ -415,7 +417,7 @@ pub fn manage_page() -> Html {
     let deleted_apartments_section: Html = {
         if *show_deleted {
             if *loading_deleted {
-                html!{<div class="border rounded p-2 bg-light mt-3"><h6 class="mb-2 text-muted">{"Deleted Apartments"}</h6><div class="text-center my-2"><div class="spinner-border spinner-border-sm text-secondary" role="status"><span class="visually-hidden">{"Loading"}</span></div></div></div>}
+                html!{<div class="border rounded p-2 bg-light mt-3"><h6 class="mb-2 text-muted">{"Deleted Apartments"}</h6><Spinner center={true} /></div>}
             } else if deleted_apartments.is_empty() {
                 html!{<div class="border rounded p-2 bg-light mt-3"><h6 class="mb-2 text-muted">{"Deleted Apartments"}</h6><div class="small text-muted">{"None"}</div></div>}
             } else {
@@ -429,7 +431,7 @@ pub fn manage_page() -> Html {
             Some(aid) => {
                 let sel_ap_handle = selected_apartment.clone();
                 let owners_badges: Html = if *loading_owners {
-                    html!{<div class="text-center"><div class="spinner-border spinner-border-sm text-secondary" role="status"><span class="visually-hidden">{"Loading"}</span></div></div>}
+                    html!{<Spinner center={true} />}
                 } else {
                     html!{ for apartment_owners.iter().cloned().map(|(oid,name,_email)| { let rm=remove_owner.clone(); html!{<span class="badge bg-secondary me-1">{name} <button type="button" class="btn-close btn-close-white btn-sm" onclick={Callback::from(move |_| rm.emit(oid))}></button></span>} }) }
                 };
@@ -457,6 +459,12 @@ pub fn manage_page() -> Html {
     html!{
         <div class="container mt-4">
             <h2>{"Manager"}</h2>
+            // Announcements management section
+            <div class="row mb-4">
+                <div class="col-12">
+                    <AnnouncementsManage />
+                </div>
+            </div>
             { if let Some(msg) = &*message { html!{<div class="alert alert-warning">{msg}</div>} } else { html!{} } }
             <div class="row">
                 <div class="col-md-5">
@@ -468,7 +476,7 @@ pub fn manage_page() -> Html {
                             <div class="col-3"><button class="btn btn-sm btn-primary" type="submit">{"Add"}</button></div>
                         </form>
                     </div>
-                    <ul class="list-group mb-2">{ if *loading_buildings && buildings.is_empty() { html!{<li class="list-group-item text-center"><div class="spinner-border spinner-border-sm text-secondary" role="status"><span class="visually-hidden">{"Loading"}</span></div></li>} } else { html!{ for buildings.iter().cloned().map(|b| {
+                    <ul class="list-group mb-2">{ if *loading_buildings && buildings.is_empty() { html!{<li class="list-group-item text-center"><Spinner center={true} /> </li>} } else { html!{ for buildings.iter().cloned().map(|b| {
                         let sel = selected_building.clone();
                         let pend = pending_delete_building.clone();
                         html!{<li class="list-group-item d-flex justify-content-between align-items-center" style="cursor:pointer" onclick={Callback::from(move |_| sel.set(Some(b.id)))}>
@@ -491,7 +499,7 @@ pub fn manage_page() -> Html {
                             <div class="col-4"><button class="btn btn-sm btn-primary" type="submit">{"Add"}</button></div>
                         </form>
                     }} else { html!{<div class="alert alert-info py-1 px-2">{"Select a building to add apartments."}</div>} } }
-                    <table class="table table-sm"><thead><tr><th>{"ID"}</th><th>{"Number"}</th><th>{"Size"}</th><th></th></tr></thead><tbody>{ if *loading_apartments && apartments.is_empty() { html!{<tr><td colspan="4" class="text-center"><div class="spinner-border spinner-border-sm text-secondary" role="status"><span class="visually-hidden">{"Loading"}</span></div></td></tr>} } else { html!{ for apartments.iter().cloned().map(|a| { let ap_pending = pending_delete_apartment.clone(); let sel_ap_set = selected_apartment.clone(); html!{<tr onclick={Callback::from(move |_| sel_ap_set.set(Some(a.id)))} style="cursor:pointer"><td>{a.id}</td><td>{a.number}</td><td>{a.size_sq_m.map(|s| format!("{:.1}", s)).unwrap_or("-".into())}</td><td><button class="btn btn-outline-danger btn-sm" onclick={Callback::from(move |e: MouseEvent| { e.stop_propagation(); ap_pending.set(Some(a.id)); })}>{"Delete"}</button></td></tr>} }) } } }</tbody></table>
+                    <table class="table table-sm"><thead><tr><th>{"ID"}</th><th>{"Number"}</th><th>{"Size"}</th><th></th></tr></thead><tbody>{ if *loading_apartments && apartments.is_empty() { html!{<tr><td colspan="4" class="text-center"><Spinner center={true} /></td></tr>} } else { html!{ for apartments.iter().cloned().map(|a| { let ap_pending = pending_delete_apartment.clone(); let sel_ap_set = selected_apartment.clone(); html!{<tr onclick={Callback::from(move |_| sel_ap_set.set(Some(a.id)))} style="cursor:pointer"><td>{a.id}</td><td>{a.number}</td><td>{a.size_sq_m.map(|s| format!("{:.1}", s)).unwrap_or("-".into())}</td><td><button class="btn btn-outline-danger btn-sm" onclick={Callback::from(move |e: MouseEvent| { e.stop_propagation(); ap_pending.set(Some(a.id)); })}>{"Delete"}</button></td></tr>} }) } } }</tbody></table>
                     { owners_section.clone() }
                     { deleted_apartments_section.clone() }
                 </div>

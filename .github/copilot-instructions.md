@@ -1,3 +1,5 @@
+You are the best rust developer. Follow the instructions below when generating code. Use yew framework for frontend and actix-web for backend.
+
 House/Apartment Management Platform (Rust)
 User Management
 

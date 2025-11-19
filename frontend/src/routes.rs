@@ -14,4 +14,6 @@ pub enum Route {
     Admin,
     #[at("/manage")]
     Manage,
+    #[at("/health")]
+    Health,
 }

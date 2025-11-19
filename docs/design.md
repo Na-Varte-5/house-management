@@ -213,12 +213,72 @@ The system will implement a role-based access control (RBAC) system where:
   - Expand domain models: maintenance requests, financials, events, voting, documents, messaging, visitors
   - Implement frontend auth and i18n switching
 
+- Soft delete implemented for buildings and apartments using `is_deleted` flag with list + restore endpoints.
+- Owner assignment join table `apartment_owners` with idempotent add/remove logic.
+
+### Soft Delete Conventions
+- Delete endpoints set `is_deleted = true` rather than removing rows.
+- Separate endpoints provide listing of deleted entities and restoration (`POST /buildings/{id}/restore`, `POST /apartments/{id}/restore`).
+- Queries for active entities must always filter `is_deleted = false`.
+
+## Upcoming Domain Expansions
+
+### Maintenance Requests
+Data model (planned):
+- `maintenance_requests` (id PK, apartment_id FK -> apartments, created_by FK -> users, request_type ENUM, priority ENUM, title, description TEXT, status ENUM(Open, InProgress, Resolved), resolution_notes TEXT NULL, created_at, updated_at)
+- `maintenance_request_attachments` (id PK, request_id FK, original_filename, stored_filename, mime_type, size_bytes INT, is_deleted BOOL DEFAULT false, created_at)
+- `maintenance_request_history` (id PK, request_id FK, from_status ENUM NULL, to_status ENUM, note TEXT NULL, changed_by FK -> users, changed_at)
+
+Attachment handling:
+- Uploaded via multipart (`POST /api/v1/requests/{id}/attachments`) containing file field `file`.
+- Stored on disk under `STORAGE_DIR/requests/{request_id}/<uuid>`.
+- Metadata persisted; physical file removal deferred until cleanup job (soft delete metadata first).
+- Validation: file size <= 10MB, mime type whitelist (image/*, application/pdf).
+
+Planned endpoints:
+- `POST /api/v1/requests` (create; roles: Homeowner, Renter, Admin, Manager)
+- `GET /api/v1/requests` (list; admins/managers see all; others see own apartment(s) or own created requests)
+- `GET /api/v1/requests/{id}` (detail with attachments + history)
+- `PUT /api/v1/requests/{id}/status` (update status; roles: Admin, Manager)
+- `POST /api/v1/requests/{id}/attachments` (upload; creator/Admin/Manager)
+- `GET /api/v1/requests/{id}/attachments` (list metadata)
+- `GET /api/v1/requests/{id}/attachments/{attachment_id}` (download binary)
+- `DELETE /api/v1/requests/{id}/attachments/{attachment_id}` (soft delete attachment; creator/Admin/Manager)
+
+Status transitions:
+- Each status change inserts row into history with from/to + note/resolution.
+- Resolution notes stored when moving to Resolved.
+
+### Voting System (Weight Strategies)
+Data model (planned):
+- `proposals` (id, title, description, start_time, end_time, created_by, weight_strategy ENUM(PerSeat, ByApartmentSize, Custom), status ENUM(Open, Closed), created_at)
+- `votes` (id, proposal_id FK, user_id FK, choice ENUM(Yes, No, Abstain), weight DECIMAL(18,6), cast_at)
+- `proposal_custom_weights` (proposal_id FK, apartment_id FK, weight DECIMAL(18,6)) for Custom strategy.
+
+Weight computation:
+- PerSeat: each vote weight = 1.
+- ByApartmentSize: join apartment to size; weight = size_sq_m (NULL -> 0).
+- Custom: lookup weight; missing -> 0.
+
+Result calculation:
+- Aggregate weights of Yes vs total eligible weights; pass threshold = >50% Yes (simple majority) initially.
+- Future extension: consensus (100% of non-abstain Yes) and other rules.
+
+### RBAC Overview (Expanded)
+- Maintenance create: Homeowner, Renter, Admin, Manager.
+- Maintenance status update: Admin, Manager.
+- Maintenance attachment upload/delete: Request creator, Admin, Manager.
+- Voting proposal create: Admin, HOA Member (to confirm), Manager.
+- Vote cast: roles defined per proposal configuration (initial default: Admin, HOA Member, Homeowner).
+
+## Testing Strategy (Planned Additions)
+- Integration tests using test database (transaction rollback per test) for maintenance and voting flows.
+- RBAC matrix tests for denial cases.
+- Attachment validation tests (size/mime) with in-memory multipart payloads.
+- Voting weight calculation unit tests (PerSeat, ByApartmentSize, Custom mapping).
+- Soft delete queries performance: add indexes to `buildings.is_deleted`, `apartments.is_deleted`, `maintenance_request_attachments.is_deleted`.
 
 ## Implementation Preferences (Updated)
-
-- Documents storage: Local filesystem under STORAGE_DIR (default: api/storage). Configure via env STORAGE_DIR. Access controlled by JWT/RBAC.
-- Messaging: REST endpoints first; WebSocket endpoint planned and tracked in TODO and instructions.
-- Financials currencies: Support CZK and EUR in initial implementation. Billing formulas to be implemented as real calculations (per-person, area-based, equal split, and custom).
-- Voting: Include weighted voting in addition to simple majority. Weighted by apartment attributes (e.g., size/share) as configured.
-- Events recurrence: Support one-off events and recurring rules including yearly recurrence and every X days interval.
-- Docker: Backend Dockerfile provided (api/Dockerfile) for containerized deployment.
+- Use enums represented as VARCHAR for flexibility (validate at application layer) or MySQL ENUM if kept stable.
+- Prefer explicit `updated_at` triggers in application layer rather than DB triggers for portability.
+- History table is append-only; no updates allowed (enforced by not exposing update endpoint).

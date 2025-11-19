@@ -8,6 +8,7 @@ use crate::pages::buildings::BuildingsPage;
 use crate::pages::home::Home;
 use crate::pages::login::LoginPage;
 use crate::pages::manage::ManagePage;
+use crate::pages::health::HealthPage;
 use crate::routes::Route;
 
 #[function_component(App)]
@@ -22,6 +23,7 @@ pub fn app() -> Html {
                 Route::Login => html!{<LoginPage />},
                 Route::Admin => html!{<AdminPage />},
                 Route::Manage => html!{<ManagePage />},
+                Route::Health => html!{<HealthPage />},
             }} />
             <footer class="app-footer py-4 mt-5 border-top">
                 <div class="container d-flex justify-content-between small">
