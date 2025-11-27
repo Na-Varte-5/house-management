@@ -5,3 +5,5 @@ pub mod building_apartments;
 pub mod admin;
 pub mod manage;
 pub mod maint; // temporary rename from maintenance
+pub mod health;
+

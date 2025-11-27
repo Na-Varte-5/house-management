@@ -42,6 +42,7 @@ message-error = Došlo k chybě
 
 ## Oznámení
 announcements-title = Oznámení
+announcements-manage-subtitle = Vytvářejte, upravujte a spravujte domovní a komunitní oznámení.
 announcement-title-label = Název
 announcement-body-label = Text (Markdown)
 announcement-preview-tab = Náhled
@@ -132,3 +133,9 @@ role-manager = Manažer
 role-homeowner = Vlastník
 role-renter = Nájemník
 role-hoa-member = Člen SVJ
+
+## Boční panel
+sidebar-management = Správa
+sidebar-user-management = Správa uživatelů
+sidebar-admin-announcements = Oznámení
+sidebar-admin-properties = Nemovitosti

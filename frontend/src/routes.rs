@@ -12,6 +12,10 @@ pub enum Route {
     Login,
     #[at("/admin")]
     Admin,
+    #[at("/admin/announcements")]
+    AdminAnnouncements,
+    #[at("/admin/properties")]
+    AdminProperties,
     #[at("/manage")]
     Manage,
     #[at("/health")]

@@ -1,3 +1,5 @@
+// ...existing AdminPage implementation moved from pages/admin.rs...
+use crate::components::AdminLayout;
 use yew::prelude::*;
 use crate::utils::auth::{current_user, get_token};
 use crate::utils::api::api_url;
@@ -9,6 +11,7 @@ const ALL_ROLES: &[&str] = &["Admin", "Manager", "Homeowner", "Renter", "HOAMemb
 
 #[function_component(AdminPage)]
 pub fn admin_page() -> Html {
+    // ...existing code from pages/admin.rs...
     let user = current_user();
     let users = use_state(|| Vec::<UserWithRoles>::new());
     let message = use_state(|| None::<String>);
@@ -102,43 +105,46 @@ pub fn admin_page() -> Html {
     }
 
     html! {
-        <div class="container mt-4">
-            <h2>{"Admin - User Management"}</h2>
-            if let Some(msg) = (*message).clone() { <div class="alert alert-warning py-1 px-2">{msg}</div> }
-            <table class="table table-sm table-striped">
-                <thead><tr><th>{"ID"}</th><th>{"Name"}</th><th>{"Email"}</th><th>{"Roles"}</th><th>{"Add Role"}</th></tr></thead>
-                <tbody>
-                    { for users.iter().map(|u| {
-                        let uid = u.id;
-                        html!{<tr>
-                            <td>{u.id}</td>
-                            <td>{u.name.clone()}</td>
-                            <td class="small">{u.email.clone()}</td>
-                            <td>
-                                { for u.roles.iter().map(|r| {
-                                    let role = r.clone();
-                                    let cb = on_remove_role.clone();
-                                    html!{<span class="badge bg-secondary me-1">{role.clone()} <button type="button" class="btn-close btn-close-white btn-sm ms-1" style="font-size:0.5rem" onclick={Callback::from(move |_| cb.emit((uid, role.clone())))}></button></span>}
-                                }) }
-                            </td>
-                            <td>
-                                <select class="form-select form-select-sm" onchange={{
-                                    let cb = on_add_role.clone();
-                                    Callback::from(move |e: Event| {
-                                        let sel: web_sys::HtmlSelectElement = e.target_unchecked_into();
-                                        let val = sel.value();
-                                        if !val.is_empty() { cb.emit((uid, val)); }
-                                    })
-                                }}>
-                                    <option value="">{"Select"}</option>
-                                    { for ALL_ROLES.iter().map(|r| html!{<option value={r.to_string()}>{r.to_string()}</option>}) }
-                                </select>
-                            </td>
-                        </tr>}
-                    }) }
-                </tbody>
-            </table>
-            <p class="small text-muted">{"Remove a role by clicking the × on its badge."}</p>
-        </div>
+        <AdminLayout title={"Admin - User Management".to_string()} active_route={crate::routes::Route::Admin}>
+            <div class="card">
+                <div class="card-body">
+                    if let Some(msg) = (*message).clone() { <div class="alert alert-warning py-1 px-2">{msg}</div> }
+                    <table class="table table-sm table-striped mb-0">
+                        <thead><tr><th>{"ID"}</th><th>{"Name"}</th><th>{"Email"}</th><th>{"Roles"}</th><th>{"Add Role"}</th></tr></thead>
+                        <tbody>
+                            { for users.iter().map(|u| {
+                                let uid = u.id;
+                                html!{<tr>
+                                    <td>{u.id}</td>
+                                    <td>{u.name.clone()}</td>
+                                    <td class="small">{u.email.clone()}</td>
+                                    <td>
+                                        { for u.roles.iter().map(|r| {
+                                            let role = r.clone();
+                                            let cb = on_remove_role.clone();
+                                            html!{<span class="badge bg-secondary me-1">{role.clone()} <button type="button" class="btn-close btn-close-white btn-sm ms-1" style="font-size:0.5rem" onclick={Callback::from(move |_| cb.emit((uid, role.clone())))}></button></span>}
+                                        }) }
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm" onchange={{
+                                            let cb = on_add_role.clone();
+                                            Callback::from(move |e: Event| {
+                                                let sel: web_sys::HtmlSelectElement = e.target_unchecked_into();
+                                                let val = sel.value();
+                                                if !val.is_empty() { cb.emit((uid, val)); }
+                                            })
+                                        }}>
+                                            <option value="">{"Select"}</option>
+                                            { for ALL_ROLES.iter().map(|r| html!{<option value={r.to_string()}>{r.to_string()}</option>}) }
+                                        </select>
+                                    </td>
+                                </tr>}
+                            }) }
+                        </tbody>
+                    </table>
+                    <p class="small text-muted mt-2">{"Remove a role by clicking the × on its badge."}</p>
+                </div>
+            </div>
+        </AdminLayout>
     }
 }

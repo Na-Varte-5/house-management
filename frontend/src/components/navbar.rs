@@ -41,6 +41,11 @@ pub fn navbar() -> Html {
         })
     };
 
+    let is_manager_or_admin = user
+        .as_ref()
+        .map(|u| u.roles.iter().any(|r| r == "Admin" || r == "Manager"))
+        .unwrap_or(false);
+
     html! {
         <nav class="navbar navbar-expand navbar-dark bg-dark">
             <div class="container-fluid">
@@ -48,8 +53,9 @@ pub fn navbar() -> Html {
                 <div class="navbar-nav">
                     <Link<Route> to={Route::Buildings} classes="nav-link">{ t("nav-buildings") }</Link<Route>>
                     <Link<Route> to={Route::Health} classes="nav-link">{ t("nav-health") }</Link<Route>>
-                    { if let Some(u) = user.clone() { if u.roles.iter().any(|r| r=="Admin") { html!{<Link<Route> to={Route::Admin} classes="nav-link">{ t("nav-admin") }</Link<Route>>} } else { html!{} } } else { html!{} } }
-                    { if let Some(u) = user.clone() { if u.roles.iter().any(|r| r=="Admin" || r=="Manager") { html!{<Link<Route> to={Route::Manage} classes="nav-link">{ t("nav-manage") }</Link<Route>>} } else { html!{} } } else { html!{} } }
+                    { if is_manager_or_admin { html!{
+                        <Link<Route> to={Route::Manage} classes="nav-link">{ t("nav-dashboard") }</Link<Route>>
+                    } } else { html!{} } }
                 </div>
                 <div class="d-flex">
                     <div class="me-2">

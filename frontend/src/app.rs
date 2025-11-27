@@ -1,15 +1,17 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
 
-use crate::components::navbar::Navbar;
-use crate::pages::admin::AdminPage;
-use crate::pages::building_apartments::BuildingApartmentsPage;
-use crate::pages::buildings::BuildingsPage;
-use crate::pages::home::Home;
-use crate::pages::login::LoginPage;
-use crate::pages::manage::ManagePage;
-use crate::pages::health::HealthPage;
-use crate::routes::Route;
+use frontend::components::navbar::Navbar;
+use frontend::pages::admin::AdminPage;
+use frontend::pages::admin::AdminAnnouncementsPage;
+use frontend::pages::admin::AdminPropertiesPage;
+use frontend::pages::building_apartments::BuildingApartmentsPage;
+use frontend::pages::buildings::BuildingsPage;
+use frontend::pages::home::Home;
+use frontend::pages::login::LoginPage;
+use frontend::pages::manage::ManagePage;
+use frontend::pages::health::HealthPage;
+use frontend::routes::Route;
 
 #[function_component(App)]
 pub fn app() -> Html {
@@ -22,6 +24,8 @@ pub fn app() -> Html {
                 Route::BuildingApartments { .. } => html!{<BuildingApartmentsPage />},
                 Route::Login => html!{<LoginPage />},
                 Route::Admin => html!{<AdminPage />},
+                Route::AdminAnnouncements => html!{<AdminAnnouncementsPage />},
+                Route::AdminProperties => html!{<AdminPropertiesPage />},
                 Route::Manage => html!{<ManagePage />},
                 Route::Health => html!{<HealthPage />},
             }} />

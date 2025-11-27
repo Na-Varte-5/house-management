@@ -49,6 +49,7 @@ message-error = An error occurred
 
 ## Announcements
 announcements-title = Announcements
+announcements-manage-subtitle = Create, edit, and manage building or community announcements.
 announcement-title-label = Title
 announcement-body-label = Body (Markdown)
 announcement-preview-tab = Preview
@@ -78,6 +79,8 @@ announcement-purge = Purge
 announcement-roles-help = Select one or more roles; leave empty for all (public depends on Public checkbox).
 announcement-options-heading = Options
 announcement-private-label = Private
+announcement-new-button = New announcement
+announcement-show-deleted-toggle = Show deleted
 
 ## Announcement Prefixes
 announcement-by-prefix = By
@@ -132,3 +135,9 @@ role-manager = Manager
 role-homeowner = Homeowner
 role-renter = Renter
 role-hoa-member = HOA Member
+
+## Sidebar
+sidebar-management = Management
+sidebar-user-management = User management
+sidebar-admin-announcements = Announcements
+sidebar-admin-properties = Properties

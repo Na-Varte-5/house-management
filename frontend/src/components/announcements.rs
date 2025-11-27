@@ -3,8 +3,9 @@ use serde::Deserialize;
 use crate::utils::{api::api_url, auth::get_token};
 use crate::components::spinner::Spinner;
 use crate::components::announcement_editor::AnnouncementEditor;
-use crate::components::announcement_editor::AnnouncementFull; // import full type for editor interactions
+use crate::components::announcement_editor::AnnouncementFull; // ensure we have the full type
 use crate::components::comment_list::CommentList;
+use crate::i18n::t;
 
 #[derive(Deserialize, Clone, PartialEq, Debug)]
 pub struct AnnouncementItem {
@@ -37,6 +38,7 @@ pub fn announcements_manage() -> Html {
     let error = use_state(|| None::<String>);
     let refreshing = use_state(|| false);
     let editing = use_state(|| None::<AnnouncementItem>);
+    let creating_new = use_state(|| false); // controls inline "new" editor
 
     let fetch_active = {
         let list = list.clone();
@@ -166,7 +168,14 @@ pub fn announcements_manage() -> Html {
         let fetch_active = fetch_active.clone();
         let refreshing = refreshing.clone();
         let editing = editing.clone();
-        Callback::from(move |_: AnnouncementFull| { refreshing.set(true); fetch_active.emit(()); editing.set(None); refreshing.set(false); })
+        let creating_new = creating_new.clone();
+        Callback::from(move |_: AnnouncementFull| {
+            refreshing.set(true);
+            fetch_active.emit(());
+            editing.set(None);
+            creating_new.set(false);
+            refreshing.set(false);
+        })
     };
     let toggle_pin = {
         let fetch_active = fetch_active.clone();
@@ -247,6 +256,24 @@ pub fn announcements_manage() -> Html {
 
     let selected_item = selected.and_then(|id| list.iter().find(|a| a.id == id).cloned());
 
+    // Helper to convert a lightweight AnnouncementItem into a full AnnouncementFull for editing
+    let editing_full: Option<AnnouncementFull> = (*editing)
+        .clone()
+        .map(|a| AnnouncementFull {
+            id: a.id,
+            title: a.title.clone(),
+            body_md: a.body_md.clone(),
+            body_html: a.body_html.clone(),
+            pinned: a.pinned,
+            public: a.public,
+            roles_csv: a.roles_csv.clone(),
+            building_id: a.building_id,
+            apartment_id: a.apartment_id,
+            comments_enabled: a.comments_enabled,
+            publish_at: a.publish_at.clone(),
+            expire_at: a.expire_at.clone(),
+        });
+
     let on_updated = {
         let fetch_active = fetch_active.clone();
         let editing = editing.clone();
@@ -257,23 +284,87 @@ pub fn announcements_manage() -> Html {
         let editing = editing.clone();
         Callback::from(move |_: AnnouncementFull| { fetch_active.emit(()); editing.set(None); })
     };
-    let cancel_edit = {
-        let editing = editing.clone(); Callback::from(move |_| editing.set(None))
+    let cancel_edit: Callback<()> = {
+        let editing = editing.clone();
+        Callback::from(move |_| editing.set(None))
+    };
+
+    let start_new = {
+        let creating_new = creating_new.clone();
+        let editing = editing.clone();
+        Callback::from(move |_e: web_sys::MouseEvent| {
+            editing.set(None);
+            creating_new.set(true);
+        })
+    };
+
+    let cancel_new: Callback<()> = {
+        let creating_new = creating_new.clone();
+        Callback::from(move |_| {
+            creating_new.set(false);
+        })
     };
 
     let now_iso: String = js_sys::Date::new_0().to_iso_string().as_string().unwrap_or_default();
 
+    let new_editor_block = if *creating_new {
+        let cancel_new_btn = cancel_new.clone();
+        let cancel_new_editor = cancel_new.clone();
+        html! {
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>{"New announcement"}</span>
+                    <button class="btn btn-sm btn-outline-secondary" onclick={Callback::from(move |_e: web_sys::MouseEvent| cancel_new_btn.emit(()))}> {"Cancel"} </button>
+                </div>
+                <div class="card-body">
+                    <AnnouncementEditor on_created={on_created.clone()} on_cancel={cancel_new_editor} />
+                </div>
+            </div>
+        }
+    } else { html!{} };
+
+    let edit_block = if let Some(full) = editing_full.clone() {
+        let cancel_cb = cancel_edit.clone();
+        html! {
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>{"Edit announcement"}</span>
+                    <button class="btn btn-sm btn-outline-secondary" onclick={Callback::from(move |_e: web_sys::MouseEvent| cancel_cb.emit(()))}> {"Cancel"} </button>
+                </div>
+                <div class="card-body">
+                    <AnnouncementEditor
+                        existing={Some(full)}
+                        on_updated={on_updated.clone()}
+                        on_published={on_published.clone()}
+                        on_cancel={cancel_edit.clone()}
+                    />
+                </div>
+            </div>
+        }
+    } else { html!{} };
+
     html!{
         <div class="announcements-manage mb-4">
-            <h4 class="mb-3">{"Announcements"}</h4>
-            { if let Some(err) = &*error { html!{<div class="alert alert-danger py-1">{err}</div>} } else { html!{} } }
-            <AnnouncementEditor on_created={on_created.clone()} on_updated={on_updated.clone()} on_published={on_published.clone()} existing={editing.as_ref().cloned().map(|e| AnnouncementFull { id: e.id, title: e.title.clone(), body_md: e.body_md.clone(), body_html: e.body_html.clone(), pinned: e.pinned, public: e.public, roles_csv: e.roles_csv.clone(), building_id: e.building_id, apartment_id: e.apartment_id, comments_enabled: e.comments_enabled, publish_at: e.publish_at.clone(), expire_at: e.expire_at.clone() })} on_cancel={cancel_edit.clone()} />
+            { if let Some(err) = &*error { html!{<div class="alert alert-danger py-1 mb-2">{err}</div>} } else { html!{} } }
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h4 class="mb-0">{ t("announcements-title") }</h4>
+                    <div class="text-muted small">{ t("announcements-manage-subtitle") }</div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-primary" onclick={start_new.clone()}>
+                        { t("announcement-new-button") }
+                    </button>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="showDeletedAnnouncements" checked={*show_deleted} onchange={{ let sd=show_deleted.clone(); Callback::from(move |e: Event| { let i: web_sys::HtmlInputElement = e.target_unchecked_into(); sd.set(i.checked()); }) }} />
+                        <label class="form-check-label small" for="showDeletedAnnouncements">{ t("announcement-show-deleted-toggle") }</label>
+                    </div>
+                </div>
+            </div>
+            { if *creating_new { new_editor_block } else { html!{} } }
+            { edit_block }
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h6 class="mb-0">{"Active"}</h6>
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="showDeletedAnnouncements" checked={*show_deleted} onchange={{ let sd=show_deleted.clone(); Callback::from(move |e: Event| { let i: web_sys::HtmlInputElement = e.target_unchecked_into(); sd.set(i.checked()); }) }} />
-                    <label class="form-check-label small" for="showDeletedAnnouncements">{"Show Deleted"}</label>
-                </div>
             </div>
             { if *loading { html!{<Spinner center={true} />} } else {
                 html!{<div>{ for list.iter().cloned().map(|a| {
