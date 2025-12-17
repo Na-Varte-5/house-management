@@ -75,19 +75,38 @@ trunk build
 ### Frontend Structure (`/frontend`)
 
 **Framework**: Yew (Rust WebAssembly) with yew-router for SPA routing
-- Components in `src/components/` (reusable: navbar, sidebar, spinners, auth dropdown, announcement editor/list, comment list)
+- Components in `src/components/` (reusable: navbar, sidebar, spinners, auth dropdown, error/success alerts)
 - Pages in `src/pages/` (routes map to page components)
 - Routes defined in `src/routes.rs`; rendered in `src/app.rs` via `<Switch<Route>>`
 
 **Styling**: Bootstrap CSS (CDN-linked in `index.html`); use Bootstrap classes for responsive layout
 
-**Auth flow**: JWT stored in browser localStorage; included in `Authorization: Bearer <token>` header for API calls via `reqwasm`
+**Architecture (REFACTORED - Dec 2025)**:
+- **AuthContext** (`src/contexts/auth.rs`): Centralized auth state provider with automatic localStorage sync
+  - Exposes: `token()`, `user()`, `is_authenticated()`, `has_role()`, `is_admin_or_manager()`
+  - All pages use `use_context::<AuthContext>()` instead of direct localStorage access
+- **API Service Layer** (`src/services/api.rs`): Typed HTTP client with automatic token injection
+  - `api_client(token)` returns configured client with base URL detection
+  - Typed errors: `ApiError` enum (NetworkError, Unauthorized, Forbidden, NotFound, BadRequest, ServerError)
+  - Auto-detects environment: port 8081 (Trunk dev) → routes to 8080 (backend)
+- **Reusable Components**: ErrorAlert, SuccessAlert for consistent user feedback
 
-**State management**: No global state library; components use Yew hooks (`use_state`, `use_effect`) and props. Auth state (JWT, user info) stored in localStorage and read per-component.
+**Auth flow**:
+- JWT stored in browser localStorage via AuthContext provider
+- AuthContext extracts user info from JWT payload (no separate /me endpoint needed)
+- API client automatically includes `Authorization: Bearer <token>` header
+
+**State management**:
+- Auth state: Centralized via AuthContext provider
+- Component state: Yew hooks (`use_state`, `use_effect`) and props
+- API calls: Always use `api_client(token)` from services module
 
 **i18n**: Fluent-based translations; locale files in `frontend/locales/` and `api/locales/`; detect browser language or allow manual selection
 
-**API communication**: Use `reqwasm::http::Request` for async fetch calls; parse JSON responses
+**API communication**:
+- **ALWAYS** use `api_client(token)` from `src/services/api.rs`
+- **NEVER** use raw `reqwasm` calls directly
+- Methods: `get<T>()`, `post<T, R>()`, `put<T, R>()`, `delete()`, `delete_no_response()`, `post_empty<T>()`
 
 ### Database Migrations
 
