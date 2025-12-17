@@ -2,33 +2,23 @@ use yew::prelude::*;
 use yew_router::prelude::*;
 
 use crate::components::auth_dropdown::AuthDropdown;
+use crate::contexts::AuthContext;
 use crate::routes::Route;
-use crate::utils::auth::{clear_token, get_token, current_user};
 use crate::i18n::{set_language, current_language, available_languages, t};
 
 #[function_component(Navbar)]
 pub fn navbar() -> Html {
-    let logged_in = use_state(|| get_token().is_some());
-    {
-        let logged_in = logged_in.clone();
-        use_effect_with((), move |_| {
-            logged_in.set(get_token().is_some());
-            || ()
-        });
-    }
+    let auth = use_context::<AuthContext>().expect("AuthContext not found");
 
     let on_logout = {
-        let logged_in = logged_in.clone();
+        let auth = auth.clone();
         Callback::from(move |_| {
-            clear_token();
-            logged_in.set(false);
+            auth.logout.emit(());
             if let Some(w) = web_sys::window() {
                 let _ = w.location().reload();
             }
         })
     };
-
-    let user = current_user();
 
     let lang_state = use_state(|| current_language());
     let on_lang_change = {
@@ -41,10 +31,7 @@ pub fn navbar() -> Html {
         })
     };
 
-    let is_manager_or_admin = user
-        .as_ref()
-        .map(|u| u.roles.iter().any(|r| r == "Admin" || r == "Manager"))
-        .unwrap_or(false);
+    let is_manager_or_admin = auth.is_admin_or_manager();
 
     html! {
         <nav class="navbar navbar-expand navbar-dark bg-dark">
@@ -52,6 +39,12 @@ pub fn navbar() -> Html {
                 <Link<Route> to={Route::Home} classes="navbar-brand">{ t("app-name") }</Link<Route>>
                 <div class="navbar-nav">
                     <Link<Route> to={Route::Buildings} classes="nav-link">{ t("nav-buildings") }</Link<Route>>
+                    { if auth.is_authenticated() { html!{
+                        <>
+                            <Link<Route> to={Route::Maintenance} classes="nav-link">{"Maintenance"}</Link<Route>>
+                            <Link<Route> to={Route::Voting} classes="nav-link">{"Voting"}</Link<Route>>
+                        </>
+                    } } else { html!{} } }
                     <Link<Route> to={Route::Health} classes="nav-link">{ t("nav-health") }</Link<Route>>
                     { if is_manager_or_admin { html!{
                         <Link<Route> to={Route::Manage} classes="nav-link">{ t("nav-dashboard") }</Link<Route>>
@@ -63,8 +56,8 @@ pub fn navbar() -> Html {
                             { for available_languages().into_iter().map(|code| html!{<option value={code.clone()} selected={code==*lang_state}>{code.to_uppercase()}</option>}) }
                         </select>
                     </div>
-                    if *logged_in {
-                        if let Some(u) = user.clone() {
+                    if auth.is_authenticated() {
+                        if let Some(u) = auth.user() {
                             <div class="dropdown" data-bs-auto-close="outside">
                                 <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     {u.name.clone()}

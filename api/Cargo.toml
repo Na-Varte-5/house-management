@@ -2,9 +2,14 @@
 name = "api"
 version = "0.1.0"
 edition = "2024"
+default-run = "api"
+
+[[bin]]
+name = "seed"
+path = "src/bin/seed.rs"
 
 [dependencies]
-diesel = { version = "2", features = ["mysql", "r2d2", "chrono"] }
+diesel = { version = "2", features = ["mysql", "r2d2", "chrono", "numeric"] }
 dotenvy = "0.15"
 actix-web = "4"
 actix-cors = "0.6"

@@ -9,6 +9,7 @@ mod schema;
 mod users; // new // new
 mod maintenance; // maintenance requests module
 mod announcements; // announcements module
+mod voting; // voting/proposals module
 
 use crate::auth::JwtKeys;
 use crate::config::AppConfig;
@@ -86,7 +87,8 @@ async fn main() -> std::io::Result<()> {
                     .configure(buildings::configure)
                     .configure(apartments::configure)
                     .configure(maintenance::configure)
-                    .configure(announcements::configure),
+                    .configure(announcements::configure)
+                    .configure(voting::configure),
             )
     })
     .bind(addr)?

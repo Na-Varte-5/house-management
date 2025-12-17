@@ -1,29 +1,57 @@
 use yew::prelude::*;
 use serde::Deserialize;
-use crate::utils::api::api_url;
+use crate::services::api_client;
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
-struct HealthResponse { status: String, message: String }
+struct HealthResponse {
+    status: String,
+    message: String,
+}
 
 #[function_component(HealthPage)]
 pub fn health_page() -> Html {
     let state = use_state(|| None::<HealthResponse>);
+    let error = use_state(|| None::<String>);
+
     {
         let state = state.clone();
+        let error = error.clone();
         use_effect_with((), move |_| {
             wasm_bindgen_futures::spawn_local(async move {
-                if let Ok(resp) = reqwasm::http::Request::get(&api_url("/api/v1/health")).send().await {
-                    if let Ok(json) = resp.json::<HealthResponse>().await { state.set(Some(json)); }
+                let client = api_client(None);
+                match client.get::<HealthResponse>("/health").await {
+                    Ok(health) => state.set(Some(health)),
+                    Err(e) => error.set(Some(format!("Health check failed: {}", e))),
                 }
             });
             || ()
         });
     }
-    html!{
+
+    html! {
         <div class="container mt-4">
             <h1>{"System Health"}</h1>
-            { match &*state { Some(h) => html!{<p class="text-success">{format!("{} - {}", h.status, h.message)}</p>} , None => html!{<p class="text-muted">{"Loading..."}</p>} } }
+            {
+                if let Some(err) = (*error).clone() {
+                    html! { <p class="text-danger">{err}</p> }
+                } else if let Some(h) = (*state).clone() {
+                    html! {
+                        <div class="alert alert-success">
+                            <strong>{"Status: "}</strong>{&h.status}
+                            <br />
+                            <strong>{"Message: "}</strong>{&h.message}
+                        </div>
+                    }
+                } else {
+                    html! {
+                        <div class="text-center py-5">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">{"Loading..."}</span>
+                            </div>
+                        </div>
+                    }
+                }
+            }
         </div>
     }
 }
-

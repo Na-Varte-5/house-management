@@ -3,6 +3,8 @@ pub mod utils {
     pub mod api; // may be unused by tests
     pub mod datetime; // added for localized formatting
 }
+pub mod contexts;
+pub mod services;
 pub mod pages;
 pub mod routes;
 pub mod components; // use components/mod.rs for submodules

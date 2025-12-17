@@ -711,11 +711,15 @@ version = "2.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a917a9209950404d5be011c81d081a2692a822f73c3d6af586f0cab5ff50f614"
 dependencies = [
+ "bigdecimal",
  "bitflags",
  "byteorder",
  "chrono",
  "diesel_derives",
  "mysqlclient-sys",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
  "percent-encoding",
  "r2d2",
  "url",
@@ -930,6 +934,7 @@ dependencies = [
  "ammonia 3.3.1",
  "base64",
  "fluent-bundle",
+ "gloo-timers 0.3.0",
  "html-escape",
  "js-sys",
  "once_cell",

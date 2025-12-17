@@ -1,0 +1,266 @@
+use reqwasm::http::{Request, Response};
+use serde::{Deserialize, Serialize};
+use std::fmt;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ApiError {
+    NetworkError(String),
+    Unauthorized,
+    Forbidden,
+    NotFound,
+    BadRequest(String),
+    ServerError(String),
+    ParseError(String),
+}
+
+impl fmt::Display for ApiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ApiError::NetworkError(msg) => write!(f, "Network error: {}", msg),
+            ApiError::Unauthorized => write!(f, "Unauthorized - please log in"),
+            ApiError::Forbidden => write!(f, "Access denied"),
+            ApiError::NotFound => write!(f, "Resource not found"),
+            ApiError::BadRequest(msg) => write!(f, "Bad request: {}", msg),
+            ApiError::ServerError(msg) => write!(f, "Server error: {}", msg),
+            ApiError::ParseError(msg) => write!(f, "Parse error: {}", msg),
+        }
+    }
+}
+
+pub type ApiResult<T> = Result<T, ApiError>;
+
+pub struct ApiClient {
+    base_url: String,
+    token: Option<String>,
+}
+
+impl ApiClient {
+    pub fn new(base_url: impl Into<String>) -> Self {
+        Self {
+            base_url: base_url.into(),
+            token: None,
+        }
+    }
+
+    pub fn with_token(mut self, token: impl Into<String>) -> Self {
+        self.token = Some(token.into());
+        self
+    }
+
+    pub async fn get<T>(&self, endpoint: &str) -> ApiResult<T>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        let url = format!("{}{}", self.base_url, endpoint);
+        let mut request = Request::get(&url);
+
+        if let Some(token) = &self.token {
+            request = request.header("Authorization", &format!("Bearer {}", token));
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+
+        Self::handle_response(response).await
+    }
+
+    pub async fn post<B, T>(&self, endpoint: &str, body: &B) -> ApiResult<T>
+    where
+        B: Serialize,
+        T: for<'de> Deserialize<'de>,
+    {
+        let url = format!("{}{}", self.base_url, endpoint);
+        let body_json = serde_json::to_string(body)
+            .map_err(|e| ApiError::ParseError(e.to_string()))?;
+
+        let mut request = Request::post(&url)
+            .header("Content-Type", "application/json")
+            .body(body_json);
+
+        if let Some(token) = &self.token {
+            request = request.header("Authorization", &format!("Bearer {}", token));
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+
+        Self::handle_response(response).await
+    }
+
+    pub async fn post_empty<T>(&self, endpoint: &str) -> ApiResult<T>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        let url = format!("{}{}", self.base_url, endpoint);
+
+        let mut request = Request::post(&url);
+
+        if let Some(token) = &self.token {
+            request = request.header("Authorization", &format!("Bearer {}", token));
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+
+        Self::handle_response(response).await
+    }
+
+    pub async fn put<B, T>(&self, endpoint: &str, body: &B) -> ApiResult<T>
+    where
+        B: Serialize,
+        T: for<'de> Deserialize<'de>,
+    {
+        let url = format!("{}{}", self.base_url, endpoint);
+        let body_json = serde_json::to_string(body)
+            .map_err(|e| ApiError::ParseError(e.to_string()))?;
+
+        let mut request = Request::put(&url)
+            .header("Content-Type", "application/json")
+            .body(body_json);
+
+        if let Some(token) = &self.token {
+            request = request.header("Authorization", &format!("Bearer {}", token));
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+
+        Self::handle_response(response).await
+    }
+
+    pub async fn delete<T>(&self, endpoint: &str) -> ApiResult<T>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        let url = format!("{}{}", self.base_url, endpoint);
+
+        let mut request = Request::delete(&url);
+
+        if let Some(token) = &self.token {
+            request = request.header("Authorization", &format!("Bearer {}", token));
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+
+        Self::handle_response(response).await
+    }
+
+    pub async fn delete_no_response(&self, endpoint: &str) -> ApiResult<()> {
+        let url = format!("{}{}", self.base_url, endpoint);
+
+        let mut request = Request::delete(&url);
+
+        if let Some(token) = &self.token {
+            request = request.header("Authorization", &format!("Bearer {}", token));
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+
+        Self::handle_empty_response(response).await
+    }
+
+    async fn handle_response<T>(response: Response) -> ApiResult<T>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        let status = response.status();
+
+        match status {
+            200..=299 => {
+                let text = response
+                    .text()
+                    .await
+                    .map_err(|e| ApiError::ParseError(e.to_string()))?;
+
+                serde_json::from_str(&text)
+                    .map_err(|e| ApiError::ParseError(format!("Failed to parse response: {} - Body: {}", e, text)))
+            }
+            401 => Err(ApiError::Unauthorized),
+            403 => Err(ApiError::Forbidden),
+            404 => Err(ApiError::NotFound),
+            400..=499 => {
+                let text = response.text().await.unwrap_or_default();
+                Err(ApiError::BadRequest(text))
+            }
+            500..=599 => {
+                let text = response.text().await.unwrap_or_default();
+                Err(ApiError::ServerError(text))
+            }
+            _ => Err(ApiError::ServerError(format!("Unexpected status: {}", status))),
+        }
+    }
+
+    async fn handle_empty_response(response: Response) -> ApiResult<()> {
+        let status = response.status();
+
+        match status {
+            200..=299 => Ok(()),
+            401 => Err(ApiError::Unauthorized),
+            403 => Err(ApiError::Forbidden),
+            404 => Err(ApiError::NotFound),
+            400..=499 => {
+                let text = response.text().await.unwrap_or_default();
+                Err(ApiError::BadRequest(text))
+            }
+            500..=599 => {
+                let text = response.text().await.unwrap_or_default();
+                Err(ApiError::ServerError(text))
+            }
+            _ => Err(ApiError::ServerError(format!("Unexpected status: {}", status))),
+        }
+    }
+}
+
+// Default API client helper
+pub fn api_client(token: Option<&str>) -> ApiClient {
+    let base_url = get_api_base_url();
+    let mut client = ApiClient::new(base_url);
+    if let Some(t) = token {
+        client = client.with_token(t);
+    }
+    client
+}
+
+fn get_api_base_url() -> String {
+    // In dev, frontend runs on 8081 (Trunk) and backend on 8080
+    // In production (same origin), use relative path
+    let base = if let Some(window) = web_sys::window() {
+        let location = window.location();
+        let protocol = location
+            .protocol()
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "http:".into());
+        let host = location
+            .host()
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "127.0.0.1:8081".into());
+
+        // If running on port 8081 (Trunk dev server), point to backend on 8080
+        let adjusted_host = if host.ends_with(":8081") {
+            host.replace(":8081", ":8080")
+        } else {
+            // Production: same host
+            host
+        };
+        format!("{}//{}/api/v1", protocol, adjusted_host)
+    } else {
+        "http://127.0.0.1:8080/api/v1".into()
+    };
+    base
+}

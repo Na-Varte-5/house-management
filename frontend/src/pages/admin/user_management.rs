@@ -1,70 +1,137 @@
-// ...existing AdminPage implementation moved from pages/admin.rs...
-use crate::components::AdminLayout;
+use crate::components::{AdminLayout, ErrorAlert};
+use crate::contexts::AuthContext;
+use crate::services::{api_client, ApiError};
+use serde::{Deserialize, Serialize};
 use yew::prelude::*;
-use crate::utils::auth::{current_user, get_token};
-use crate::utils::api::api_url;
 
-#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
-struct UserWithRoles { id: u64, email: String, name: String, roles: Vec<String> }
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct UserWithRoles {
+    id: u64,
+    email: String,
+    name: String,
+    roles: Vec<String>,
+}
 
-const ALL_ROLES: &[&str] = &["Admin", "Manager", "Homeowner", "Renter", "HOAMember"];
+#[derive(Serialize)]
+struct UpdateRolesRequest {
+    roles: Vec<String>,
+}
+
+const ALL_ROLES: &[&str] = &["Admin", "Manager", "Homeowner", "Renter", "HOA Member"];
 
 #[function_component(AdminPage)]
 pub fn admin_page() -> Html {
-    // ...existing code from pages/admin.rs...
-    let user = current_user();
-    let users = use_state(|| Vec::<UserWithRoles>::new());
-    let message = use_state(|| None::<String>);
+    let auth = use_context::<AuthContext>().expect("AuthContext not found");
 
-    let is_admin = user.as_ref().map(|u| u.roles.iter().any(|r| r == "Admin")).unwrap_or(false);
+    let users = use_state(|| Vec::<UserWithRoles>::new());
+    let loading = use_state(|| true);
+    let error = use_state(|| None::<String>);
+    let success = use_state(|| None::<String>);
+
+    // Only admins can access
+    if !auth.has_role("Admin") {
+        return html! {
+            <div class="container mt-4">
+                <div class="alert alert-danger">
+                    <strong>{"Access denied"}</strong>
+                    <p class="mb-0 small">{"Only Admins can access user management."}</p>
+                </div>
+            </div>
+        };
+    }
+
+    // Load users on mount
     {
         let users = users.clone();
-        let message = message.clone();
-        use_effect_with(is_admin, move |_| {
-            if is_admin {
-                let users = users.clone();
-                let message = message.clone();
-                wasm_bindgen_futures::spawn_local(async move {
-                    let mut req = reqwasm::http::Request::get(&api_url("/api/v1/users/with_roles"));
-                    if let Some(tok) = get_token() { req = req.header("Authorization", &format!("Bearer {}", tok)); }
-                    match req.send().await {
-                        Ok(resp) => {
-                            if resp.ok() {
-                                if let Ok(list) = resp.json::<Vec<UserWithRoles>>().await { users.set(list); }
-                            } else { message.set(Some("Failed to load users".into())); }
-                        }
-                        Err(_) => message.set(Some("Network error".into())),
+        let loading = loading.clone();
+        let error = error.clone();
+        let token = auth.token().map(|t| t.to_string());
+
+        use_effect_with((), move |_| {
+            wasm_bindgen_futures::spawn_local(async move {
+                let client = api_client(token.as_deref());
+                match client.get::<Vec<UserWithRoles>>("/users/with_roles").await {
+                    Ok(list) => {
+                        users.set(list);
+                        loading.set(false);
                     }
-                });
-            }
+                    Err(e) => {
+                        error.set(Some(format!("Failed to load users: {}", e)));
+                        loading.set(false);
+                    }
+                }
+            });
             || ()
         });
     }
 
-    let on_add_role = {
+    let reload_users = {
         let users = users.clone();
-        let message = message.clone();
-        Callback::from(move |(user_id, role): (u64, String)| {
+        let error = error.clone();
+        let token = auth.token().map(|t| t.to_string());
+
+        Callback::from(move |_| {
             let users = users.clone();
-            let message = message.clone();
+            let error = error.clone();
+            let token = token.clone();
+
             wasm_bindgen_futures::spawn_local(async move {
-                let current = users.iter().find(|u| u.id == user_id).cloned();
-                if let Some(mut urec) = current {
-                    if !urec.roles.contains(&role) { urec.roles.push(role.clone()); }
-                    let payload = serde_json::json!({"roles": urec.roles});
-                    let mut req = reqwasm::http::Request::post(&api_url(&format!("/api/v1/users/{}/roles", user_id)))
-                        .header("Content-Type", "application/json");
-                    if let Some(tok) = get_token() { req = req.header("Authorization", &format!("Bearer {}", tok)); }
-                    match req.body(payload.to_string()).send().await {
-                        Ok(resp) => {
-                            if resp.ok() {
-                                // reload list
-                                let mut req2 = reqwasm::http::Request::get(&api_url("/api/v1/users/with_roles"));
-                                if let Some(tok) = get_token() { req2 = req2.header("Authorization", &format!("Bearer {}", tok)); }
-                                if let Ok(resp2) = req2.send().await { if let Ok(list) = resp2.json::<Vec<UserWithRoles>>().await { users.set(list); } }
-                            } else { message.set(Some("Update failed".into())); }
+                let client = api_client(token.as_deref());
+                match client.get::<Vec<UserWithRoles>>("/users/with_roles").await {
+                    Ok(list) => users.set(list),
+                    Err(e) => error.set(Some(format!("Failed to reload users: {}", e))),
+                }
+            });
+        })
+    };
+
+    let on_add_role = {
+        let error = error.clone();
+        let success = success.clone();
+        let reload_users = reload_users.clone();
+        let users_state = users.clone();
+        let token = auth.token().map(|t| t.to_string());
+
+        Callback::from(move |(user_id, role): (u64, String)| {
+            let error = error.clone();
+            let success = success.clone();
+            let reload_users = reload_users.clone();
+            let users_state = users_state.clone();
+            let token = token.clone();
+
+            error.set(None);
+            success.set(None);
+
+            wasm_bindgen_futures::spawn_local(async move {
+                // Find current user and add role
+                let current = users_state.iter().find(|u| u.id == user_id).cloned();
+                if let Some(mut user_record) = current {
+                    if !user_record.roles.contains(&role) {
+                        user_record.roles.push(role.clone());
+                    }
+
+                    let client = api_client(token.as_deref());
+                    let update_req = UpdateRolesRequest {
+                        roles: user_record.roles,
+                    };
+
+                    match client
+                        .post::<_, serde_json::Value>(
+                            &format!("/users/{}/roles", user_id),
+                            &update_req,
+                        )
+                        .await
+                    {
+                        Ok(_) => {
+                            success.set(Some(format!("Role '{}' added successfully", role)));
+                            reload_users.emit(());
                         }
-                        Err(_) => message.set(Some("Network error".into())),
+                        Err(ApiError::Forbidden) => {
+                            error.set(Some("You don't have permission to update roles".to_string()));
+                        }
+                        Err(e) => {
+                            error.set(Some(format!("Failed to add role: {}", e)));
+                        }
                     }
                 }
             });
@@ -72,77 +139,159 @@ pub fn admin_page() -> Html {
     };
 
     let on_remove_role = {
-        let users = users.clone();
-        let message = message.clone();
+        let error = error.clone();
+        let success = success.clone();
+        let reload_users = reload_users.clone();
+        let users_state = users.clone();
+        let token = auth.token().map(|t| t.to_string());
+
         Callback::from(move |(user_id, role): (u64, String)| {
-            let users = users.clone();
-            let message = message.clone();
+            let error = error.clone();
+            let success = success.clone();
+            let reload_users = reload_users.clone();
+            let users_state = users_state.clone();
+            let token = token.clone();
+
+            error.set(None);
+            success.set(None);
+
             wasm_bindgen_futures::spawn_local(async move {
-                let current = users.iter().find(|u| u.id == user_id).cloned();
-                if let Some(mut urec) = current {
-                    urec.roles.retain(|r| r != &role);
-                    let payload = serde_json::json!({"roles": urec.roles});
-                    let mut req = reqwasm::http::Request::post(&api_url(&format!("/api/v1/users/{}/roles", user_id)))
-                        .header("Content-Type", "application/json");
-                    if let Some(tok) = get_token() { req = req.header("Authorization", &format!("Bearer {}", tok)); }
-                    match req.body(payload.to_string()).send().await {
-                        Ok(resp) => {
-                            if resp.ok() {
-                                let mut req2 = reqwasm::http::Request::get(&api_url("/api/v1/users/with_roles"));
-                                if let Some(tok) = get_token() { req2 = req2.header("Authorization", &format!("Bearer {}", tok)); }
-                                if let Ok(resp2) = req2.send().await { if let Ok(list) = resp2.json::<Vec<UserWithRoles>>().await { users.set(list); } }
-                            } else { message.set(Some("Update failed".into())); }
+                // Find current user and remove role
+                let current = users_state.iter().find(|u| u.id == user_id).cloned();
+                if let Some(mut user_record) = current {
+                    user_record.roles.retain(|r| r != &role);
+
+                    let client = api_client(token.as_deref());
+                    let update_req = UpdateRolesRequest {
+                        roles: user_record.roles,
+                    };
+
+                    match client
+                        .post::<_, serde_json::Value>(
+                            &format!("/users/{}/roles", user_id),
+                            &update_req,
+                        )
+                        .await
+                    {
+                        Ok(_) => {
+                            success.set(Some(format!("Role '{}' removed successfully", role)));
+                            reload_users.emit(());
                         }
-                        Err(_) => message.set(Some("Network error".into())),
+                        Err(ApiError::Forbidden) => {
+                            error.set(Some("You don't have permission to update roles".to_string()));
+                        }
+                        Err(e) => {
+                            error.set(Some(format!("Failed to remove role: {}", e)));
+                        }
                     }
                 }
             });
         })
     };
 
-    if !is_admin {
-        return html!{<div class="container mt-4"><div class="alert alert-danger">{"Access denied: Admins only."}</div></div>};
-    }
+    let clear_error = {
+        let error = error.clone();
+        Callback::from(move |_| error.set(None))
+    };
+
+    let clear_success = {
+        let success = success.clone();
+        Callback::from(move |_| success.set(None))
+    };
 
     html! {
         <AdminLayout title={"Admin - User Management".to_string()} active_route={crate::routes::Route::Admin}>
             <div class="card">
                 <div class="card-body">
-                    if let Some(msg) = (*message).clone() { <div class="alert alert-warning py-1 px-2">{msg}</div> }
-                    <table class="table table-sm table-striped mb-0">
-                        <thead><tr><th>{"ID"}</th><th>{"Name"}</th><th>{"Email"}</th><th>{"Roles"}</th><th>{"Add Role"}</th></tr></thead>
-                        <tbody>
-                            { for users.iter().map(|u| {
-                                let uid = u.id;
-                                html!{<tr>
-                                    <td>{u.id}</td>
-                                    <td>{u.name.clone()}</td>
-                                    <td class="small">{u.email.clone()}</td>
-                                    <td>
-                                        { for u.roles.iter().map(|r| {
-                                            let role = r.clone();
-                                            let cb = on_remove_role.clone();
-                                            html!{<span class="badge bg-secondary me-1">{role.clone()} <button type="button" class="btn-close btn-close-white btn-sm ms-1" style="font-size:0.5rem" onclick={Callback::from(move |_| cb.emit((uid, role.clone())))}></button></span>}
-                                        }) }
-                                    </td>
-                                    <td>
-                                        <select class="form-select form-select-sm" onchange={{
-                                            let cb = on_add_role.clone();
-                                            Callback::from(move |e: Event| {
-                                                let sel: web_sys::HtmlSelectElement = e.target_unchecked_into();
-                                                let val = sel.value();
-                                                if !val.is_empty() { cb.emit((uid, val)); }
-                                            })
-                                        }}>
-                                            <option value="">{"Select"}</option>
-                                            { for ALL_ROLES.iter().map(|r| html!{<option value={r.to_string()}>{r.to_string()}</option>}) }
-                                        </select>
-                                    </td>
-                                </tr>}
-                            }) }
-                        </tbody>
-                    </table>
-                    <p class="small text-muted mt-2">{"Remove a role by clicking the × on its badge."}</p>
+                    if let Some(err) = (*error).clone() {
+                        <ErrorAlert message={err} on_close={clear_error.clone()} />
+                    }
+
+                    if let Some(msg) = (*success).clone() {
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            {msg}
+                            <button type="button" class="btn-close" onclick={clear_success.clone()}></button>
+                        </div>
+                    }
+
+                    if *loading {
+                        <div class="text-center py-5">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">{"Loading users..."}</span>
+                            </div>
+                        </div>
+                    } else if (*users).is_empty() {
+                        <div class="alert alert-info">{"No users found."}</div>
+                    } else {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>{"ID"}</th>
+                                        <th>{"Name"}</th>
+                                        <th>{"Email"}</th>
+                                        <th>{"Roles"}</th>
+                                        <th>{"Add Role"}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    { for users.iter().map(|u| {
+                                        let uid = u.id;
+                                        html! {
+                                            <tr>
+                                                <td>{u.id}</td>
+                                                <td>{&u.name}</td>
+                                                <td class="small">{&u.email}</td>
+                                                <td>
+                                                    { for u.roles.iter().map(|r| {
+                                                        let role = r.clone();
+                                                        let cb = on_remove_role.clone();
+                                                        html! {
+                                                            <span class="badge bg-secondary me-1">
+                                                                {&role}
+                                                                {" "}
+                                                                <button
+                                                                    type="button"
+                                                                    class="btn-close btn-close-white"
+                                                                    style="font-size: 0.5rem; vertical-align: middle;"
+                                                                    aria-label="Remove role"
+                                                                    onclick={Callback::from(move |_| cb.emit((uid, role.clone())))}
+                                                                ></button>
+                                                            </span>
+                                                        }
+                                                    }) }
+                                                </td>
+                                                <td>
+                                                    <select
+                                                        class="form-select form-select-sm"
+                                                        onchange={{
+                                                            let cb = on_add_role.clone();
+                                                            Callback::from(move |e: Event| {
+                                                                let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
+                                                                let val = select.value();
+                                                                if !val.is_empty() {
+                                                                    cb.emit((uid, val.clone()));
+                                                                    select.set_value("");  // Reset select
+                                                                }
+                                                            })
+                                                        }}
+                                                    >
+                                                        <option value="">{"-- Select Role --"}</option>
+                                                        { for ALL_ROLES.iter().map(|r| {
+                                                            html! { <option value={r.to_string()}>{r.to_string()}</option> }
+                                                        }) }
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }) }
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="small text-muted mt-3 mb-0">
+                            {"Remove a role by clicking the × on its badge. Add a role using the dropdown."}
+                        </p>
+                    }
                 </div>
             </div>
         </AdminLayout>

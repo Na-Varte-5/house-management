@@ -1,21 +1,20 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
-use crate::utils::auth::current_user;
+use crate::contexts::AuthContext;
 use crate::components::AdminLayout;
 use crate::routes::Route;
 
 #[function_component(ManagePage)]
 pub fn manage_page() -> Html {
-    let user = current_user();
-    let can_manage = user
-        .as_ref()
-        .map(|u| u.roles.iter().any(|r| r == "Admin" || r == "Manager"))
-        .unwrap_or(false);
+    let auth = use_context::<AuthContext>().expect("AuthContext not found");
 
-    if !can_manage {
+    if !auth.is_admin_or_manager() {
         return html! {
             <div class="container mt-4">
-                <div class="alert alert-danger">{"Access denied"}</div>
+                <div class="alert alert-danger">
+                    <strong>{"Access denied"}</strong>
+                    <p class="mb-0 small">{"You need Admin or Manager permissions to access this page."}</p>
+                </div>
             </div>
         };
     }

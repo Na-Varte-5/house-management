@@ -21,6 +21,20 @@ pub async fn list_requests(auth: AuthContext, pool: web::Data<DbPool>) -> Result
     Ok(HttpResponse::Ok().json(list))
 }
 
+/// Get a single maintenance request
+pub async fn get_request(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
+    use crate::schema::maintenance_requests::dsl as mr;
+    let id = path.into_inner();
+    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let req: MaintenanceRequest = mr::maintenance_requests.filter(mr::id.eq(id)).select(MaintenanceRequest::as_select()).first(&mut conn)?;
+    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+    // Check permission: admin/manager can see all, others can only see if they created or are assigned
+    if !(auth.has_any_role(&["Admin", "Manager"]) || req.created_by == user_id || req.assigned_to == Some(user_id)) {
+        return Err(AppError::Forbidden);
+    }
+    Ok(HttpResponse::Ok().json(req))
+}
+
 /// Create a maintenance request (Homeowner, Renter, Admin, Manager)
 pub async fn create_request(auth: AuthContext, pool: web::Data<DbPool>, payload: web::Json<NewMaintenanceRequest>) -> Result<impl Responder, AppError> {
     use crate::schema::maintenance_requests::dsl as mr;
@@ -65,6 +79,52 @@ pub async fn update_status(auth: AuthContext, path: web::Path<u64>, pool: web::D
         ))
         .execute(&mut conn)?;
     Ok(HttpResponse::Ok().finish())
+}
+
+/// General update endpoint for status, priority, and assignment (Admin/Manager)
+#[derive(serde::Deserialize)]
+pub struct UpdateRequestPayload {
+    pub status: Option<String>,
+    pub priority: Option<String>,
+    pub assigned_to: Option<u64>,
+}
+
+pub async fn update_request(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>, payload: web::Json<UpdateRequestPayload>) -> Result<impl Responder, AppError> {
+    use crate::schema::maintenance_requests::dsl as mr;
+    use crate::schema::maintenance_request_history::dsl as hist;
+    if !auth.has_any_role(&["Admin", "Manager"]) { return Err(AppError::Forbidden); }
+    let id = path.into_inner();
+    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let current: MaintenanceRequest = mr::maintenance_requests.filter(mr::id.eq(id)).select(MaintenanceRequest::as_select()).first(&mut conn)?;
+
+    // Apply updates
+    if let Some(new_status) = &payload.status {
+        diesel::update(mr::maintenance_requests.filter(mr::id.eq(id)))
+            .set(mr::status.eq(new_status))
+            .execute(&mut conn)?;
+        diesel::insert_into(hist::maintenance_request_history)
+            .values((
+                hist::request_id.eq(id),
+                hist::from_status.eq(&current.status),
+                hist::to_status.eq(new_status),
+                hist::note.eq::<Option<String>>(None),
+                hist::changed_by.eq(auth.claims.sub.parse::<u64>().unwrap_or(0)),
+            ))
+            .execute(&mut conn)?;
+    }
+    if let Some(new_priority) = &payload.priority {
+        diesel::update(mr::maintenance_requests.filter(mr::id.eq(id)))
+            .set(mr::priority.eq(new_priority))
+            .execute(&mut conn)?;
+    }
+    if let Some(new_assigned) = payload.assigned_to {
+        diesel::update(mr::maintenance_requests.filter(mr::id.eq(id)))
+            .set(mr::assigned_to.eq(Some(new_assigned)))
+            .execute(&mut conn)?;
+    }
+
+    let updated: MaintenanceRequest = mr::maintenance_requests.filter(mr::id.eq(id)).select(MaintenanceRequest::as_select()).first(&mut conn)?;
+    Ok(HttpResponse::Ok().json(updated))
 }
 
 /// List history entries for a request
@@ -118,6 +178,8 @@ pub async fn unassign_request(auth: AuthContext, path: web::Path<u64>, pool: web
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.route("/requests", web::get().to(list_requests))
         .route("/requests", web::post().to(create_request))
+        .route("/requests/{id}", web::get().to(get_request))
+        .route("/requests/{id}", web::put().to(update_request))
         .route("/requests/{id}/status", web::put().to(update_status))
         .route("/requests/{id}/history", web::get().to(list_history))
         .route("/requests/{id}/assign", web::put().to(assign_request))

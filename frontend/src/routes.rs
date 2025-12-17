@@ -20,4 +20,16 @@ pub enum Route {
     Manage,
     #[at("/health")]
     Health,
+    #[at("/maintenance")]
+    Maintenance,
+    #[at("/maintenance/new")]
+    MaintenanceNew,
+    #[at("/maintenance/:id")]
+    MaintenanceDetail { id: u64 },
+    #[at("/voting")]
+    Voting,
+    #[at("/voting/new")]
+    VotingNew,
+    #[at("/voting/:id")]
+    VotingDetail { id: u64 },
 }

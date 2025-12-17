@@ -19,6 +19,7 @@ base64 = "0.22"
 pulldown-cmark = "0.10"
 ammonia = "3"
 html-escape = "0.2"
+gloo-timers = "0.3"
 
 [lib]
 name = "frontend"
