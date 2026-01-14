@@ -11,6 +11,7 @@ pub mod error_alert;
 pub mod main_sidebar;
 pub mod app_layout;
 pub mod breadcrumb;
+pub mod properties; // properties management components
 
 pub use admin_sidebar::AdminSidebar;
 pub use admin_layout::AdminLayout;
