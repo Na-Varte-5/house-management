@@ -2,6 +2,7 @@ use yew::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 use web_sys::window;
+use base64::{Engine as _, engine::general_purpose};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct User {
@@ -138,6 +139,15 @@ fn load_auth_from_storage() -> AuthState {
     let token = storage.get_item("auth.token").ok().flatten();
     let user_json = storage.get_item("auth.user").ok().flatten();
 
+    // Validate token expiry before loading
+    if let Some(ref token_str) = token {
+        if !is_token_valid(token_str) {
+            // Token is expired or invalid, clear storage
+            clear_auth_from_storage();
+            return AuthState { token: None, user: None };
+        }
+    }
+
     let user = user_json.and_then(|json| serde_json::from_str::<User>(&json).ok());
 
     AuthState { token, user }
@@ -161,4 +171,41 @@ fn clear_auth_from_storage() {
             let _ = storage.remove_item("auth.user");
         }
     }
+}
+
+/// Checks if a JWT token is valid (not expired)
+/// Returns false if token is malformed or expired
+fn is_token_valid(token: &str) -> bool {
+    // JWT format: header.payload.signature
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return false;
+    }
+
+    // Decode the payload (second part)
+    let payload = parts[1];
+    let decoded = match general_purpose::STANDARD_NO_PAD.decode(payload) {
+        Ok(d) => d,
+        Err(_) => return false,
+    };
+
+    let payload_str = match String::from_utf8(decoded) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+
+    // Parse as JSON and check expiry
+    #[derive(Deserialize)]
+    struct TokenPayload {
+        exp: u64,
+    }
+
+    let payload_data: TokenPayload = match serde_json::from_str(&payload_str) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+
+    // Check if token is expired (exp is in seconds since epoch)
+    let current_time = (js_sys::Date::now() / 1000.0) as u64;
+    payload_data.exp > current_time
 }

@@ -1,10 +1,11 @@
 use yew::prelude::*;
 use serde::Deserialize;
-use crate::utils::{api::api_url, auth::get_token};
 use crate::components::spinner::Spinner;
 use crate::components::announcement_editor::AnnouncementEditor;
 use crate::components::announcement_editor::AnnouncementFull; // ensure we have the full type
 use crate::components::comment_list::CommentList;
+use crate::contexts::AuthContext;
+use crate::services::api_client;
 use crate::i18n::t;
 
 #[derive(Deserialize, Clone, PartialEq, Debug)]
@@ -30,6 +31,9 @@ pub struct AnnouncementItem {
 
 #[function_component(AnnouncementsManage)]
 pub fn announcements_manage() -> Html {
+    let auth = use_context::<AuthContext>().expect("AuthContext not found");
+    let token = auth.token().map(|t| t.to_string());
+
     let loading = use_state(|| false);
     let list = use_state(|| Vec::<AnnouncementItem>::new());
     let deleted = use_state(|| Vec::<AnnouncementItem>::new());
@@ -44,45 +48,43 @@ pub fn announcements_manage() -> Html {
         let list = list.clone();
         let loading = loading.clone();
         let error = error.clone();
+        let token = token.clone();
         Callback::from(move |_| {
             loading.set(true);
             let list2 = list.clone();
             let loading2 = loading.clone();
             let error2 = error.clone();
+            let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let mut req = reqwasm::http::Request::get(&api_url("/api/v1/announcements"));
-                if let Some(tok) = get_token() { req = req.header("Authorization", &format!("Bearer {}", tok)); }
-                match req.send().await {
-                    Ok(resp) => {
-                        if resp.ok() {
-                            if let Ok(v) = resp.json::<Vec<serde_json::Value>>().await {
-                                let mapped = v.into_iter().filter_map(|x| Some(AnnouncementItem {
-                                    id: x.get("id")?.as_u64()?,
-                                    title: x.get("title")?.as_str()?.to_string(),
-                                    body_html: x.get("body_html")?.as_str()?.to_string(),
-                                    body_md: x.get("body_md")?.as_str()?.to_string(),
-                                    author_id: x.get("author_id")?.as_u64()?,
-                                    author_name: x.get("author_name")?.as_str()?.to_string(),
-                                    pinned: x.get("pinned")?.as_bool()?,
-                                    public: x.get("public")?.as_bool()?,
-                                    roles_csv: x.get("roles_csv").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                                    comments_enabled: x.get("comments_enabled")?.as_bool()?,
-                                    publish_at: x.get("publish_at").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                                    expire_at: x.get("expire_at").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                                    is_deleted: x.get("is_deleted")?.as_bool()?,
-                                    building_id: x.get("building_id").and_then(|r| r.as_u64()),
-                                    building_address: x.get("building_address").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                                    apartment_id: x.get("apartment_id").and_then(|r| r.as_u64()),
-                                    apartment_number: x.get("apartment_number").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                                })).collect();
-                                list2.set(mapped);
-                            }
-                        } else {
-                            error2.set(Some(format!("Load failed {}", resp.status())));
-                        }
+                let client = api_client(token.as_deref());
+                match client.get::<Vec<serde_json::Value>>("/announcements").await {
+                    Ok(v) => {
+                        let mapped = v.into_iter().filter_map(|x| Some(AnnouncementItem {
+                            id: x.get("id")?.as_u64()?,
+                            title: x.get("title")?.as_str()?.to_string(),
+                            body_html: x.get("body_html")?.as_str()?.to_string(),
+                            body_md: x.get("body_md")?.as_str()?.to_string(),
+                            author_id: x.get("author_id")?.as_u64()?,
+                            author_name: x.get("author_name")?.as_str()?.to_string(),
+                            pinned: x.get("pinned")?.as_bool()?,
+                            public: x.get("public")?.as_bool()?,
+                            roles_csv: x.get("roles_csv").and_then(|r| r.as_str()).map(|s| s.to_string()),
+                            comments_enabled: x.get("comments_enabled")?.as_bool()?,
+                            publish_at: x.get("publish_at").and_then(|r| r.as_str()).map(|s| s.to_string()),
+                            expire_at: x.get("expire_at").and_then(|r| r.as_str()).map(|s| s.to_string()),
+                            is_deleted: x.get("is_deleted")?.as_bool()?,
+                            building_id: x.get("building_id").and_then(|r| r.as_u64()),
+                            building_address: x.get("building_address").and_then(|r| r.as_str()).map(|s| s.to_string()),
+                            apartment_id: x.get("apartment_id").and_then(|r| r.as_u64()),
+                            apartment_number: x.get("apartment_number").and_then(|r| r.as_str()).map(|s| s.to_string()),
+                        })).collect();
+                        list2.set(mapped);
                         loading2.set(false);
                     }
-                    Err(_) => { error2.set(Some("Network error".into())); loading2.set(false); }
+                    Err(e) => {
+                        error2.set(Some(format!("Load failed: {}", e)));
+                        loading2.set(false);
+                    }
                 }
             });
         })
@@ -92,43 +94,40 @@ pub fn announcements_manage() -> Html {
         let deleted_state = deleted.clone();
         let error = error.clone();
         let show_deleted_flag = show_deleted.clone();
+        let token = token.clone();
         Callback::from(move |_| {
             if !*show_deleted_flag { return; }
             let deleted_state2 = deleted_state.clone();
             let error2 = error.clone();
+            let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let mut req = reqwasm::http::Request::get(&api_url("/api/v1/announcements/deleted"));
-                if let Some(tok) = get_token() { req = req.header("Authorization", &format!("Bearer {}", tok)); }
-                match req.send().await {
-                    Ok(resp) => {
-                        if resp.ok() {
-                            if let Ok(v) = resp.json::<Vec<serde_json::Value>>().await {
-                                let mapped = v.into_iter().filter_map(|x| Some(AnnouncementItem {
-                                    id: x.get("id")?.as_u64()?,
-                                    title: x.get("title")?.as_str()?.to_string(),
-                                    body_html: x.get("body_html")?.as_str()?.to_string(),
-                                    body_md: x.get("body_md")?.as_str()?.to_string(),
-                                    author_id: x.get("author_id")?.as_u64()?,
-                                    author_name: x.get("author_name")?.as_str()?.to_string(),
-                                    pinned: x.get("pinned")?.as_bool()?,
-                                    public: x.get("public")?.as_bool()?,
-                                    roles_csv: x.get("roles_csv").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                                    comments_enabled: x.get("comments_enabled")?.as_bool()?,
-                                    publish_at: x.get("publish_at").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                                    expire_at: x.get("expire_at").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                                    is_deleted: x.get("is_deleted")?.as_bool()?,
-                                    building_id: x.get("building_id").and_then(|r| r.as_u64()),
-                                    building_address: x.get("building_address").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                                    apartment_id: x.get("apartment_id").and_then(|r| r.as_u64()),
-                                    apartment_number: x.get("apartment_number").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                                })).collect();
-                                deleted_state2.set(mapped);
-                            }
-                        } else {
-                            error2.set(Some("Load deleted failed".into()));
-                        }
+                let client = api_client(token.as_deref());
+                match client.get::<Vec<serde_json::Value>>("/announcements/deleted").await {
+                    Ok(v) => {
+                        let mapped = v.into_iter().filter_map(|x| Some(AnnouncementItem {
+                            id: x.get("id")?.as_u64()?,
+                            title: x.get("title")?.as_str()?.to_string(),
+                            body_html: x.get("body_html")?.as_str()?.to_string(),
+                            body_md: x.get("body_md")?.as_str()?.to_string(),
+                            author_id: x.get("author_id")?.as_u64()?,
+                            author_name: x.get("author_name")?.as_str()?.to_string(),
+                            pinned: x.get("pinned")?.as_bool()?,
+                            public: x.get("public")?.as_bool()?,
+                            roles_csv: x.get("roles_csv").and_then(|r| r.as_str()).map(|s| s.to_string()),
+                            comments_enabled: x.get("comments_enabled")?.as_bool()?,
+                            publish_at: x.get("publish_at").and_then(|r| r.as_str()).map(|s| s.to_string()),
+                            expire_at: x.get("expire_at").and_then(|r| r.as_str()).map(|s| s.to_string()),
+                            is_deleted: x.get("is_deleted")?.as_bool()?,
+                            building_id: x.get("building_id").and_then(|r| r.as_u64()),
+                            building_address: x.get("building_address").and_then(|r| r.as_str()).map(|s| s.to_string()),
+                            apartment_id: x.get("apartment_id").and_then(|r| r.as_u64()),
+                            apartment_number: x.get("apartment_number").and_then(|r| r.as_str()).map(|s| s.to_string()),
+                        })).collect();
+                        deleted_state2.set(mapped);
                     }
-                    Err(_) => { error2.set(Some("Network error".into())); }
+                    Err(e) => {
+                        error2.set(Some(format!("Load deleted failed: {}", e)));
+                    }
                 }
             });
         })
@@ -149,16 +148,16 @@ pub fn announcements_manage() -> Html {
     let publish_now_list = {
         let fetch_active = fetch_active.clone();
         let error = error.clone();
+        let token = token.clone();
         Callback::from(move |id: u64| {
             let fetch_active2 = fetch_active.clone();
             let error2 = error.clone();
+            let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let mut req = reqwasm::http::Request::post(&api_url(&format!("/api/v1/announcements/{}/publish", id)))
-                    .header("Content-Type", "application/json");
-                if let Some(tok) = get_token() { req = req.header("Authorization", &format!("Bearer {}", tok)); }
-                match req.send().await {
-                    Ok(resp) => { if resp.ok() { fetch_active2.emit(()); } else { error2.set(Some(format!("Publish failed {}", resp.status()))); } }
-                    Err(_) => { error2.set(Some("Network error".into())); }
+                let client = api_client(token.as_deref());
+                match client.post_empty::<serde_json::Value>(&format!("/announcements/{}/publish", id)).await {
+                    Ok(_) => fetch_active2.emit(()),
+                    Err(e) => error2.set(Some(format!("Publish failed: {}", e))),
                 }
             });
         })
@@ -179,53 +178,64 @@ pub fn announcements_manage() -> Html {
     };
     let toggle_pin = {
         let fetch_active = fetch_active.clone();
+        let token = token.clone();
         Callback::from(move |id: u64| {
             let fetch_active2 = fetch_active.clone();
+            let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let mut req = reqwasm::http::Request::post(&api_url(&format!("/api/v1/announcements/{}/pin", id)));
-                if let Some(tok) = get_token() { req = req.header("Authorization", &format!("Bearer {}", tok)); }
-                if let Ok(resp) = req.send().await { if resp.ok() { fetch_active2.emit(()); } }
+                let client = api_client(token.as_deref());
+                if let Ok(_) = client.post_empty::<serde_json::Value>(&format!("/announcements/{}/pin", id)).await {
+                    fetch_active2.emit(());
+                }
             });
         })
     };
     let soft_delete = {
         let fetch_active = fetch_active.clone();
+        let token = token.clone();
         Callback::from(move |id: u64| {
             let fetch_active2 = fetch_active.clone();
+            let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let mut req = reqwasm::http::Request::delete(&api_url(&format!("/api/v1/announcements/{}", id)));
-                if let Some(tok) = get_token() { req = req.header("Authorization", &format!("Bearer {}", tok)); }
-                if let Ok(resp) = req.send().await { if resp.ok() { fetch_active2.emit(()); } }
+                let client = api_client(token.as_deref());
+                if let Ok(_) = client.delete_no_response(&format!("/announcements/{}", id)).await {
+                    fetch_active2.emit(());
+                }
             });
         })
     };
     let restore = {
         let fetch_active = fetch_active.clone();
         let fetch_deleted = fetch_deleted.clone();
+        let token = token.clone();
         Callback::from(move |id: u64| {
             let fetch_active2 = fetch_active.clone();
             let fetch_deleted2 = fetch_deleted.clone();
+            let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let mut req = reqwasm::http::Request::post(&api_url(&format!("/api/v1/announcements/{}/restore", id)));
-                if let Some(tok) = get_token() { req = req.header("Authorization", &format!("Bearer {}", tok)); }
-                if let Ok(resp) = req.send().await { if resp.ok() { fetch_active2.emit(()); fetch_deleted2.emit(()); } }
+                let client = api_client(token.as_deref());
+                if let Ok(_) = client.post_empty::<serde_json::Value>(&format!("/announcements/{}/restore", id)).await {
+                    fetch_active2.emit(());
+                    fetch_deleted2.emit(());
+                }
             });
         })
     };
     let purge = {
         let fetch_deleted = fetch_deleted.clone();
         let deleted_state = deleted.clone();
+        let token = token.clone();
         Callback::from(move |id: u64| {
             let fetch_deleted2 = fetch_deleted.clone();
             let deleted_state2 = deleted_state.clone();
+            let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let mut req = reqwasm::http::Request::delete(&api_url(&format!("/api/v1/announcements/{}/purge", id)));
-                if let Some(tok) = get_token() { req = req.header("Authorization", &format!("Bearer {}", tok)); }
-                if let Ok(resp) = req.send().await { if resp.ok() {
+                let client = api_client(token.as_deref());
+                if let Ok(_) = client.delete_no_response(&format!("/announcements/{}/purge", id)).await {
                     // Optimistically remove from state
                     deleted_state2.set(deleted_state2.iter().cloned().filter(|a| a.id != id).collect());
                     fetch_deleted2.emit(());
-                } }
+                }
             });
         })
     };
@@ -233,17 +243,17 @@ pub fn announcements_manage() -> Html {
     let toggle_comments = {
         let fetch_active = fetch_active.clone();
         let error = error.clone();
+        let token = token.clone();
         Callback::from(move |(id, current): (u64,bool)| {
             let fetch_active2 = fetch_active.clone();
             let error2 = error.clone();
+            let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let body = serde_json::json!({"comments_enabled": !current});
-                let mut req = reqwasm::http::Request::put(&api_url(&format!("/api/v1/announcements/{}", id)))
-                    .header("Content-Type","application/json");
-                if let Some(tok) = get_token() { req = req.header("Authorization", &format!("Bearer {}", tok)); }
-                match req.body(body.to_string()).send().await {
-                    Ok(resp) => { if resp.ok() { fetch_active2.emit(()); } else { error2.set(Some(format!("Toggle comments failed {}", resp.status()))); } }
-                    Err(_) => error2.set(Some("Network error".into())),
+                let client = api_client(token.as_deref());
+                match client.put::<_, serde_json::Value>(&format!("/announcements/{}", id), &body).await {
+                    Ok(_) => fetch_active2.emit(()),
+                    Err(e) => error2.set(Some(format!("Toggle comments failed: {}", e))),
                 }
             });
         })

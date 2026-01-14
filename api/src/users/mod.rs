@@ -4,7 +4,21 @@ use crate::models::{NewUser, PublicUser, User}; // added PublicUser import
 use crate::schema::{roles as roles_schema, user_roles as ur_schema};
 use actix_web::{HttpResponse, Responder, web};
 use diesel::prelude::*;
+use utoipa;
 
+/// List all users
+///
+/// Returns all users with complete information including password hashes.
+/// This endpoint is available to all authenticated users for internal use.
+#[utoipa::path(
+    get,
+    path = "/api/v1/users",
+    responses(
+        (status = 200, description = "List of users", body = Vec<User>),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Users"
+)]
 pub async fn list_users(pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
     use crate::schema::users::dsl::*;
     let mut conn = pool
@@ -14,6 +28,21 @@ pub async fn list_users(pool: web::Data<DbPool>) -> Result<impl Responder, AppEr
     Ok(HttpResponse::Ok().json(user_list))
 }
 
+/// Create a new user
+///
+/// Creates a new user. Requires Admin role. Password should already be hashed in the NewUser payload.
+#[utoipa::path(
+    post,
+    path = "/api/v1/users",
+    request_body = NewUser,
+    responses(
+        (status = 201, description = "User created successfully"),
+        (status = 403, description = "Forbidden - requires Admin role"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Users",
+    security(("bearer_auth" = []))
+)]
 pub async fn create_user(
     auth: AuthContext,
     pool: web::Data<DbPool>,
@@ -32,17 +61,17 @@ pub async fn create_user(
     Ok(HttpResponse::Created().finish())
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct SetRolesRequest {
     pub roles: Vec<String>,
 }
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct UserRolesResponse {
     pub user_id: u64,
     pub roles: Vec<String>,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct UserWithRoles {
     pub id: u64,
     pub email: String,
@@ -50,6 +79,20 @@ pub struct UserWithRoles {
     pub roles: Vec<String>,
 }
 
+/// List all users with their roles
+///
+/// Returns all users along with their assigned roles. Requires Admin role.
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/with_roles",
+    responses(
+        (status = 200, description = "List of users with roles", body = Vec<UserWithRoles>),
+        (status = 403, description = "Forbidden - requires Admin role"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Users",
+    security(("bearer_auth" = []))
+)]
 pub async fn list_users_with_roles(auth: AuthContext, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
     if !auth.has_any_role(&["Admin"]) { return Err(AppError::Forbidden); }
     use crate::schema::users::dsl as u;
@@ -63,6 +106,26 @@ pub async fn list_users_with_roles(auth: AuthContext, pool: web::Data<DbPool>) -
     Ok(HttpResponse::Ok().json(out))
 }
 
+/// Set user roles
+///
+/// Sets the roles for a user, replacing all existing roles. Creates roles if they don't exist.
+/// Valid roles: Admin, Manager, Homeowner, Renter, HOAMember. Requires Admin role.
+#[utoipa::path(
+    post,
+    path = "/api/v1/users/{id}/roles",
+    params(
+        ("id" = u64, Path, description = "User ID")
+    ),
+    request_body = SetRolesRequest,
+    responses(
+        (status = 200, description = "Roles set successfully", body = UserRolesResponse),
+        (status = 400, description = "Bad request - invalid role name"),
+        (status = 403, description = "Forbidden - requires Admin role"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Users",
+    security(("bearer_auth" = []))
+)]
 pub async fn set_user_roles(
     auth: AuthContext,
     path: web::Path<u64>,
@@ -145,6 +208,21 @@ pub async fn set_user_roles(
     }))
 }
 
+/// List users (public info only)
+///
+/// Returns all users with only public information (no password hashes).
+/// Requires Admin or Manager role.
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/public",
+    responses(
+        (status = 200, description = "List of users (public info)", body = Vec<PublicUser>),
+        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Users",
+    security(("bearer_auth" = []))
+)]
 pub async fn list_public_users(auth: AuthContext, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
     if !auth.has_any_role(&["Admin", "Manager"]) { return Err(AppError::Forbidden); }
     use crate::schema::users::dsl as u;

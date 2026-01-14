@@ -1,142 +1,366 @@
 # House Management System - TODO Tracker
 
-This file tracks progress and planned work. It maps to the design doc and Copilot instructions. Please keep items small and check them off as we complete them.
+This file tracks progress and planned work. Tasks are organized by priority tier based on user feedback (2026-01-14).
 
 Legend: [ ] planned, [x] done, [~] in progress, [!] blocked
 
-## Repo & Tooling
-- [x] Create initial repo structure (api/, frontend/, docs/, locales/) 
+---
+
+## PRIORITY TIER 1: Critical UX & Foundation ✅ COMPLETED (2026-01-14)
+**Goal:** Fix immediate usability issues, establish multi-HOA RBAC foundation
+**Estimated effort:** 1-2 weeks | **Impact:** Makes app immediately more usable
+
+### Navigation & Layout Improvements
+- [x] Switch to left sidebar navigation (user links stay top-right)
+- [x] Add active route highlighting in navbar
+- [x] Add breadcrumb navigation for nested pages
+- [x] Create Home/Dashboard page with statistics and activity feed (quick stats cards, recent activity, action items)
+- [x] Fix navbar overlay issue on public pages (added padding-top for unauthenticated views)
+- [x] Fix logout flow (navigate to home instead of reload to avoid 401 errors)
+
+### Multi-HOA RBAC Foundation
+- [x] Add building_id scoping to all RBAC checks (users only see their buildings)
+- [x] Create building_members via apartment_owners + apartment_renters + building_managers
+- [x] Add building_id to voting proposals and filter by user's buildings
+- [x] Filter maintenance requests, meters, announcements by user's building access
+- [x] Update all list endpoints to respect building-scoped access
+- [x] Create building_managers table migration
+- [x] Create apartment_renters table migration
+- [x] Implement get_user_building_ids() helper for RBAC
+- [x] Add building manager CRUD endpoints (assign, remove, list)
+
+### Properties Dashboard UX Fixes
+- [x] Add visual selection indicators for buildings and apartments (Bootstrap .active class)
+- [x] Hide/disable assign owner panel until apartment is selected
+- [x] Show placeholder message when no apartment selected
+- [x] Conditional display of owner management sections
+
+### Form & Date Handling Improvements
+- [x] Add building scope dropdown to proposal creation form
+- [x] Add sensible date defaults (proposals: start=now, end=+7 days)
+- [x] Add '(optional)' labels to non-required form fields (building scope)
+- [x] Add help text for building scope selection
+
+---
+
+## PRIORITY TIER 2: Owner Experience Core (Critical Missing Functionality)
+**Goal:** Address "owners don't see value yet" - make app useful for regular users
+**Estimated effort:** 2-3 weeks | **Impact:** Provides value to non-admin users
+
+### Owner Property Management
+- [ ] Create 'My Properties' view filtering apartments owned/rented by user
+- [ ] Add tenant management system:
+  - [ ] Create apartment_renters table (id, apartment_id, user_id, start_date, end_date, is_active)
+  - [ ] Invite renter endpoint (by email, sends registration link or creates account)
+  - [ ] Set rental period (start/end dates)
+  - [ ] Revoke access (soft-expire relationship, remove renter role if no other apartments)
+  - [ ] View current and past tenants per apartment
+- [ ] Implement auto-role assignment logic:
+  - [ ] User assigned as apartment owner → gets Homeowner role
+  - [ ] User assigned as renter → gets Renter role
+  - [ ] When last apartment assignment removed → role auto-revoked (check other apartments first)
+- [ ] Create property history/timeline view (maintenance requests, tenant changes, updates)
+
+### Multi-ownership Support
+- [ ] Allow multiple owners per apartment (apartment_owners already supports this, just need UI)
+- [ ] Add ownership_percentage field to apartment_owners table (optional, for legal/voting weight)
+- [ ] Update voting logic: when multiple owners per apartment, last vote wins (overwrites previous owner's vote)
+- [ ] Add UI to show all owners on apartment detail page
+
+---
+
+## PRIORITY TIER 3: Manager & Maintenance Enhancements
+**Goal:** Improve daily operations, enable delegation
+**Estimated effort:** 2 weeks | **Impact:** Better workflows for property management
+
+### Building Managers
+- [ ] Create building_managers table (id, building_id, user_id, created_at) - many-to-many
+- [ ] Implement building-scoped manager permissions (managers only see assigned buildings)
+- [ ] Add manager assignment UI in admin properties dashboard
+- [ ] Update RBAC checks: Manager role respects building assignments
+- [ ] Add "Assign Manager" button similar to "Assign Owner"
+
+### Maintenance Comments & Collaboration
+- [ ] Create maintenance_request_comments table (id, request_id, user_id, comment_text, created_at)
+- [ ] Add comments API endpoints:
+  - [ ] POST /api/v1/requests/{id}/comments (create comment)
+  - [ ] GET /api/v1/requests/{id}/comments (list comments)
+- [ ] RBAC for comments: creator, assignee, apartment owners, Admin/Manager can comment
+- [ ] Display comments in history feed on maintenance detail page (mixed with status changes)
+- [ ] Extend attachment permissions: creator, assignee, apartment owners can upload (not just admin)
+- [ ] Implement owner escalation workflow:
+  - [ ] Renter submits request → initially assigned to owner
+  - [ ] Owner can escalate to manager (change assignment)
+  - [ ] Manager handles or reassigns
+
+---
+
+## PRIORITY TIER 4: Major New Modules (Large Features)
+**Goal:** Add critical HOA operations functionality
+**Estimated effort:** 4-6 weeks total | **Impact:** Essential for real-world HOA management
+
+### Payment/Billing System
+- [ ] Design payment schema:
+  - [ ] fee_structures table (id, building_id, fee_type, amount, calculation_method, is_active)
+  - [ ] fee_types: monthly, special_assessment, meter_based, per_person, custom
+  - [ ] calculation_methods: per_apartment, per_square_meter, per_person, usage_based, fixed_amount
+  - [ ] invoices table (id, apartment_id, user_id, period_start, period_end, total_amount, status, due_date)
+  - [ ] invoice_line_items table (id, invoice_id, description, amount, fee_structure_id)
+  - [ ] payments table (id, invoice_id, user_id, amount, payment_method, transaction_id, paid_at)
+- [ ] Create configurable fee structures (per apartment, per person, per meter, custom)
+- [ ] Implement monthly fee calculation engine (aggregate fees per apartment)
+- [ ] Add special assessments (one-time charges, can target all or specific apartments)
+- [ ] Create payment tracking UI:
+  - [ ] Owner view: "My Invoices" (paid/overdue status)
+  - [ ] Admin view: payment dashboard (overdue apartments, total collected)
+- [ ] Add payment history and export (CSV, PDF reports)
+- [ ] Email notifications for payment due/overdue
+
+### Document Management System
+- [ ] Create documents table:
+  - [ ] Columns: id, building_id, title, description, file_path, file_size, mime_type, uploaded_by, visibility_scope, category, created_at
+  - [ ] visibility_scope enum: all_residents, owners_only, specific_apartments, managers_only, admin_only
+  - [ ] category enum: bylaws, minutes, financial, contracts, rules, maintenance, other
+- [ ] Implement visibility scopes (filter documents based on user role and apartment assignments)
+- [ ] Add document upload UI (admin/manager):
+  - [ ] Multipart upload with metadata form
+  - [ ] Select visibility scope and category
+  - [ ] Optional: assign to specific apartments
+- [ ] Create document library page:
+  - [ ] List view with filtering (category, date range)
+  - [ ] Search by title/description
+  - [ ] Download with audit trail (track who downloaded when)
+- [ ] Add reasonable file size limits (50MB per file, 500MB per building, configurable in AppConfig)
+- [ ] Backend: store under STORAGE_DIR/documents/{building_id}/{uuid}
+
+---
+
+## PRIORITY TIER 5: Communication & Polish (Nice-to-Have)
+**Goal:** Quality-of-life improvements, notifications, analytics
+**Estimated effort:** 3-4 weeks | **Impact:** Enhances user experience
+
+### Email Notification System
+- [ ] Set up email service integration (SMTP configuration in .env: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS)
+- [ ] Create notification_preferences table (id, user_id, event_type, email_enabled, created_at)
+- [ ] Event types: new_announcement, vote_closing_soon, maintenance_status_changed, maintenance_comment_added, payment_due, payment_overdue
+- [ ] Implement email templates (Handlebars or Tera):
+  - [ ] New announcement notification
+  - [ ] Vote closing soon reminder (24h before close_time)
+  - [ ] Maintenance status changed
+  - [ ] Maintenance comment added
+  - [ ] Payment due reminder (7 days before due_date)
+  - [ ] Payment overdue notice
+- [ ] Add notification triggers in backend (background job or inline after mutations)
+- [ ] Create notification preferences UI for users (checkboxes per event type)
+
+### Additional Features
+- [ ] Add announcement comments/discussions (similar to maintenance comments)
+- [ ] Create audit log system:
+  - [ ] audit_log table (id, user_id, entity_type, entity_id, action, old_value, new_value, created_at)
+  - [ ] Track: building/apartment edits, owner assignments, role changes, all mutations
+  - [ ] Admin-only page to view audit trail with filtering
+- [ ] Implement data export:
+  - [ ] Apartments CSV (number, building, size, owners, renters)
+  - [ ] Owner contacts CSV (name, email, phone, apartments)
+  - [ ] Payment history CSV (date range filter)
+- [ ] Improve mobile responsiveness:
+  - [ ] Test on mobile devices (sidebar collapses to hamburger menu)
+  - [ ] Optimize table layouts for small screens (horizontal scroll or stack)
+  - [ ] Touch-friendly controls (larger buttons, tap targets)
+- [ ] Add water meter usage charts and analytics:
+  - [ ] Line charts: daily/weekly/monthly/yearly usage
+  - [ ] Period comparisons (current month vs last month/year)
+  - [ ] Usage statistics (avg daily, total, min/max)
+  - [ ] Handle meter replacement discontinuities (detect serial number change, segment data)
+  - [ ] PDF report generation for usage summaries
+- [ ] Usage alerts/notifications:
+  - [ ] Configurable thresholds per meter type
+  - [ ] Email/in-app alert when usage exceeds threshold
+
+---
+
+## COMPLETED FEATURES ✅
+
+### Repo & Tooling
+- [x] Create initial repo structure (api/, frontend/, docs/, locales/)
 - [x] Add i18n scaffolding (backend + frontend placeholders)
 - [x] Add scripts: scripts/dev.sh (runs API + FE), scripts/test.sh (fmt/clippy/test + trunk build)
 - [x] CI: GitHub Actions building backend and frontend
 - [x] Docker files for backend
+- [x] Seed script for local dev (./scripts/seed.sh with test users)
 
-## Backend (Actix + Diesel)
+### Backend (Actix + Diesel)
 - [x] Health endpoint with i18n message
 - [x] Users basic CRUD (list, create)
-- [x] Buildings: list/create, Diesel models + migrations
-- [x] Apartments: list/create, list by building, Diesel models + migrations
-- [x] RBAC roles and permissions enforcement (middleware, route guards) (initial enforcement on mutating endpoints)
+- [x] Buildings: list/create, Diesel models + migrations, soft-delete
+- [x] Apartments: list/create, list by building, Diesel models + migrations, soft-delete
+- [x] RBAC roles and permissions enforcement (AuthContext, route guards)
 - [x] Authentication (JWT) with registration/login endpoints
-- [x] Maintenance Requests: models, endpoints (create/list), status update + history audit, attachments CRUD (upload/download/delete/restore), assignment endpoints (assign/unassign), RBAC refined (creator/assigned/apartment owner checks)
-- [x] Maintenance Requests: status transition validation map PENDING (currently allows any transition)
-- [ ] Maintenance Requests tests: create/list/update status, attachment constraints (size/type), history entries, assignment workflow
-- [~] Voting: proposals, votes, results, weight strategies (PerSeat, ByApartmentSize, Custom) - tables created, API pending
-- [ ] Documents: upload/retrieve (multipart), storage
-- [ ] Messaging: WebSocket endpoint and/or REST
-- [ ] Visitors/Access logs
-- [ ] Analytics endpoints
-- [ ] Unit/integration tests for API modules
+- [x] Maintenance Requests: full system with enriched responses
+  - [x] Models, endpoints (create/list with enriched data)
+  - [x] Status update + comprehensive history audit (status, priority, assignment changes)
+  - [x] Attachments CRUD (upload/download/delete/restore) with size/MIME validation
+  - [x] Assignment endpoints (assign/unassign with FK validation)
+  - [x] RBAC refined (creator/assigned/apartment owner checks)
+- [x] Announcements: create, list, pin, comments (Admin/Manager roles)
+- [x] Voting system: full implementation
+  - [x] Proposals, votes, results tables
+  - [x] Voting methods: SimpleMajority, WeightedArea, PerSeat, Consensus
+  - [x] Vote choices: Yes, No, Abstain
+  - [x] Proposal statuses: Scheduled, Open, Closed, Tallied
+  - [x] RBAC: Admin/Manager create/tally, eligible users vote
+- [x] Water Meter Reading System: full implementation
+  - [x] Meters, meter_readings, webhook_api_keys tables
+  - [x] Multiple meter types per apartment (ColdWater, HotWater, Gas, Electricity)
+  - [x] Webhook integration with API key auth
+  - [x] Manual reading entry, CSV export
+  - [x] Calibration tracking, meter replacement workflow
+  - [x] RBAC: Admin/Manager manage, Owners/Renters view (is_visible_to_renters toggle)
 
-## Database (MySQL + Diesel)
+### Database (MySQL + Diesel)
 - [x] Users, roles, user_roles migrations
-- [x] Buildings, apartments migrations
+- [x] Buildings, apartments migrations (with is_deleted for soft-delete)
 - [x] Apartment owners join table (apartment_owners)
 - [x] Maintenance-related tables (maintenance_requests, maintenance_request_attachments, maintenance_request_history, assigned_to column)
+- [x] Announcements tables (announcements, announcement_comments)
 - [x] Voting tables (proposals, votes, proposal_results)
-- [ ] Financial tables: bills, payments, accounts
-- [ ] Events tables
-- [ ] Documents metadata table
-- [ ] Messages table
-- [ ] Visitors table
+- [x] Water meter tables (meters, meter_readings, webhook_api_keys)
 
-## Frontend (Yew + Bootstrap)
+### Frontend (Yew + Bootstrap)
 - [x] App bootstrap and router
-- [x] Home page displaying health
+- [x] Home page (announcements feed)
 - [x] Buildings page (list/create)
 - [x] Apartments page per building (list/create)
 - [x] Integrate Bootstrap 5 via CDN and set up base layout (Navbar, Footer)
-- [x] Refactor into modular components/pages structure (components/, pages/, utils/, routes.rs)
-- [x] Login via Navbar dropdown with inline Register; auth state persisted in LocalStorage (JWT)
-- [x] Fix dropdown closing on Create account (use data-bs-auto-close="outside" + stopPropagation)
-- [ ] Global state (user, token, language)
-- [ ] i18n implementation and language switcher
-- [ ] UI pages for maintenance, financials, events, voting, documents, messaging, visitors
-- [ ] Charts (analytics)
-- [ ] Maintenance requests page: list, filter by status, create form, attachment upload
-- [ ] Voting page: list active/past proposals, vote submission UI
+- [x] Refactor into modular components/pages structure (components/, pages/, routes.rs)
+- [x] Login via Navbar dropdown with inline Register
+- [x] AuthContext: centralized auth state provider with localStorage sync
+- [x] API Service Layer: typed HTTP client (api_client) with automatic token injection
+- [x] Reusable components: ErrorAlert, SuccessAlert, Spinner, AdminSidebar
+- [x] Manager page (admin sidebar, properties management)
+- [x] Maintenance requests pages: list, detail with history, new request form
+- [x] Voting pages: list proposals, view detail & cast vote, create proposal
+- [x] Water meters page: unified meter management with tabs (list, registration, detail with readings)
 
-## Documentation
+### Documentation
 - [x] docs/design.md: initial design
-- [ ] Update design doc with implemented MVP endpoints and data model details
-- [x] .github/copilot-instructions.md: align with current repo layout and chosen libs
+- [x] .github/copilot-instructions.md: align with current repo layout
 - [x] README: add scripts usage and local dev notes
+- [x] CLAUDE.md: comprehensive project overview and architecture guide
 
-## Session Follow-up (Soft Delete & Manager Page)
-- [ ] Backend test: soft-delete & restore buildings endpoints (list active vs deleted, restore removes from deleted)
+---
+
+## TESTING & QUALITY (Ongoing)
+
+### Backend Tests (Pending)
+- [ ] Maintenance request tests: create/list/update status, attachment constraints (size/type), history entries, assignment workflow
+- [ ] Backend test: soft-delete & restore buildings endpoints
 - [ ] Backend test: soft-delete & restore apartments endpoints
-- [ ] Backend test: RBAC guard denies non-Admin/Manager access to create/delete/restore building/apartment
-- [ ] Backend test: apartment owner assignment add/remove idempotency (duplicate add ignored)
+- [ ] Backend test: RBAC guard denies non-Admin/Manager access to create/delete/restore
+- [ ] Backend test: apartment owner assignment add/remove idempotency
 - [ ] Backend test: public users listing limited fields (no password hash exposure)
-- [x] Frontend: extract spinner into reusable component
-- [ ] Frontend: debounce user search input (avoid excessive network calls; 250ms delay)
-- [ ] Frontend: pagination or virtual scroll for large user lists in owner assignment panel
-- [ ] Frontend: optimistic UI update for delete/restore (revert on failure)
-- [ ] Frontend: Admin page for user management (enable/disable users, assign/remove roles)
-- [ ] Frontend: Navbar user dropdown shows role badges (Admin/Manager) + quick link to Manager/Admin pages
-- [ ] Frontend: accessibility improvements (modal focus trap, aria-labels on delete/restore buttons)
-- [ ] Frontend: unify API calls in typed service layer (error mapping, retry for 5xx)
-- [ ] Frontend test: render Manager page with mocked data (owners list, spinners) using wasm-bindgen-test
-- [ ] Frontend test: ensure restore removes item from deleted list immediately
-- [ ] Add index on buildings.is_deleted & apartments.is_deleted for faster filtered queries
-- [ ] Clippy pass: remove unused mut warnings (manage.rs)
-- [ ] Add cargo integration test harness with test DB (transactions rolled back per test)
-- [ ] Seed script for local dev (sample buildings, apartments, users)
-- [ ] Add CI job to run new backend + frontend tests separately
-- [ ] Document soft-delete conventions in design.md
+- [ ] Backend test: maintenance attachment upload rejects >10MB or disallowed MIME
+- [ ] Backend test: maintenance request create/status transition saves history
 - [ ] Add guard unit tests for AuthContext.has_any_role
 - [ ] Create test fixtures helper (create_building(), create_apartment(), assign_owner())
-- [ ] Backend test: maintenance request create/status transition saves history
-- [ ] Backend test: maintenance attachment upload rejects >10MB or disallowed mime
+- [ ] Add cargo integration test harness with test DB (transactions rolled back per test)
 
-## Notes
-- Keep modules/components small. Split handlers by domain and avoid monolithic files.
-- Prefer async DB operations via thread pool (r2d2 is already set up).
-- Next priority suggested: Frontend auth (login), global state, and i18n; then maintenance module.
-- Maintenance attachments stored under STORAGE_DIR with UUID filenames; soft-delete flag for metadata (physical file removal deferred)
-- Voting weight strategy chosen per proposal; if Custom, populate override table before opening voting window.
-- Progress 2025-11-17 (Session 1): Maintenance module backend fully implemented (Phases 1-3 complete except transition validation)
-  
-  **Phase 1 ✅ COMPLETED - Data & Config Foundation:**
-  - Migrations: assigned_to column (nullable FK to users) + voting tables (proposals, votes, proposal_results)
-  - Models/Schema: MaintenanceRequest.assigned_to, Proposal/Vote/ProposalResult structs, VotingMethod/VoteChoice/ProposalStatus enums
-  - Config module: attachments_base_path, max_attachment_size_bytes (10MB default), allowed_mime_types
-  - Error handling: Extended AppError (AttachmentTooLarge, InvalidMimeType, NotFound)
-  
-  **Phase 2 ✅ COMPLETED - Maintenance Attachments Endpoints:**
-  - All 7 attachment endpoints in maintenance/attachments.rs:
-    1. POST /requests/{id}/attachments - Upload with multipart
-    2. GET /requests/{id}/attachments - List active attachments
-    3. GET /requests/{id}/attachments/deleted - List soft-deleted (Admin/Manager only)
-    4. GET /requests/{id}/attachments/{att_id} - Get metadata
-    5. GET /requests/{id}/attachments/{att_id}/download - Download file
-    6. DELETE /requests/{id}/attachments/{att_id} - Soft-delete
-    7. POST /requests/{id}/attachments/{att_id}/restore - Restore
-  - Upload features: UUID filenames, magic byte mime detection (infer crate), size validation, atomic writes, filename sanitization, per-request directories
-  - Download: Correct Content-Type & Content-Disposition headers with original filename
-  - RBAC refined with helpers (load_request, user_owns_apartment, compute_perms)
-  - View permission: creator OR assigned_to OR apartment owner OR Admin/Manager
-  - Modify permission: creator OR assigned_to OR Admin/Manager
-  
-  **Phase 3 ⚠️ PARTIALLY COMPLETED - Assignment & History:**
-  - Assignment endpoints: PUT /assign (validates user exists), DELETE /assign (unassigns)
-  - list_requests enhanced: includes requests where user is assigned_to
-  - Status update & history audit already functional (from previous work)
-  - OUTSTANDING: Status transition validation map (currently allows any transition)
-  
-  **Technical Details:**
-  - Dependencies added: actix-multipart 0.6, uuid 1.0 (v4), infer 0.15, futures-util 0.3
-  - Tests: Placeholder api/tests/attachments_upload.rs (ignored); comprehensive tests deferred to Phase 18
-  - Frontend: minimal maintenance.rs created but module resolution issue; workaround is integrating into ManagePage
-  - Documentation: rest-api.http extended with all maintenance/attachment examples
-  - Metrics: ~800 LOC added, 13 endpoints (6 request + 7 attachment), 3 RBAC helpers, 2 migrations
-  - Build status: ✅ GREEN (workspace builds successfully)
-  
-  **API Surface Added:**
-  - Maintenance: GET/POST /requests, PUT /status, GET /history, PUT/DELETE /assign
-  - Attachments: POST/GET/DELETE upload, list, metadata, download, restore
-  
-  **Next Steps:**
-  - Immediate: Implement status transition validation map, document state machine in design.md
-  - Short-term: Phase 4 voting backend, integrate maintenance UI into ManagePage
-  - Medium-term: Phase 18 comprehensive testing (attachment constraints, RBAC, assignment workflow)
+### Frontend Tests (Pending)
+- [ ] Frontend test: render Manager page with mocked data using wasm-bindgen-test
+- [ ] Frontend test: ensure restore removes item from deleted list immediately
+
+### Performance & Optimization
+- [ ] Add index on buildings.is_deleted & apartments.is_deleted for faster filtered queries
+- [ ] Frontend: debounce user search input (250ms delay)
+- [ ] Frontend: pagination or virtual scroll for large user lists in owner assignment panel
+- [ ] Frontend: optimistic UI update for delete/restore (revert on failure)
+- [ ] Clippy pass: remove unused mut warnings
+
+### Code Quality
+- [ ] Add CI job to run new backend + frontend tests separately
+- [ ] Unit/integration tests for all API modules
+- [ ] Document soft-delete conventions in design.md
+- [ ] Update design doc with all implemented endpoints and data models
+
+### Accessibility & UX
+- [ ] Frontend: accessibility improvements (modal focus trap, aria-labels on buttons)
+- [ ] Frontend: Navbar user dropdown shows role badges (Admin/Manager)
+- [ ] Frontend: Admin page for user management (enable/disable users, assign/remove roles)
+
+---
+
+## FUTURE CONSIDERATIONS (Not Prioritized)
+
+- [ ] Messaging: WebSocket endpoint and/or REST API for direct messages
+- [ ] Visitors/Access logs: track building access, visitor registration
+- [ ] Analytics dashboard: usage statistics, trends, reports
+- [ ] Events/Calendar: schedule meetings, reserve common spaces
+- [ ] Mobile app (native or PWA)
+- [ ] SMS/Push notifications (in addition to email)
+- [ ] Payment gateway integration (Stripe, bank transfer APIs)
+- [ ] Redis caching layer for latest meter readings
+
+---
+
+## NOTES & ARCHITECTURE DECISIONS
+
+### Multi-HOA Architecture
+- System supports multiple HOAs via building-scoped access control
+- RBAC roles are global, but permissions filtered by building_id
+- Users can belong to multiple buildings (as owner, renter, or manager)
+- Building access derived from: apartment_owners, apartment_renters, building_managers
+- Voting proposals scoped to building_id (only users with access to that building can vote)
+
+### Voting Logic (Multiple Owners)
+- Multiple owners allowed per apartment (apartment_owners many-to-many)
+- When multiple owners vote on same proposal: last vote wins (overwrites previous owner's vote for that apartment)
+- Vote weight determined by proposal's voting_method (SimpleMajority, WeightedArea, PerSeat, Consensus)
+
+### Manager Permissions
+- Managers are building-scoped (building_managers join table)
+- Manager role users only see buildings they're assigned to
+- One manager can manage multiple buildings
+- Multiple managers can be assigned to one building
+
+### Maintenance Escalation Workflow
+- Renter submits request → initially visible to apartment owners
+- Owner can escalate (reassign) to building manager
+- Manager handles or reassigns to specific maintenance personnel
+
+### Payment Structure
+- Monthly fees configurable per building with multiple calculation methods:
+  - Per apartment (flat fee)
+  - Per square meter (area-based)
+  - Per person (occupant count)
+  - Usage-based (meter readings)
+  - Fixed amount (custom)
+- Special assessments: one-time charges, can target all or specific apartments
+- Invoice generation: aggregate fees per apartment for billing period
+
+### Document Visibility
+- Documents have building_id scope
+- Visibility levels: all_residents, owners_only, specific_apartments, managers_only, admin_only
+- Examples:
+  - House rules: all_residents
+  - Financial reports: owners_only
+  - Manager contracts: managers_only
+  - Legal documents: admin_only
+
+### Notification Preferences
+- User-configurable per event type (email on/off)
+- Start with email notifications only (SMTP)
+- Future: SMS, push notifications (requires additional infrastructure)
+
+### Technical Patterns
+- Soft-delete: Set is_deleted=true, provide restore endpoints, filter active queries
+- Diesel ORM: Avoid Model::as_select() in joins with nullable FKs (manual field selection)
+- Foreign key validation: Always validate user IDs exist before inserting to avoid FK constraint violations
+- File storage: Local filesystem under STORAGE_DIR (future: S3/object storage)
+- JWT auth: Token in localStorage, AuthContext provider, automatic API client injection
+- Error handling: AppError enum → HTTP status codes, user-friendly messages
+
+### Code Style
+- Rust: async/await, Result<T, AppError>, snake_case functions, CamelCase types
+- RBAC: Centralized checks in handlers via AuthContext
+- Frontend: Use api_client() from services/api.rs (never raw reqwasm)
+- Testing: Transaction rollback per test, RBAC matrix tests, attachment validation tests

@@ -32,4 +32,14 @@ pub enum Route {
     VotingNew,
     #[at("/voting/:id")]
     VotingDetail { id: u64 },
+    #[at("/apartments/:apartment_id/meters")]
+    ApartmentMeters { apartment_id: u64 },
+    #[at("/meters/:id")]
+    MeterDetail { id: u64 },
+    #[at("/admin/meters")]
+    MeterManagement,
+    #[at("/meters/new")]
+    MeterNew,
+    #[at("/admin/meters/calibration")]
+    MeterCalibration,
 }

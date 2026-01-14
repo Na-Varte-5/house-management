@@ -189,7 +189,11 @@ impl ApiClient {
                 serde_json::from_str(&text)
                     .map_err(|e| ApiError::ParseError(format!("Failed to parse response: {} - Body: {}", e, text)))
             }
-            401 => Err(ApiError::Unauthorized),
+            401 => {
+                // Clear auth from localStorage on 401
+                clear_auth_storage();
+                Err(ApiError::Unauthorized)
+            }
             403 => Err(ApiError::Forbidden),
             404 => Err(ApiError::NotFound),
             400..=499 => {
@@ -209,7 +213,11 @@ impl ApiClient {
 
         match status {
             200..=299 => Ok(()),
-            401 => Err(ApiError::Unauthorized),
+            401 => {
+                // Clear auth from localStorage on 401
+                clear_auth_storage();
+                Err(ApiError::Unauthorized)
+            }
             403 => Err(ApiError::Forbidden),
             404 => Err(ApiError::NotFound),
             400..=499 => {
@@ -225,6 +233,17 @@ impl ApiClient {
     }
 }
 
+/// Clears authentication data from localStorage
+/// Called automatically when a 401 Unauthorized response is received
+fn clear_auth_storage() {
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            let _ = storage.remove_item("auth.token");
+            let _ = storage.remove_item("auth.user");
+        }
+    }
+}
+
 // Default API client helper
 pub fn api_client(token: Option<&str>) -> ApiClient {
     let base_url = get_api_base_url();
@@ -236,31 +255,6 @@ pub fn api_client(token: Option<&str>) -> ApiClient {
 }
 
 fn get_api_base_url() -> String {
-    // In dev, frontend runs on 8081 (Trunk) and backend on 8080
-    // In production (same origin), use relative path
-    let base = if let Some(window) = web_sys::window() {
-        let location = window.location();
-        let protocol = location
-            .protocol()
-            .ok()
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| "http:".into());
-        let host = location
-            .host()
-            .ok()
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| "127.0.0.1:8081".into());
-
-        // If running on port 8081 (Trunk dev server), point to backend on 8080
-        let adjusted_host = if host.ends_with(":8081") {
-            host.replace(":8081", ":8080")
-        } else {
-            // Production: same host
-            host
-        };
-        format!("{}//{}/api/v1", protocol, adjusted_host)
-    } else {
-        "http://127.0.0.1:8080/api/v1".into()
-    };
-    base
+    // Use relative path - Trunk proxy will forward /api/* to backend
+    "/api/v1".into()
 }

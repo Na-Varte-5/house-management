@@ -1,5 +1,6 @@
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 #[derive(Clone)]
 pub struct JwtKeys {
@@ -15,7 +16,7 @@ impl JwtKeys {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct Claims {
     pub sub: String,
     pub email: String,
@@ -24,19 +25,35 @@ pub struct Claims {
     pub exp: usize,
 }
 
-#[derive(Deserialize)]
+/// Register a new user
+#[derive(Deserialize, ToSchema)]
 pub struct RegisterRequest {
+    /// User's email address
+    #[schema(example = "user@example.com")]
     pub email: String,
+    /// User's full name
+    #[schema(example = "John Doe")]
     pub name: String,
+    /// User's password (min 8 characters)
+    #[schema(example = "password123")]
     pub password: String,
 }
-#[derive(Deserialize)]
+
+/// Login request
+#[derive(Deserialize, ToSchema)]
 pub struct LoginRequest {
+    /// User's email address
+    #[schema(example = "user@example.com")]
     pub email: String,
+    /// User's password
+    #[schema(example = "password123")]
     pub password: String,
 }
-#[derive(Serialize)]
+
+/// Authentication response containing JWT token
+#[derive(Serialize, ToSchema)]
 pub struct AuthResponse {
+    /// JWT token for authentication
     pub token: String,
 }
 

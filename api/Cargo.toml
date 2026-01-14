@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2024"
 default-run = "api"
 
+[lib]
+name = "api"
+path = "src/lib.rs"
+
+[[bin]]
+name = "api"
+path = "src/main.rs"
+
 [[bin]]
 name = "seed"
 path = "src/bin/seed.rs"
@@ -32,3 +40,10 @@ infer = "0.15"
 futures-util = "0.3"
 pulldown-cmark = "0.13"
 ammonia = "4"
+utoipa = { version = "5", features = ["actix_extras", "chrono", "decimal"] }
+utoipa-swagger-ui = { version = "8", features = ["actix-web"] }
+
+[dev-dependencies]
+actix-rt = "2"
+reqwest = { version = "0.12", features = ["json", "multipart"] }
+tokio = { version = "1", features = ["full"] }

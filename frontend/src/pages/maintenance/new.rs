@@ -6,11 +6,17 @@ use crate::contexts::AuthContext;
 use crate::routes::Route;
 use crate::services::{api_client, ApiError};
 
+#[derive(Deserialize)]
+struct CreatedResponse {
+    id: u64,
+}
+
 #[derive(Deserialize, Clone, PartialEq)]
-struct Apartment {
+struct ApartmentWithBuilding {
     id: u64,
     number: String,
     building_id: u64,
+    building_address: String,
 }
 
 #[derive(Serialize)]
@@ -27,7 +33,7 @@ pub fn maintenance_new_page() -> Html {
     let auth = use_context::<AuthContext>().expect("AuthContext not found");
     let navigator = use_navigator().unwrap();
 
-    let apartments = use_state(|| Vec::<Apartment>::new());
+    let apartments = use_state(|| Vec::<ApartmentWithBuilding>::new());
     let loading_apartments = use_state(|| true);
 
     let apartment_id = use_state(|| None::<u64>);
@@ -50,9 +56,7 @@ pub fn maintenance_new_page() -> Html {
         use_effect_with((), move |_| {
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                // TODO: This should load apartments owned by the current user
-                // For now, we'll load all apartments - backend would need a /apartments/mine endpoint
-                match client.get::<Vec<Apartment>>("/apartments").await {
+                match client.get::<Vec<ApartmentWithBuilding>>("/apartments/my").await {
                     Ok(list) => {
                         apartments.set(list);
                         loading.set(false);
@@ -121,12 +125,13 @@ pub fn maintenance_new_page() -> Html {
                     description: (*description).clone(),
                 };
 
-                match client.post::<_, serde_json::Value>("/requests", &new_request).await {
-                    Ok(_) => {
-                        success.set(Some("Request created successfully".to_string()));
-                        // Redirect to maintenance list after short delay
-                        gloo_timers::callback::Timeout::new(1500, move || {
-                            navigator.push(&Route::Maintenance);
+                match client.post::<_, CreatedResponse>("/requests", &new_request).await {
+                    Ok(response) => {
+                        success.set(Some("Request created successfully! Redirecting...".to_string()));
+                        // Redirect to the created request's detail page
+                        let request_id = response.id;
+                        gloo_timers::callback::Timeout::new(1000, move || {
+                            navigator.push(&Route::MaintenanceDetail { id: request_id });
                         }).forget();
                     }
                     Err(ApiError::Forbidden) => {
@@ -202,7 +207,7 @@ pub fn maintenance_new_page() -> Html {
                                                 for apartments.iter().map(|apt| {
                                                     html! {
                                                         <option value={apt.id.to_string()}>
-                                                            {format!("Apartment {} (Building #{})", apt.number, apt.building_id)}
+                                                            {format!("Apartment {} - {}", apt.number, apt.building_address)}
                                                         </option>
                                                     }
                                                 })
@@ -251,10 +256,10 @@ pub fn maintenance_new_page() -> Html {
                                             })
                                         }}
                                     >
-                                        <option value="Low">{"Low"}</option>
-                                        <option value="Medium">{"Medium"}</option>
-                                        <option value="High">{"High"}</option>
-                                        <option value="Urgent">{"Urgent"}</option>
+                                        <option value="Low" selected={*priority == "Low"}>{"Low"}</option>
+                                        <option value="Medium" selected={*priority == "Medium"}>{"Medium"}</option>
+                                        <option value="High" selected={*priority == "High"}>{"High"}</option>
+                                        <option value="Urgent" selected={*priority == "Urgent"}>{"Urgent"}</option>
                                     </select>
                                 </div>
 

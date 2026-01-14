@@ -6,7 +6,23 @@ use crate::models::{NewUser, User};
 use crate::schema::users;
 use actix_web::{HttpResponse, Responder, web};
 use diesel::prelude::*;
+use utoipa;
 
+/// Register a new user
+///
+/// Creates a new user account. The first user to register is automatically assigned the Admin role,
+/// subsequent users are assigned the Homeowner role by default.
+#[utoipa::path(
+    post,
+    path = "/api/v1/register",
+    request_body = RegisterRequest,
+    responses(
+        (status = 201, description = "User registered successfully"),
+        (status = 400, description = "Invalid input or email already exists"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Authentication"
+)]
 pub async fn register(
     pool: web::Data<DbPool>,
     payload: web::Json<RegisterRequest>,
@@ -35,6 +51,20 @@ pub async fn register(
     Ok(HttpResponse::Created().finish())
 }
 
+/// Login with email and password
+///
+/// Authenticates a user and returns a JWT token valid for 24 hours.
+#[utoipa::path(
+    post,
+    path = "/api/v1/login",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Login successful", body = AuthResponse),
+        (status = 401, description = "Invalid credentials"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Authentication"
+)]
 pub async fn login(
     pool: web::Data<DbPool>,
     keys: web::Data<JwtKeys>,

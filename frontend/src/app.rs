@@ -2,7 +2,8 @@ use yew::prelude::*;
 use yew_router::prelude::*;
 
 use frontend::components::navbar::Navbar;
-use frontend::contexts::AuthProvider;
+use frontend::components::app_layout::AppLayout;
+use frontend::contexts::{AuthProvider, AuthContext};
 use frontend::pages::admin::AdminPage;
 use frontend::pages::admin::AdminAnnouncementsPage;
 use frontend::pages::admin::AdminPropertiesPage;
@@ -14,37 +15,76 @@ use frontend::pages::manage::ManagePage;
 use frontend::pages::health::HealthPage;
 use frontend::pages::maintenance::{MaintenanceListPage, MaintenanceNewPage, MaintenanceDetailPage};
 use frontend::pages::voting::{VotingListPage, VotingNewPage, VotingDetailPage};
+use frontend::pages::meters::{MeterListPage, MeterDetailPage, MeterNewPage, MeterCalibrationPage, MeterManagementPage};
 use frontend::routes::Route;
+
+#[function_component(AppContent)]
+fn app_content() -> Html {
+    let auth = use_context::<AuthContext>().expect("AuthContext not found");
+    let is_authenticated = auth.is_authenticated();
+
+    html! {
+        <>
+            <Navbar />
+            <Switch<Route> render={move |route| {
+                // Routes that don't need AppLayout (public/login)
+                if matches!(route, Route::Login) {
+                    return match route {
+                        Route::Login => html!{<LoginPage />},
+                        _ => html!{<div>{"Not found"}</div>},
+                    };
+                }
+
+                // Home page: use layout only if authenticated
+                if matches!(route, Route::Home) {
+                    return if is_authenticated {
+                        html!{
+                            <AppLayout active_route={route.clone()}>
+                                <Home />
+                            </AppLayout>
+                        }
+                    } else {
+                        html!{<Home />}
+                    };
+                }
+
+                // All other routes: wrap with AppLayout
+                html!{
+                    <AppLayout active_route={route.clone()}>
+                        {match route {
+                            Route::Buildings => html!{<BuildingsPage />},
+                            Route::BuildingApartments { .. } => html!{<BuildingApartmentsPage />},
+                            Route::Admin => html!{<AdminPage />},
+                            Route::AdminAnnouncements => html!{<AdminAnnouncementsPage />},
+                            Route::AdminProperties => html!{<AdminPropertiesPage />},
+                            Route::Manage => html!{<ManagePage />},
+                            Route::Health => html!{<HealthPage />},
+                            Route::Maintenance => html!{<MaintenanceListPage />},
+                            Route::MaintenanceNew => html!{<MaintenanceNewPage />},
+                            Route::MaintenanceDetail { id } => html!{<MaintenanceDetailPage id={id} />},
+                            Route::Voting => html!{<VotingListPage />},
+                            Route::VotingNew => html!{<VotingNewPage />},
+                            Route::VotingDetail { id } => html!{<VotingDetailPage id={id} />},
+                            Route::ApartmentMeters { apartment_id } => html!{<MeterListPage apartment_id={apartment_id} />},
+                            Route::MeterDetail { id } => html!{<MeterDetailPage id={id} />},
+                            Route::MeterManagement => html!{<MeterManagementPage />},
+                            Route::MeterNew => html!{<MeterNewPage />},
+                            Route::MeterCalibration => html!{<MeterCalibrationPage />},
+                            _ => html!{<div>{"Not found"}</div>},
+                        }}
+                    </AppLayout>
+                }
+            }} />
+        </>
+    }
+}
 
 #[function_component(App)]
 pub fn app() -> Html {
     html! {
         <AuthProvider>
             <BrowserRouter>
-                <Navbar />
-                <Switch<Route> render={move |route| match route {
-                    Route::Home => html!{<Home />},
-                    Route::Buildings => html!{<BuildingsPage />},
-                    Route::BuildingApartments { .. } => html!{<BuildingApartmentsPage />},
-                    Route::Login => html!{<LoginPage />},
-                    Route::Admin => html!{<AdminPage />},
-                    Route::AdminAnnouncements => html!{<AdminAnnouncementsPage />},
-                    Route::AdminProperties => html!{<AdminPropertiesPage />},
-                    Route::Manage => html!{<ManagePage />},
-                    Route::Health => html!{<HealthPage />},
-                    Route::Maintenance => html!{<MaintenanceListPage />},
-                    Route::MaintenanceNew => html!{<MaintenanceNewPage />},
-                    Route::MaintenanceDetail { id } => html!{<MaintenanceDetailPage id={id} />},
-                    Route::Voting => html!{<VotingListPage />},
-                    Route::VotingNew => html!{<VotingNewPage />},
-                    Route::VotingDetail { id } => html!{<VotingDetailPage id={id} />},
-                }} />
-                <footer class="app-footer py-4 mt-5 border-top">
-                    <div class="container d-flex justify-content-between small">
-                        <span>{"© House Management"}</span>
-                        <span class="text-muted">{"v0.1.0"}</span>
-                    </div>
-                </footer>
+                <AppContent />
             </BrowserRouter>
         </AuthProvider>
     }

@@ -10,6 +10,22 @@ House Management System is a web application for managing residential properties
 
 ## Development Commands
 
+### Test Users
+
+**Available test credentials** (created via seed script):
+- `admin@example.com` / `password123` (Admin)
+- `manager@example.com` / `password123` (Manager)
+- `owner1@example.com` / `password123` (Homeowner)
+- `owner2@example.com` / `password123` (Homeowner)
+- `renter1@example.com` / `password123` (Renter)
+
+**To seed the database:**
+```bash
+./scripts/seed.sh
+```
+
+**Note:** The first user to register via `/api/v1/auth/register` automatically becomes Admin. Subsequent users default to Homeowner role and must be assigned other roles by an Admin via `POST /api/v1/users/{id}/roles`.
+
 ### Running the Application
 
 ```bash
@@ -130,22 +146,63 @@ diesel migration run              # apply pending migrations
 - Buildings and apartments CRUD with soft-delete
 - Apartment-owner assignment (many-to-many via `apartment_owners` join table)
 - Manager page UI: create buildings/apartments, assign owners, show deleted toggle, restore
-- Maintenance requests: submission, status tracking (Open/InProgress/Resolved), audit history
+- **Maintenance Requests System**: Full-featured request tracking with enriched data and comprehensive audit history
+  - Tables: `maintenance_requests`, `maintenance_request_attachments`, `maintenance_request_history`
+  - **Enriched API responses**: All endpoints return apartment numbers, building addresses, and user names (not just IDs)
+    - `GET /api/v1/requests` returns `MaintenanceRequestEnriched` with apartment/building context
+    - `GET /api/v1/requests/{id}` returns `MaintenanceRequestDetail` with full user names for creator and assignee
+    - `PUT /api/v1/requests/{id}` returns enriched detail after updates
+    - `GET /api/v1/requests/{id}/history` returns `MaintenanceRequestHistoryEnriched` with user names
+  - **Comprehensive audit history**: All changes (status, priority, assignment) logged to history table
+    - Status changes: "Changed status from Open to InProgress"
+    - Priority changes: "Priority changed from Medium to High"
+    - Assignment changes: "Assigned to [User Name]" or "Reassigned from [Old User] to [New User]"
+    - All history entries include user name and formatted timestamp
+  - **Frontend improvements**: User-friendly display with proper names and formatted dates
+    - Dates formatted as "Jan 14, 2026 at 10:30" instead of raw timestamps
+    - Dropdown defaults show current values (status, priority, assigned user)
+    - All users (not just Admin/Manager) see proper names in history
+  - File uploads via multipart (`POST /api/v1/requests/{id}/attachments`); stored under `STORAGE_DIR` (configurable in `AppConfig`)
+  - Constraints: max 10MB, allowed MIME types: `image/*`, `application/pdf`
+  - **Important**: Manual field selection in join queries to avoid Diesel deserialization issues with nullable foreign keys
+  - RBAC: Admin/Manager can update all fields; Homeowner/Renter can only view their own requests
 - Announcements: create, list, pin, comments (Admin/Manager roles)
+- **Voting System**: proposal creation, voting with weighted methods, result tallying
+  - Tables: `proposals`, `votes`, `proposal_results`
+  - Voting methods: `SimpleMajority` (yes > no), `WeightedArea` (weight by apartment size), `PerSeat` (1 vote each), `Consensus` (requires unanimous approval)
+  - Vote choices: Yes, No, Abstain
+  - Proposal statuses: Scheduled, Open, Closed, Tallied
+  - Eligibility: Role-based (Admin, Manager, Homeowner, Renter, HOA Member) - configurable per proposal
+  - RBAC: Only Admin/Manager can create proposals and tally results; eligible users can vote
+  - Frontend: List proposals (`/voting`), view details & cast vote (`/voting/:id`), create proposal (`/voting/new`)
+  - Backend API: `GET /api/v1/proposals`, `POST /api/v1/proposals`, `GET /api/v1/proposals/:id`, `POST /api/v1/proposals/:id/vote`, `POST /api/v1/proposals/:id/tally`
 - Health check endpoint (`/api/v1/health`) with i18n
+- **Water Meter Reading System**: Remote meter readings with webhook integration for automated data ingestion
+  - Tables: `meters`, `meter_readings`, `webhook_api_keys`
+  - Support for multiple meter types per apartment: ColdWater, HotWater, Gas, Electricity
+  - Webhook integration with per-integration API key authentication (stored hashed in database)
+  - Manual reading entry as fallback (Admin/Manager only)
+  - CSV export of readings with date range filtering
+  - Calibration tracking: due date monitoring, color-coded status badges (overdue/due soon/valid)
+  - Meter replacement workflow: update serial number while preserving all historical readings (same meter ID)
+  - RBAC: Admin/Manager can register/edit meters and add readings; Owners/Renters can view meters (with `is_visible_to_renters` toggle)
+  - Frontend: Unified meter management page (`/admin/meters`) with tabs for list view and registration form
+  - Meter detail page with reading history table, manual entry form, edit/replace meter form, CSV export
+  - Backend API: Full CRUD for meters, readings, and webhook API keys
+  - **Note**: Physical meter replacement (calibration) causes reading value reset to 0; charts/analytics (not yet implemented) will need to handle discontinuities
 
-### Upcoming Features (Partially Implemented)
+### Upcoming Features
 
-**Maintenance Requests**:
-- Tables: `maintenance_requests`, `maintenance_request_attachments`, `maintenance_request_history`
-- File uploads via multipart (`POST /api/v1/requests/{id}/attachments`); stored under `STORAGE_DIR` (configurable in `AppConfig`)
-- Constraints: max 10MB, allowed MIME types: `image/*`, `application/pdf`
-- Status changes logged to history table with audit trail
-
-**Voting System** (planned):
-- Weight strategies: PerSeat (1 vote each), ByApartmentSize (weight by `size_sq_m`), Custom (override table)
-- Tables: `proposals`, `votes`, `proposal_custom_weights`
-- Result calculation: aggregate weights, simple majority initially
+**Water Meter Analytics & Visualization** (planned):
+- Historical usage charts (line graphs): daily, weekly, monthly, yearly aggregations
+- Period comparisons: compare current month to previous month/year
+- Usage statistics: average daily usage, total usage per period, min/max readings
+- Handle meter replacement discontinuities: detect serial number changes, calculate consumption deltas, segment/normalize data
+- Meter replacement event tracking: dedicated table to record old serial number and final reading at replacement time
+- PDF report generation for usage summaries
+- Usage alerts/notifications: email/in-app alerts for unusual consumption (configurable thresholds)
+- Caching layer (Redis) for latest readings to optimize read-heavy queries
+- Yearly billing tally export with all apartments and annual totals
 
 ## Code Style and Conventions
 
@@ -170,6 +227,25 @@ diesel migration run              # apply pending migrations
 - Storing sensitive data in JWT (only user ID and roles)
 - Blocking database calls (always use async)
 - Exposing internal error details to API responses
+- Using `Model::as_select()` in join queries with nullable foreign keys (causes "could not convert slice to array" errors)
+
+**Diesel ORM patterns**:
+- **Issue with joins and nullable FKs**: When using `as_select()` with joined queries, Diesel can fail to deserialize nullable foreign key fields
+- **Solution**: Manually select individual fields in join queries instead of using `as_select()`
+  ```rust
+  // BAD - can cause deserialization errors with nullable FKs
+  let result: (MaintenanceRequest, String) = maintenance_requests
+      .inner_join(apartments)
+      .select((MaintenanceRequest::as_select(), apartments::number))
+      .first(&mut conn)?;
+
+  // GOOD - explicitly select each field
+  let result: (u64, u64, Option<u64>, String) = maintenance_requests
+      .inner_join(apartments)
+      .select((mr::id, mr::apartment_id, mr::assigned_to, apt::number))
+      .first(&mut conn)?;
+  ```
+- **Foreign key validation**: Always validate user IDs exist in database before inserting into history tables to avoid FK constraint violations
 
 ## Important Implementation Notes
 

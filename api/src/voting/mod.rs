@@ -5,20 +5,53 @@ use crate::db::DbPool;
 use crate::auth::{AuthContext, AppError};
 use crate::models::{Proposal, Vote, ProposalResult, NewProposal, VotingMethod, VoteChoice};
 use std::str::FromStr;
+use utoipa;
 
 /// List all proposals
+///
+/// Returns all proposals ordered by creation date (most recent first).
+/// Accessible to all authenticated users.
+#[utoipa::path(
+    get,
+    path = "/api/v1/proposals",
+    responses(
+        (status = 200, description = "List of proposals", body = Vec<Proposal>),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Voting",
+    security(("bearer_auth" = []))
+)]
 pub async fn list_proposals(auth: AuthContext, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
     use crate::schema::proposals::dsl as p;
+    use crate::auth::get_user_building_ids;
+
     let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
-    let proposals = p::proposals
+
+    // Get user's accessible buildings
+    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+    let is_admin = auth.has_any_role(&["Admin"]);
+    let building_ids = get_user_building_ids(user_id, is_admin, &mut conn)?;
+
+    // Build query
+    let mut query = p::proposals.into_boxed();
+
+    // If user has restricted access, filter by accessible buildings OR global proposals
+    if let Some(ref ids) = building_ids {
+        query = query.filter(
+            p::building_id.eq_any(ids).or(p::building_id.is_null())
+        );
+    }
+
+    let proposals = query
         .select(Proposal::as_select())
         .order(p::created_at.desc())
         .load(&mut conn)?;
+
     Ok(HttpResponse::Ok().json(proposals))
 }
 
 /// Get a single proposal with vote counts
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct ProposalWithVotes {
     #[serde(flatten)]
     pub proposal: Proposal,
@@ -31,6 +64,24 @@ pub struct ProposalWithVotes {
     pub result: Option<ProposalResult>,
 }
 
+/// Get proposal details with vote statistics
+///
+/// Returns detailed information about a proposal including vote counts,
+/// whether the current user has voted, and if they are eligible to vote.
+#[utoipa::path(
+    get,
+    path = "/api/v1/proposals/{id}",
+    params(
+        ("id" = u64, Path, description = "Proposal ID")
+    ),
+    responses(
+        (status = 200, description = "Proposal details with vote statistics", body = ProposalWithVotes),
+        (status = 404, description = "Proposal not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Voting",
+    security(("bearer_auth" = []))
+)]
 pub async fn get_proposal(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
     use crate::schema::proposals::dsl as p;
     use crate::schema::votes::dsl as v;
@@ -85,16 +136,37 @@ pub async fn get_proposal(auth: AuthContext, path: web::Path<u64>, pool: web::Da
 }
 
 /// Create a new proposal (Admin/Manager only)
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct CreateProposalPayload {
     pub title: String,
     pub description: String,
-    pub start_time: String,  // ISO datetime string
-    pub end_time: String,    // ISO datetime string
+    pub building_id: Option<u64>,  // If None, proposal is global (visible to all)
+    #[schema(example = "2026-01-20T10:00")]
+    pub start_time: String,  // ISO datetime string (YYYY-MM-DDTHH:MM)
+    #[schema(example = "2026-01-27T18:00")]
+    pub end_time: String,    // ISO datetime string (YYYY-MM-DDTHH:MM)
+    #[schema(example = "SimpleMajority")]
     pub voting_method: String,
     pub eligible_roles: Vec<String>,
 }
 
+/// Create a new proposal
+///
+/// Creates a new voting proposal. Only Admin or Manager roles can create proposals.
+/// The proposal status is automatically determined based on start/end times.
+#[utoipa::path(
+    post,
+    path = "/api/v1/proposals",
+    request_body = CreateProposalPayload,
+    responses(
+        (status = 201, description = "Proposal created successfully", body = Proposal),
+        (status = 400, description = "Invalid input (e.g., invalid datetime format or voting method)"),
+        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Voting",
+    security(("bearer_auth" = []))
+)]
 pub async fn create_proposal(
     auth: AuthContext,
     pool: web::Data<DbPool>,
@@ -119,6 +191,20 @@ pub async fn create_proposal(
     VotingMethod::from_str(&payload.voting_method)
         .map_err(|_| AppError::BadRequest("Invalid voting_method".into()))?;
 
+    // Validate building access (if building_id is specified)
+    if let Some(building_id) = payload.building_id {
+        use crate::auth::get_user_building_ids;
+        let is_admin = auth.has_any_role(&["Admin"]);
+        let accessible_buildings = get_user_building_ids(created_by, is_admin, &mut conn)?;
+
+        // If user has restricted access, verify they can access this building
+        if let Some(buildings) = accessible_buildings {
+            if !buildings.contains(&building_id) {
+                return Err(AppError::Forbidden);
+            }
+        }
+    }
+
     let eligible_roles = payload.eligible_roles.join(",");
 
     // Determine status based on start time
@@ -134,6 +220,7 @@ pub async fn create_proposal(
     let new_proposal = NewProposal {
         title: payload.title.clone(),
         description: payload.description.clone(),
+        building_id: payload.building_id,
         start_time,
         end_time,
         voting_method: payload.voting_method.clone(),
@@ -168,11 +255,34 @@ pub async fn create_proposal(
 }
 
 /// Cast a vote on a proposal
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct CastVotePayload {
+    #[schema(example = "Yes")]
     pub choice: String,  // "Yes", "No", "Abstain"
 }
 
+/// Cast or update a vote on a proposal
+///
+/// Allows eligible users to vote on an open proposal. If the user has already voted,
+/// this endpoint updates their existing vote. Vote weight is calculated based on the
+/// proposal's voting method (SimpleMajority, WeightedArea, PerSeat, or Consensus).
+#[utoipa::path(
+    post,
+    path = "/api/v1/proposals/{id}/vote",
+    params(
+        ("id" = u64, Path, description = "Proposal ID")
+    ),
+    request_body = CastVotePayload,
+    responses(
+        (status = 200, description = "Vote cast successfully"),
+        (status = 400, description = "Invalid choice or proposal not open for voting"),
+        (status = 403, description = "Forbidden - user not eligible to vote on this proposal"),
+        (status = 404, description = "Proposal not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Voting",
+    security(("bearer_auth" = []))
+)]
 pub async fn cast_vote(
     auth: AuthContext,
     path: web::Path<u64>,
@@ -270,7 +380,26 @@ pub async fn cast_vote(
     }))
 }
 
-/// Tally results for a proposal (Admin/Manager only)
+/// Tally results for a proposal
+///
+/// Calculates and stores the final results for a proposal. Only Admin or Manager roles
+/// can tally results. This determines whether the proposal passed based on the voting
+/// method and updates the proposal status to "Tallied".
+#[utoipa::path(
+    post,
+    path = "/api/v1/proposals/{id}/tally",
+    params(
+        ("id" = u64, Path, description = "Proposal ID")
+    ),
+    responses(
+        (status = 200, description = "Results tallied successfully"),
+        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 404, description = "Proposal not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Voting",
+    security(("bearer_auth" = []))
+)]
 pub async fn tally_results(
     auth: AuthContext,
     path: web::Path<u64>,

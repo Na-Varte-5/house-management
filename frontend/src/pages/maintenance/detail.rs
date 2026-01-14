@@ -11,13 +11,19 @@ use web_sys::HtmlInputElement;
 struct MaintenanceRequest {
     id: u64,
     apartment_id: u64,
+    apartment_number: String,
+    building_id: u64,
+    building_address: String,
     request_type: String,
     priority: String,
     title: String,
     description: String,
     status: String,
+    resolution_notes: Option<String>,
     created_by: u64,
+    created_by_name: String,
     assigned_to: Option<u64>,
+    assigned_to_name: Option<String>,
     created_at: String,
     updated_at: String,
 }
@@ -30,6 +36,7 @@ struct HistoryEntry {
     to_status: String,
     note: Option<String>,
     changed_by: u64,
+    changed_by_name: String,
     changed_at: Option<String>,
 }
 
@@ -59,6 +66,52 @@ struct UpdateRequest {
 #[derive(Properties, PartialEq)]
 pub struct Props {
     pub id: u64,
+}
+
+// Helper function to format datetime strings to be more user-friendly
+fn format_date(datetime_str: &str) -> String {
+    if datetime_str.is_empty() {
+        return String::from("N/A");
+    }
+
+    // Parse the datetime string (format: "2026-01-14 10:30:00")
+    let parts: Vec<&str> = datetime_str.split(' ').collect();
+    if parts.len() == 2 {
+        let date_parts: Vec<&str> = parts[0].split('-').collect();
+        if date_parts.len() == 3 {
+            let year = date_parts[0];
+            let month = date_parts[1];
+            let day = date_parts[2];
+            let time = parts[1];
+
+            // Format as "Jan 14, 2026 at 10:30"
+            let month_name = match month {
+                "01" => "Jan", "02" => "Feb", "03" => "Mar", "04" => "Apr",
+                "05" => "May", "06" => "Jun", "07" => "Jul", "08" => "Aug",
+                "09" => "Sep", "10" => "Oct", "11" => "Nov", "12" => "Dec",
+                _ => month
+            };
+
+            let time_parts: Vec<&str> = time.split(':').collect();
+            let short_time = if time_parts.len() >= 2 {
+                format!("{}:{}", time_parts[0], time_parts[1])
+            } else {
+                time.to_string()
+            };
+
+            return format!("{} {}, {} at {}", month_name, day, year, short_time);
+        }
+    }
+
+    datetime_str.to_string()
+}
+
+// Helper function to get user name by ID from users list
+fn get_user_name(user_id: u64, users: &[UserInfo]) -> String {
+    users.iter()
+        .find(|u| u.id == user_id)
+        .map(|u| u.name.clone())
+        .unwrap_or_else(|| format!("User #{}", user_id))
 }
 
 #[function_component(MaintenanceDetailPage)]
@@ -421,17 +474,17 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
 
                                 <div class="row small text-muted">
                                     <div class="col-md-6 mb-2">
-                                        <strong>{"Apartment:"}</strong>{" "}{req.apartment_id}
+                                        <strong>{"Apartment:"}</strong>{" "}{format!("{} ({})", req.apartment_number, req.building_address)}
                                     </div>
                                     <div class="col-md-6 mb-2">
-                                        <strong>{"Created by:"}</strong>{" "}{req.created_by}
+                                        <strong>{"Created by:"}</strong>{" "}{&req.created_by_name}
                                     </div>
                                     <div class="col-md-6 mb-2">
                                         <strong>{"Assigned to:"}</strong>{" "}
-                                        {req.assigned_to.map(|id| id.to_string()).unwrap_or_else(|| "Unassigned".to_string())}
+                                        {req.assigned_to_name.as_ref().map(|name| name.clone()).unwrap_or_else(|| "Unassigned".to_string())}
                                     </div>
                                     <div class="col-md-6 mb-2">
-                                        <strong>{"Created:"}</strong>{" "}{&req.created_at}
+                                        <strong>{"Created:"}</strong>{" "}{format_date(&req.created_at)}
                                     </div>
                                 </div>
                             </div>
@@ -453,26 +506,43 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
                                     <div class="timeline">
                                         {
                                             for history.iter().map(|entry| {
+                                                let formatted_date = entry.changed_at.as_ref()
+                                                    .map(|dt| format_date(dt))
+                                                    .unwrap_or_else(|| "(unknown)".to_string());
+
                                                 html! {
                                                     <div class="mb-3 pb-3 border-bottom">
                                                         <div class="d-flex justify-content-between">
-                                                            <strong class="small">{"User #"}{entry.changed_by}</strong>
+                                                            <strong class="small">{&entry.changed_by_name}</strong>
                                                             <span class="small text-muted">
-                                                                {entry.changed_at.as_ref().unwrap_or(&"(unknown)".to_string())}
+                                                                {formatted_date}
                                                             </span>
                                                         </div>
                                                         <p class="mb-0 small">
-                                                            {"Changed status from "}
-                                                            <span class="text-decoration-line-through">
-                                                                {entry.from_status.as_ref().unwrap_or(&"(none)".to_string())}
-                                                            </span>
-                                                            {" to "}
-                                                            <strong>{&entry.to_status}</strong>
                                                             {
-                                                                if let Some(note) = &entry.note {
-                                                                    html! { <span class="text-muted">{" - "}{note}</span> }
+                                                                // Check if this is a status change or other type of change
+                                                                if entry.from_status.is_none() && entry.note.is_some() {
+                                                                    // Priority or assignment change - just show the note
+                                                                    html! { <>{entry.note.as_ref().unwrap()}</> }
                                                                 } else {
-                                                                    html! {}
+                                                                    // Status change - show from/to format
+                                                                    html! {
+                                                                        <>
+                                                                            {"Changed status from "}
+                                                                            <span class="text-decoration-line-through">
+                                                                                {entry.from_status.as_ref().unwrap_or(&"(none)".to_string())}
+                                                                            </span>
+                                                                            {" to "}
+                                                                            <strong>{&entry.to_status}</strong>
+                                                                            {
+                                                                                if let Some(note) = &entry.note {
+                                                                                    html! { <span class="text-muted">{" - "}{note}</span> }
+                                                                                } else {
+                                                                                    html! {}
+                                                                                }
+                                                                            }
+                                                                        </>
+                                                                    }
                                                                 }
                                                             }
                                                         </p>
@@ -535,18 +605,21 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
                                         <select
                                             class="form-select form-select-sm mb-2"
                                             disabled={*updating}
+                                            value={(*new_status).clone().unwrap_or_else(|| req.status.clone())}
                                             onchange={{
                                                 let new_status = new_status.clone();
                                                 Callback::from(move |e: Event| {
                                                     let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
-                                                    new_status.set(Some(select.value()));
+                                                    let value = select.value();
+                                                    if !value.is_empty() {
+                                                        new_status.set(Some(value));
+                                                    }
                                                 })
                                             }}
                                         >
-                                            <option value="">{"-- Select Status --"}</option>
-                                            <option value="Open">{"Open"}</option>
-                                            <option value="InProgress">{"In Progress"}</option>
-                                            <option value="Resolved">{"Resolved"}</option>
+                                            <option value="Open" selected={req.status == "Open"}>{"Open"}</option>
+                                            <option value="InProgress" selected={req.status == "InProgress"}>{"In Progress"}</option>
+                                            <option value="Resolved" selected={req.status == "Resolved"}>{"Resolved"}</option>
                                         </select>
                                         <button
                                             class="btn btn-sm btn-primary w-100"
@@ -568,19 +641,22 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
                                         <select
                                             class="form-select form-select-sm mb-2"
                                             disabled={*updating}
+                                            value={(*new_priority).clone().unwrap_or_else(|| req.priority.clone())}
                                             onchange={{
                                                 let new_priority = new_priority.clone();
                                                 Callback::from(move |e: Event| {
                                                     let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
-                                                    new_priority.set(Some(select.value()));
+                                                    let value = select.value();
+                                                    if !value.is_empty() {
+                                                        new_priority.set(Some(value));
+                                                    }
                                                 })
                                             }}
                                         >
-                                            <option value="">{"-- Select Priority --"}</option>
-                                            <option value="Low">{"Low"}</option>
-                                            <option value="Medium">{"Medium"}</option>
-                                            <option value="High">{"High"}</option>
-                                            <option value="Urgent">{"Urgent"}</option>
+                                            <option value="Low" selected={req.priority == "Low"}>{"Low"}</option>
+                                            <option value="Medium" selected={req.priority == "Medium"}>{"Medium"}</option>
+                                            <option value="High" selected={req.priority == "High"}>{"High"}</option>
+                                            <option value="Urgent" selected={req.priority == "Urgent"}>{"Urgent"}</option>
                                         </select>
                                         <button
                                             class="btn btn-sm btn-primary w-100"
@@ -602,21 +678,30 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
                                         <select
                                             class="form-select form-select-sm mb-2"
                                             disabled={*updating}
+                                            value={
+                                                new_assigned.map(|id| id.to_string())
+                                                    .or_else(|| req.assigned_to.map(|id| id.to_string()))
+                                                    .unwrap_or_default()
+                                            }
                                             onchange={{
                                                 let new_assigned = new_assigned.clone();
                                                 Callback::from(move |e: Event| {
                                                     let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
-                                                    if let Ok(id) = select.value().parse::<u64>() {
-                                                        new_assigned.set(Some(id));
+                                                    let value = select.value();
+                                                    if !value.is_empty() {
+                                                        if let Ok(id) = value.parse::<u64>() {
+                                                            new_assigned.set(Some(id));
+                                                        }
                                                     }
                                                 })
                                             }}
                                         >
-                                            <option value="">{"-- Select User --"}</option>
+                                            <option value="">{"-- Unassigned --"}</option>
                                             {
                                                 for users.iter().map(|user| {
+                                                    let is_selected = req.assigned_to == Some(user.id);
                                                     html! {
-                                                        <option value={user.id.to_string()}>
+                                                        <option value={user.id.to_string()} selected={is_selected}>
                                                             {format!("{} ({})", user.name, user.email)}
                                                         </option>
                                                     }

@@ -1,29 +1,18 @@
-mod apartments;
-mod auth;
-mod buildings; // new
-mod config; // new config module
-mod db; // new
-mod i18n;
-mod models;
-mod schema;
-mod users; // new // new
-mod maintenance; // maintenance requests module
-mod announcements; // announcements module
-mod voting; // voting/proposals module
-
-use crate::auth::JwtKeys;
-use crate::config::AppConfig;
-use crate::db::DbPool;
-use crate::i18n::{get_message, init_translations, negotiate_language};
+use api::{
+    apartments, announcements, auth, buildings, dashboard, maintenance, users, voting, meters,
+    AppConfig, DbPool, JwtKeys, MIGRATIONS,
+    openapi::ApiDoc,
+};
+use api::i18n::{get_message, init_translations, negotiate_language};
 use actix_cors::Cors;
 use actix_web::{App, HttpRequest, HttpServer, Responder, web};
 use diesel::mysql::MysqlConnection;
 use diesel::r2d2::ConnectionManager;
-use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
+use diesel_migrations::MigrationHarness;
 use serde::Serialize;
 use std::env;
-
-pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -73,11 +62,17 @@ async fn main() -> std::io::Result<()> {
     let app_config = AppConfig::load();
     println!("AppConfig: attachments_path={}, max_size={}, mime_types={:?}", app_config.attachments_base_path, app_config.max_attachment_size_bytes, app_config.allowed_mime_types);
 
+    let openapi = ApiDoc::openapi();
+
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(keys.clone()))
             .app_data(web::Data::new(app_config.clone()))
+            .service(
+                SwaggerUi::new("/swagger-ui/{_:.*}")
+                    .url("/api-docs/openapi.json", openapi.clone())
+            )
             .service(
                 web::scope("/api/v1")
                     .wrap(Cors::permissive())
@@ -88,7 +83,9 @@ async fn main() -> std::io::Result<()> {
                     .configure(apartments::configure)
                     .configure(maintenance::configure)
                     .configure(announcements::configure)
-                    .configure(voting::configure),
+                    .configure(voting::configure)
+                    .configure(meters::configure)
+                    .configure(dashboard::configure),
             )
     })
     .bind(addr)?

@@ -9,14 +9,15 @@ use crate::i18n::{set_language, current_language, available_languages, t};
 #[function_component(Navbar)]
 pub fn navbar() -> Html {
     let auth = use_context::<AuthContext>().expect("AuthContext not found");
+    let navigator = use_navigator().unwrap();
 
     let on_logout = {
         let auth = auth.clone();
+        let navigator = navigator.clone();
         Callback::from(move |_| {
             auth.logout.emit(());
-            if let Some(w) = web_sys::window() {
-                let _ = w.location().reload();
-            }
+            // Navigate to home instead of reloading to avoid 401 errors
+            navigator.push(&Route::Home);
         })
     };
 
@@ -31,26 +32,13 @@ pub fn navbar() -> Html {
         })
     };
 
-    let is_manager_or_admin = auth.is_admin_or_manager();
-
     html! {
-        <nav class="navbar navbar-expand navbar-dark bg-dark">
+        <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top">
             <div class="container-fluid">
                 <Link<Route> to={Route::Home} classes="navbar-brand">{ t("app-name") }</Link<Route>>
-                <div class="navbar-nav">
-                    <Link<Route> to={Route::Buildings} classes="nav-link">{ t("nav-buildings") }</Link<Route>>
-                    { if auth.is_authenticated() { html!{
-                        <>
-                            <Link<Route> to={Route::Maintenance} classes="nav-link">{"Maintenance"}</Link<Route>>
-                            <Link<Route> to={Route::Voting} classes="nav-link">{"Voting"}</Link<Route>>
-                        </>
-                    } } else { html!{} } }
-                    <Link<Route> to={Route::Health} classes="nav-link">{ t("nav-health") }</Link<Route>>
-                    { if is_manager_or_admin { html!{
-                        <Link<Route> to={Route::Manage} classes="nav-link">{ t("nav-dashboard") }</Link<Route>>
-                    } } else { html!{} } }
-                </div>
-                <div class="d-flex">
+
+                // Right side: language selector and user dropdown
+                <div class="d-flex ms-auto">
                     <div class="me-2">
                         <select class="form-select form-select-sm bg-dark text-light border-secondary" onchange={on_lang_change.clone()} value={(*lang_state).clone()}>
                             { for available_languages().into_iter().map(|code| html!{<option value={code.clone()} selected={code==*lang_state}>{code.to_uppercase()}</option>}) }

@@ -7,6 +7,7 @@ use crate::schema::{announcements, announcements_comments};
 use crate::schema::users::dsl as u;
 use std::collections::HashMap;
 use chrono::Utc;
+use utoipa;
 
 fn render_markdown(md: &str) -> String {
     use pulldown_cmark::{Parser, Options, html};
@@ -19,42 +20,42 @@ fn render_markdown(md: &str) -> String {
     ammonia::Builder::default().clean(&html_output).to_string()
 }
 
-#[derive(serde::Deserialize)]
-struct CreateAnnouncementRequest {
-    title: String,
-    body_md: String,
-    public: bool,
-    pinned: bool,
-    roles_csv: Option<String>,
-    building_id: Option<u64>,
-    apartment_id: Option<u64>,
-    comments_enabled: bool,
-    publish_at: Option<chrono::NaiveDateTime>,
-    expire_at: Option<chrono::NaiveDateTime>,
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+pub struct CreateAnnouncementRequest {
+    pub title: String,
+    pub body_md: String,
+    pub public: bool,
+    pub pinned: bool,
+    pub roles_csv: Option<String>,
+    pub building_id: Option<u64>,
+    pub apartment_id: Option<u64>,
+    pub comments_enabled: bool,
+    pub publish_at: Option<chrono::NaiveDateTime>,
+    pub expire_at: Option<chrono::NaiveDateTime>,
 }
 
-#[derive(serde::Deserialize)]
-struct UpdateAnnouncementRequest {
-    title: Option<String>,
-    body_md: Option<String>,
-    public: Option<bool>,
-    pinned: Option<bool>,
-    roles_csv: Option<Option<String>>, // double option to allow clearing
-    building_id: Option<Option<u64>>,
-    apartment_id: Option<Option<u64>>,
-    comments_enabled: Option<bool>,
-    publish_at: Option<Option<chrono::NaiveDateTime>>,
-    expire_at: Option<Option<chrono::NaiveDateTime>>,
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+pub struct UpdateAnnouncementRequest {
+    pub title: Option<String>,
+    pub body_md: Option<String>,
+    pub public: Option<bool>,
+    pub pinned: Option<bool>,
+    pub roles_csv: Option<Option<String>>, // double option to allow clearing
+    pub building_id: Option<Option<u64>>,
+    pub apartment_id: Option<Option<u64>>,
+    pub comments_enabled: Option<bool>,
+    pub publish_at: Option<Option<chrono::NaiveDateTime>>,
+    pub expire_at: Option<Option<chrono::NaiveDateTime>>,
 }
 
-#[derive(serde::Deserialize)]
-struct CommentsQuery { include_deleted: Option<bool> }
+#[derive(serde::Deserialize, utoipa::IntoParams)]
+pub struct CommentsQuery { pub include_deleted: Option<bool> }
 
-#[derive(serde::Deserialize)]
-struct CreateCommentRequest { body_md: String }
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+pub struct CreateCommentRequest { pub body_md: String }
 
-#[derive(serde::Serialize)]
-struct AnnouncementOut {
+#[derive(serde::Serialize, utoipa::ToSchema)]
+pub struct AnnouncementOut {
     id: u64,
     title: String,
     body_md: String,
@@ -76,8 +77,8 @@ struct AnnouncementOut {
     updated_at: Option<chrono::NaiveDateTime>,
 }
 
-#[derive(serde::Serialize)]
-struct CommentOut {
+#[derive(serde::Serialize, utoipa::ToSchema)]
+pub struct CommentOut {
     id: u64,
     announcement_id: u64,
     user_id: u64,
@@ -190,7 +191,20 @@ fn conn(pool: &web::Data<DbPool>) -> Result<diesel::r2d2::PooledConnection<diese
     pool.get().map_err(|_| AppError::Internal("db_pool".into()))
 }
 
-async fn list_public(pool: web::Data<DbPool>) -> Result<HttpResponse, AppError> {
+/// List public announcements
+///
+/// Returns all published, non-expired, non-deleted public announcements.
+/// No authentication required. Announcements are ordered by pinned status, then creation date.
+#[utoipa::path(
+    get,
+    path = "/api/v1/announcements/public",
+    responses(
+        (status = 200, description = "List of public announcements", body = Vec<AnnouncementOut>),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements"
+)]
+pub async fn list_public(pool: web::Data<DbPool>) -> Result<HttpResponse, AppError> {
     use announcements::dsl as a;
     let mut c = conn(&pool)?;
     let now = Utc::now().naive_utc();
@@ -205,19 +219,53 @@ async fn list_public(pool: web::Data<DbPool>) -> Result<HttpResponse, AppError> 
     Ok(HttpResponse::Ok().json(enrich(items, &mut c)?))
 }
 
-async fn list_auth(pool: web::Data<DbPool>, auth: AuthContext) -> Result<HttpResponse, AppError> {
+/// List announcements for authenticated users
+///
+/// Returns announcements based on user role:
+/// - Admin/Manager: See all announcements including drafts and scheduled
+/// - Others: See public announcements and role-specific private announcements
+#[utoipa::path(
+    get,
+    path = "/api/v1/announcements",
+    responses(
+        (status = 200, description = "List of announcements", body = Vec<AnnouncementOut>),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements",
+    security(("bearer_auth" = []))
+)]
+pub async fn list_auth(pool: web::Data<DbPool>, auth: AuthContext) -> Result<HttpResponse, AppError> {
     use announcements::dsl as a;
+    use crate::auth::get_user_building_ids;
+
     let mut c = conn(&pool)?;
     let now = Utc::now().naive_utc();
     let roles = auth.claims.roles.clone();
+    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+    let is_admin = auth.has_any_role(&["Admin"]);
     let is_manager = auth.has_any_role(&["Admin", "Manager"]);
+
+    // Get building access for non-admin users
+    let building_ids = if !is_admin {
+        get_user_building_ids(user_id, is_admin, &mut c)?
+    } else {
+        None
+    };
 
     // Build query conditionally to avoid mixing runtime bools into Diesel expression trees.
     let mut query = a::announcements.filter(a::is_deleted.eq(false)).into_boxed();
+
     if !is_manager {
         query = query
             .filter(a::publish_at.is_null().or(a::publish_at.le(now)))
             .filter(a::expire_at.is_null().or(a::expire_at.gt(now)));
+    }
+
+    // Building-scoped filtering: non-Admin users see only announcements from accessible buildings OR global announcements
+    if let Some(ref ids) = building_ids {
+        query = query.filter(
+            a::building_id.eq_any(ids).or(a::building_id.is_null())
+        );
     }
 
     let items = query
@@ -239,7 +287,26 @@ async fn list_auth(pool: web::Data<DbPool>, auth: AuthContext) -> Result<HttpRes
     Ok(HttpResponse::Ok().json(enrich(filtered, &mut c)?))
 }
 
-async fn get_one(pool: web::Data<DbPool>, auth_opt: Option<AuthContext>, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
+/// Get a single announcement
+///
+/// Returns details of a specific announcement. Public announcements can be viewed by anyone.
+/// Private announcements require authentication and appropriate role. Admin/Manager can view drafts and scheduled posts.
+#[utoipa::path(
+    get,
+    path = "/api/v1/announcements/{id}",
+    params(
+        ("id" = u64, Path, description = "Announcement ID")
+    ),
+    responses(
+        (status = 200, description = "Announcement details", body = AnnouncementOut),
+        (status = 401, description = "Unauthorized - private announcement requires authentication"),
+        (status = 403, description = "Forbidden - user doesn't have required role"),
+        (status = 404, description = "Announcement not found or deleted"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements"
+)]
+pub async fn get_one(pool: web::Data<DbPool>, auth_opt: Option<AuthContext>, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
     use announcements::dsl as a;
     let id = path.into_inner();
     let mut c = conn(&pool)?;
@@ -267,7 +334,23 @@ async fn get_one(pool: web::Data<DbPool>, auth_opt: Option<AuthContext>, path: w
     Ok(HttpResponse::Ok().json(enrich_one(ann, &mut c)?))
 }
 
-async fn create(pool: web::Data<DbPool>, auth: AuthContext, body: web::Json<CreateAnnouncementRequest>) -> Result<HttpResponse, AppError> {
+/// Create an announcement
+///
+/// Creates a new announcement with markdown content (automatically rendered to HTML).
+/// Requires Admin or Manager role. Supports drafts (publish_at = NULL), scheduling, and expiration.
+#[utoipa::path(
+    post,
+    path = "/api/v1/announcements",
+    request_body = CreateAnnouncementRequest,
+    responses(
+        (status = 201, description = "Announcement created successfully", body = AnnouncementOut),
+        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements",
+    security(("bearer_auth" = []))
+)]
+pub async fn create(pool: web::Data<DbPool>, auth: AuthContext, body: web::Json<CreateAnnouncementRequest>) -> Result<HttpResponse, AppError> {
     auth.require_roles(&["Admin", "Manager"])?;
     use announcements::dsl as a;
     let mut c = conn(&pool)?;
@@ -291,7 +374,27 @@ async fn create(pool: web::Data<DbPool>, auth: AuthContext, body: web::Json<Crea
     Ok(HttpResponse::Created().json(enrich_one(inserted, &mut c)?))
 }
 
-async fn update(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>, body: web::Json<UpdateAnnouncementRequest>) -> Result<HttpResponse, AppError> {
+/// Update an announcement
+///
+/// Updates announcement fields. Accessible by Admin, Manager, or the announcement author.
+/// If body_md is updated, body_html is automatically regenerated.
+#[utoipa::path(
+    put,
+    path = "/api/v1/announcements/{id}",
+    params(
+        ("id" = u64, Path, description = "Announcement ID")
+    ),
+    request_body = UpdateAnnouncementRequest,
+    responses(
+        (status = 200, description = "Announcement updated successfully", body = AnnouncementOut),
+        (status = 403, description = "Forbidden - requires Admin, Manager, or author"),
+        (status = 404, description = "Announcement not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements",
+    security(("bearer_auth" = []))
+)]
+pub async fn update(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>, body: web::Json<UpdateAnnouncementRequest>) -> Result<HttpResponse, AppError> {
     use announcements::dsl as a;
     let id = path.into_inner();
     let mut c = conn(&pool)?;
@@ -330,7 +433,25 @@ async fn update(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>
     Ok(HttpResponse::Ok().json(enrich_one(updated, &mut c)?))
 }
 
-async fn delete_soft(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
+/// Soft-delete an announcement
+///
+/// Marks an announcement as deleted (soft-delete). Requires Admin or Manager role.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/announcements/{id}",
+    params(
+        ("id" = u64, Path, description = "Announcement ID")
+    ),
+    responses(
+        (status = 204, description = "Announcement deleted successfully"),
+        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 404, description = "Announcement not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements",
+    security(("bearer_auth" = []))
+)]
+pub async fn delete_soft(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
     auth.require_roles(&["Admin", "Manager"])?;
     use announcements::dsl as a;
     let id = path.into_inner();
@@ -339,7 +460,25 @@ async fn delete_soft(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path
     Ok(HttpResponse::NoContent().finish())
 }
 
-async fn restore(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
+/// Restore a soft-deleted announcement
+///
+/// Restores an announcement that was previously soft-deleted. Requires Admin or Manager role.
+#[utoipa::path(
+    post,
+    path = "/api/v1/announcements/{id}/restore",
+    params(
+        ("id" = u64, Path, description = "Announcement ID")
+    ),
+    responses(
+        (status = 200, description = "Announcement restored successfully", body = Announcement),
+        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 404, description = "Announcement not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements",
+    security(("bearer_auth" = []))
+)]
+pub async fn restore(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
     auth.require_roles(&["Admin", "Manager"])?;
     use announcements::dsl as a;
     let id = path.into_inner();
@@ -349,7 +488,26 @@ async fn restore(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64
     Ok(HttpResponse::Ok().json(ann))
 }
 
-async fn toggle_pin(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
+/// Toggle pin status of an announcement
+///
+/// Pins or unpins an announcement. Pinned announcements appear first in lists.
+/// Requires Admin or Manager role.
+#[utoipa::path(
+    post,
+    path = "/api/v1/announcements/{id}/pin",
+    params(
+        ("id" = u64, Path, description = "Announcement ID")
+    ),
+    responses(
+        (status = 200, description = "Pin status toggled successfully", body = AnnouncementOut),
+        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 404, description = "Announcement not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements",
+    security(("bearer_auth" = []))
+)]
+pub async fn toggle_pin(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
     auth.require_roles(&["Admin", "Manager"])?;
     use announcements::dsl as a;
     let id = path.into_inner();
@@ -360,7 +518,28 @@ async fn toggle_pin(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<
     Ok(HttpResponse::Ok().json(enrich_one(updated, &mut c)?))
 }
 
-async fn list_comments(pool: web::Data<DbPool>, auth_opt: Option<AuthContext>, path: web::Path<u64>, q: web::Query<CommentsQuery>) -> Result<HttpResponse, AppError> {
+/// List comments on an announcement
+///
+/// Returns all comments on an announcement. For public announcements, no authentication required.
+/// For private announcements, requires authentication and appropriate role.
+/// Admin/Manager can use include_deleted=true query param to view deleted comments.
+#[utoipa::path(
+    get,
+    path = "/api/v1/announcements/{id}/comments",
+    params(
+        ("id" = u64, Path, description = "Announcement ID"),
+        CommentsQuery
+    ),
+    responses(
+        (status = 200, description = "List of comments", body = Vec<CommentOut>),
+        (status = 401, description = "Unauthorized - private announcement requires authentication"),
+        (status = 403, description = "Forbidden - user doesn't have required role"),
+        (status = 404, description = "Announcement not found or comments disabled"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements"
+)]
+pub async fn list_comments(pool: web::Data<DbPool>, auth_opt: Option<AuthContext>, path: web::Path<u64>, q: web::Query<CommentsQuery>) -> Result<HttpResponse, AppError> {
     use announcements::dsl as a;
     use announcements_comments::dsl as cmt;
     let announcement_id = path.into_inner();
@@ -409,7 +588,27 @@ async fn list_comments(pool: web::Data<DbPool>, auth_opt: Option<AuthContext>, p
     Ok(HttpResponse::Ok().json(out))
 }
 
-async fn create_comment(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>, body: web::Json<CreateCommentRequest>) -> Result<HttpResponse, AppError> {
+/// Create a comment on an announcement
+///
+/// Adds a comment to an announcement. Markdown content is automatically rendered to HTML.
+/// Requires authentication and appropriate permissions for private announcements.
+#[utoipa::path(
+    post,
+    path = "/api/v1/announcements/{id}/comments",
+    params(
+        ("id" = u64, Path, description = "Announcement ID")
+    ),
+    request_body = CreateCommentRequest,
+    responses(
+        (status = 201, description = "Comment created successfully", body = AnnouncementComment),
+        (status = 403, description = "Forbidden - comments disabled or insufficient permissions"),
+        (status = 404, description = "Announcement not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements",
+    security(("bearer_auth" = []))
+)]
+pub async fn create_comment(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>, body: web::Json<CreateCommentRequest>) -> Result<HttpResponse, AppError> {
     use announcements::dsl as a;
     use announcements_comments::dsl as cmt;
     let announcement_id = path.into_inner();
@@ -435,7 +634,25 @@ async fn create_comment(pool: web::Data<DbPool>, auth: AuthContext, path: web::P
     Ok(HttpResponse::Created().json(inserted))
 }
 
-async fn delete_comment(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
+/// Soft-delete a comment
+///
+/// Marks a comment as deleted (soft-delete). Accessible by Admin, Manager, or the comment author.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/announcements/comments/{comment_id}",
+    params(
+        ("comment_id" = u64, Path, description = "Comment ID")
+    ),
+    responses(
+        (status = 204, description = "Comment deleted successfully"),
+        (status = 403, description = "Forbidden - requires Admin, Manager, or author"),
+        (status = 404, description = "Comment not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements",
+    security(("bearer_auth" = []))
+)]
+pub async fn delete_comment(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
     use announcements_comments::dsl as cmt;
     let comment_id = path.into_inner();
     let mut c = conn(&pool)?;
@@ -447,7 +664,25 @@ async fn delete_comment(pool: web::Data<DbPool>, auth: AuthContext, path: web::P
     Ok(HttpResponse::NoContent().finish())
 }
 
-async fn restore_comment(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
+/// Restore a soft-deleted comment
+///
+/// Restores a comment that was previously soft-deleted. Requires Admin or Manager role.
+#[utoipa::path(
+    post,
+    path = "/api/v1/announcements/comments/{comment_id}/restore",
+    params(
+        ("comment_id" = u64, Path, description = "Comment ID")
+    ),
+    responses(
+        (status = 200, description = "Comment restored successfully", body = AnnouncementComment),
+        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 404, description = "Comment not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements",
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_comment(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
     auth.require_roles(&["Admin", "Manager"])?;
     use announcements_comments::dsl as cmt;
     let comment_id = path.into_inner();
@@ -457,7 +692,21 @@ async fn restore_comment(pool: web::Data<DbPool>, auth: AuthContext, path: web::
     Ok(HttpResponse::Ok().json(restored))
 }
 
-async fn list_deleted(pool: web::Data<DbPool>, auth: AuthContext) -> Result<HttpResponse, AppError> {
+/// List soft-deleted announcements
+///
+/// Returns all announcements that have been soft-deleted. Requires Admin or Manager role.
+#[utoipa::path(
+    get,
+    path = "/api/v1/announcements/deleted",
+    responses(
+        (status = 200, description = "List of deleted announcements", body = Vec<AnnouncementOut>),
+        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements",
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted(pool: web::Data<DbPool>, auth: AuthContext) -> Result<HttpResponse, AppError> {
     auth.require_roles(&["Admin", "Manager"])?;
     use announcements::dsl as a;
     let mut c = conn(&pool)?;
@@ -468,7 +717,28 @@ async fn list_deleted(pool: web::Data<DbPool>, auth: AuthContext) -> Result<Http
     Ok(HttpResponse::Ok().json(enrich(items, &mut c)?))
 }
 
-async fn purge(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
+/// Permanently delete an announcement (purge)
+///
+/// Permanently removes a soft-deleted announcement from the database.
+/// This also deletes all associated comments. Requires Admin or Manager role.
+/// The announcement must be soft-deleted first before it can be purged.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/announcements/{id}/purge",
+    params(
+        ("id" = u64, Path, description = "Announcement ID")
+    ),
+    responses(
+        (status = 204, description = "Announcement permanently deleted"),
+        (status = 400, description = "Bad request - announcement not soft-deleted"),
+        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 404, description = "Announcement not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements",
+    security(("bearer_auth" = []))
+)]
+pub async fn purge(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
     auth.require_roles(&["Admin", "Manager"])?;
     use announcements::dsl as a;
     use announcements_comments::dsl as cmt;
@@ -489,7 +759,26 @@ async fn purge(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>)
     Ok(HttpResponse::NoContent().finish())
 }
 
-async fn publish_now(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
+/// Publish an announcement immediately
+///
+/// Sets the publish_at timestamp to now, making a draft or scheduled announcement
+/// immediately visible. Accessible by Admin, Manager, or the announcement author.
+#[utoipa::path(
+    post,
+    path = "/api/v1/announcements/{id}/publish",
+    params(
+        ("id" = u64, Path, description = "Announcement ID")
+    ),
+    responses(
+        (status = 200, description = "Announcement published successfully", body = AnnouncementOut),
+        (status = 403, description = "Forbidden - requires Admin, Manager, or author"),
+        (status = 404, description = "Announcement not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements",
+    security(("bearer_auth" = []))
+)]
+pub async fn publish_now(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
     use announcements::dsl as a;
     let id = path.into_inner();
     let mut c = conn(&pool)?;
@@ -508,7 +797,27 @@ async fn publish_now(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path
     Ok(HttpResponse::Ok().json(enrich_one(updated, &mut c)?))
 }
 
-async fn purge_comment(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
+/// Permanently delete a comment (purge)
+///
+/// Permanently removes a soft-deleted comment from the database. Requires Admin or Manager role.
+/// The comment must be soft-deleted first before it can be purged.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/announcements/comments/{comment_id}/purge",
+    params(
+        ("comment_id" = u64, Path, description = "Comment ID")
+    ),
+    responses(
+        (status = 204, description = "Comment permanently deleted"),
+        (status = 400, description = "Bad request - comment not soft-deleted"),
+        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 404, description = "Comment not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Announcements",
+    security(("bearer_auth" = []))
+)]
+pub async fn purge_comment(pool: web::Data<DbPool>, auth: AuthContext, path: web::Path<u64>) -> Result<HttpResponse, AppError> {
     auth.require_roles(&["Admin", "Manager"])?;
     use announcements_comments::dsl as cmt;
     let comment_id = path.into_inner();

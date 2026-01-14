@@ -13,9 +13,31 @@ use actix_web::http::header::{CONTENT_TYPE, CONTENT_DISPOSITION};
 use crate::models::MaintenanceRequest; // for RBAC checks
 use crate::schema::{maintenance_requests as mr, apartment_owners as ao};
 use diesel::mysql::MysqlConnection;
+use utoipa;
 
 
-/// Upload a maintenance request attachment (multipart form)
+/// Upload a maintenance request attachment
+///
+/// Uploads a file attachment to a maintenance request using multipart/form-data.
+/// File size limit and MIME type restrictions apply (configured in AppConfig).
+/// Accessible by Admin, Manager, request creator, or assigned user.
+#[utoipa::path(
+    post,
+    path = "/api/v1/requests/{id}/attachments",
+    params(
+        ("id" = u64, Path, description = "Maintenance request ID")
+    ),
+    request_body(content_type = "multipart/form-data"),
+    responses(
+        (status = 201, description = "Attachment uploaded successfully"),
+        (status = 400, description = "Bad request - no file or invalid MIME type"),
+        (status = 403, description = "Forbidden - cannot modify this request"),
+        (status = 413, description = "File too large"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Maintenance",
+    security(("bearer_auth" = []))
+)]
 pub async fn upload_attachment(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>, cfg: web::Data<AppConfig>, mut payload: Multipart) -> Result<HttpResponse, AppError> {
     use crate::schema::maintenance_request_attachments::dsl as att;
     let request_id = path.into_inner();
@@ -103,6 +125,24 @@ fn compute_perms(auth: &AuthContext, req: &MaintenanceRequest, owns: bool, user_
 }
 
 /// List attachments (non-deleted)
+///
+/// Returns all non-deleted attachments for a maintenance request.
+/// Accessible by Admin, Manager, request creator, assigned user, or apartment owner.
+#[utoipa::path(
+    get,
+    path = "/api/v1/requests/{id}/attachments",
+    params(
+        ("id" = u64, Path, description = "Maintenance request ID")
+    ),
+    responses(
+        (status = 200, description = "List of attachments", body = Vec<MaintenanceRequestAttachment>),
+        (status = 403, description = "Forbidden - cannot view this request"),
+        (status = 404, description = "Request not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Maintenance",
+    security(("bearer_auth" = []))
+)]
 pub async fn list_attachments(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>) -> Result<HttpResponse, AppError> {
     use crate::schema::maintenance_request_attachments::dsl as att;
     let request_id = path.into_inner();
@@ -120,7 +160,25 @@ pub async fn list_attachments(auth: AuthContext, path: web::Path<u64>, pool: web
     Ok(HttpResponse::Ok().json(rows))
 }
 
-/// List deleted attachments (admin/manager)
+/// List deleted attachments
+///
+/// Returns all soft-deleted attachments for a maintenance request.
+/// Accessible by Admin, Manager, request creator, or assigned user.
+#[utoipa::path(
+    get,
+    path = "/api/v1/requests/{id}/attachments/deleted",
+    params(
+        ("id" = u64, Path, description = "Maintenance request ID")
+    ),
+    responses(
+        (status = 200, description = "List of deleted attachments", body = Vec<MaintenanceRequestAttachment>),
+        (status = 403, description = "Forbidden - requires modify permissions"),
+        (status = 404, description = "Request not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Maintenance",
+    security(("bearer_auth" = []))
+)]
 pub async fn list_deleted_attachments(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>) -> Result<HttpResponse, AppError> {
     use crate::schema::maintenance_request_attachments::dsl as att;
     let request_id = path.into_inner();
@@ -140,6 +198,25 @@ pub async fn list_deleted_attachments(auth: AuthContext, path: web::Path<u64>, p
 }
 
 /// Get attachment metadata
+///
+/// Returns metadata (filename, size, MIME type, etc.) for a specific attachment.
+/// Accessible by Admin, Manager, request creator, assigned user, or apartment owner.
+#[utoipa::path(
+    get,
+    path = "/api/v1/requests/{id}/attachments/{att_id}",
+    params(
+        ("id" = u64, Path, description = "Maintenance request ID"),
+        ("att_id" = u64, Path, description = "Attachment ID")
+    ),
+    responses(
+        (status = 200, description = "Attachment metadata", body = MaintenanceRequestAttachment),
+        (status = 403, description = "Forbidden - cannot view this request"),
+        (status = 404, description = "Attachment or request not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Maintenance",
+    security(("bearer_auth" = []))
+)]
 pub async fn get_attachment_metadata(auth: AuthContext, path: web::Path<(u64,u64)>, pool: web::Data<DbPool>) -> Result<HttpResponse, AppError> {
     use crate::schema::maintenance_request_attachments::dsl as att;
     let (request_id, att_id) = path.into_inner();
@@ -157,7 +234,27 @@ pub async fn get_attachment_metadata(auth: AuthContext, path: web::Path<(u64,u64
     Ok(HttpResponse::Ok().json(item))
 }
 
-/// Download attachment file (placeholder)
+/// Download attachment file
+///
+/// Downloads the actual file content for an attachment. Returns the file with appropriate
+/// Content-Type and Content-Disposition headers. Only non-deleted attachments can be downloaded.
+/// Accessible by Admin, Manager, request creator, assigned user, or apartment owner.
+#[utoipa::path(
+    get,
+    path = "/api/v1/requests/{id}/attachments/{att_id}/download",
+    params(
+        ("id" = u64, Path, description = "Maintenance request ID"),
+        ("att_id" = u64, Path, description = "Attachment ID")
+    ),
+    responses(
+        (status = 200, description = "File content", content_type = "application/octet-stream"),
+        (status = 403, description = "Forbidden - cannot view this request"),
+        (status = 404, description = "Attachment not found or deleted"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Maintenance",
+    security(("bearer_auth" = []))
+)]
 pub async fn download_attachment(auth: AuthContext, path: web::Path<(u64,u64)>, pool: web::Data<DbPool>, cfg: web::Data<AppConfig>) -> Result<HttpResponse, AppError> {
     use crate::schema::maintenance_request_attachments::dsl as att;
     let (request_id, att_id) = path.into_inner();
@@ -184,6 +281,25 @@ pub async fn download_attachment(auth: AuthContext, path: web::Path<(u64,u64)>, 
 }
 
 /// Soft-delete attachment
+///
+/// Marks an attachment as deleted (soft-delete). The file remains on disk but is hidden.
+/// Accessible by Admin, Manager, request creator, or assigned user.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/requests/{id}/attachments/{att_id}",
+    params(
+        ("id" = u64, Path, description = "Maintenance request ID"),
+        ("att_id" = u64, Path, description = "Attachment ID")
+    ),
+    responses(
+        (status = 200, description = "Attachment deleted successfully"),
+        (status = 403, description = "Forbidden - requires modify permissions"),
+        (status = 404, description = "Attachment or request not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Maintenance",
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_attachment(auth: AuthContext, path: web::Path<(u64,u64)>, pool: web::Data<DbPool>) -> Result<HttpResponse, AppError> {
     use crate::schema::maintenance_request_attachments::dsl as att;
     let (request_id, att_id) = path.into_inner();
@@ -200,6 +316,25 @@ pub async fn delete_attachment(auth: AuthContext, path: web::Path<(u64,u64)>, po
 }
 
 /// Restore attachment
+///
+/// Restores a soft-deleted attachment, making it visible again.
+/// Accessible by Admin, Manager, request creator, or assigned user.
+#[utoipa::path(
+    post,
+    path = "/api/v1/requests/{id}/attachments/{att_id}/restore",
+    params(
+        ("id" = u64, Path, description = "Maintenance request ID"),
+        ("att_id" = u64, Path, description = "Attachment ID")
+    ),
+    responses(
+        (status = 200, description = "Attachment restored successfully"),
+        (status = 403, description = "Forbidden - requires modify permissions"),
+        (status = 404, description = "Attachment or request not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Maintenance",
+    security(("bearer_auth" = []))
+)]
 pub async fn restore_attachment(auth: AuthContext, path: web::Path<(u64,u64)>, pool: web::Data<DbPool>) -> Result<HttpResponse, AppError> {
     use crate::schema::maintenance_request_attachments::dsl as att;
     let (request_id, att_id) = path.into_inner();

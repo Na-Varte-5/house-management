@@ -6,5 +6,6 @@ pub mod admin;
 pub mod manage;
 pub mod maintenance;
 pub mod voting;
+pub mod meters;
 pub mod health;
 

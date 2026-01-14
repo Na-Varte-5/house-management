@@ -13,19 +13,19 @@ The House Management System provides a centralized solution for managing various
 - Voting system for community decision-making
 - Maintenance request and complaint handling
 
-## Recent Changes (Session Log)
+## Recent Changes (January 2026)
 
-The following features were added or refined in the current development session:
+### Maintenance Request System - Complete Implementation ✅
+Full-featured maintenance request tracking with enriched data and comprehensive audit history:
+- **Enriched API responses**: All endpoints return apartment numbers, building addresses, and user names (not just IDs)
+- **Comprehensive audit history**: Status, priority, and assignment changes all logged with user names and timestamps
+- **User-friendly display**: Formatted dates ("Jan 14, 2026 at 10:30"), proper dropdown defaults, names instead of IDs
+- **File attachments**: Upload images/PDFs (max 10MB) with metadata tracking
+- **RBAC enforcement**: Admin/Manager can update all fields; users can only view their own requests
 
+### Previous Features (November 2025)
 - Manager page (Yew) consolidating building & apartment management plus owner assignment.
 - Soft-delete support for buildings and apartments (is_deleted flag) with toggle to show deleted items and one-click restore.
-- New backend endpoints:
-  - `GET /api/v1/buildings/deleted` – list soft-deleted buildings.
-  - `POST /api/v1/buildings/{id}/restore` – restore a building.
-  - `DELETE /api/v1/buildings/{id}` – soft-delete a building (Admin/Manager).
-  - `GET /api/v1/apartments/deleted` – list soft-deleted apartments.
-  - `POST /api/v1/apartments/{id}/restore` – restore an apartment.
-  - `DELETE /api/v1/apartments/{id}` – soft-delete an apartment (Admin/Manager).
 - Owner assignment UI with searchable public user list; click to assign / badge with close button to remove.
 - Deletion confirmation modal for buildings/apartments (prevent accidental removal).
 - Loading spinners for buildings, apartments, owners, and deleted lists to improve UX feedback.
@@ -33,9 +33,9 @@ The following features were added or refined in the current development session:
 - Immediate in-place refresh after delete/restore (no full page reload required).
 
 ### Upcoming (In Progress)
-- Maintenance Requests module: request submission (Open/InProgress/Resolved), status updates with audit history, file attachments (images/PDF) stored server-side.
-- Voting groundwork: flexible weight strategies (per seat, by apartment size, or custom override table).
-- Test harness: backend integration tests for soft-delete/RBAC and new maintenance workflows.
+- Water meter analytics and visualization (consumption charts, period comparisons, PDF reports)
+- Email notifications for maintenance requests
+- Test harness: backend integration tests for RBAC and maintenance workflows
 
 ## RBAC Summary
 Roles currently recognized: Admin, Manager, Homeowner, Renter, HOA Member.
@@ -45,9 +45,11 @@ Roles currently recognized: Admin, Manager, Homeowner, Renter, HOA Member.
 | Create/Soft-delete/Restore Building | Admin, Manager |
 | Create/Soft-delete/Restore Apartment | Admin, Manager |
 | Assign/Remove Apartment Owner | Admin, Manager |
-| Submit Maintenance Request (planned) | Homeowner, Renter, Admin, Manager |
-| Update Maintenance Status (planned) | Admin, Manager |
-| Upload Maintenance Attachment (planned) | Request creator, Admin, Manager |
+| Submit Maintenance Request | Homeowner, Renter, Admin, Manager |
+| View Maintenance Request | Request creator, assigned user, Admin, Manager |
+| Update Maintenance Status/Priority/Assignment | Admin, Manager |
+| Upload Maintenance Attachment | Request creator, Admin, Manager |
+| View Maintenance History | Request creator, Admin, Manager |
 
 RBAC checks are centralized via `AuthContext.has_any_role` and enforced in handlers. Upcoming tests will assert denial for unauthorized roles.
 
@@ -143,23 +145,33 @@ For detailed information about the project design, architecture, and features, p
 | Add apartment owner (Admin/Manager) | POST | /api/v1/apartments/{id}/owners |
 | Remove apartment owner (Admin/Manager) | DELETE | /api/v1/apartments/{id}/owners/{user_id} |
 
-## Maintenance Requests (Planned Implementation)
-Will introduce three tables:
-- `maintenance_requests`: core request data (apartment_id, created_by, request_type, priority, status, resolution_notes)
+## Maintenance Requests (✅ Implemented)
+
+Three tables in production:
+- `maintenance_requests`: core request data (apartment_id, created_by, request_type, priority, status, resolution_notes, assigned_to)
 - `maintenance_request_attachments`: uploaded files metadata (original_filename, stored_filename, mime_type, size_bytes, is_deleted)
-- `maintenance_request_history`: audit trail of status transitions (from_status, to_status, note)
+- `maintenance_request_history`: comprehensive audit trail (status changes, priority changes, assignment changes with user names)
 
-Endpoints (initial set):
-- POST /api/v1/requests
-- GET /api/v1/requests (list, role-filtered)
-- GET /api/v1/requests/{id}
-- PUT /api/v1/requests/{id}/status
-- POST /api/v1/requests/{id}/attachments (multipart)
-- GET /api/v1/requests/{id}/attachments
-- GET /api/v1/requests/{id}/attachments/{attachment_id}
-- DELETE /api/v1/requests/{id}/attachments/{attachment_id}
+### Available Endpoints
 
-Attachment constraints: max 10MB, allowed types: image/*, application/pdf (extensible). Files stored under STORAGE_DIR (default: ./storage) with UUID filenames.
+| Method | Path | Description | Response Type |
+|--------|------|-------------|---------------|
+| GET | /api/v1/requests | List requests with apartment/building context | MaintenanceRequestEnriched[] |
+| POST | /api/v1/requests | Create new request | { id: number } |
+| GET | /api/v1/requests/{id} | Get request details with user names | MaintenanceRequestDetail |
+| PUT | /api/v1/requests/{id} | Update status/priority/assignment | MaintenanceRequestDetail |
+| GET | /api/v1/requests/{id}/history | Get audit trail with user names | MaintenanceRequestHistoryEnriched[] |
+| POST | /api/v1/requests/{id}/attachments | Upload file (multipart) | Attachment metadata |
+| GET | /api/v1/requests/{id}/attachments | List attachments | Attachment[] |
+| GET | /api/v1/requests/{id}/attachments/{attachment_id} | Download file | Binary stream |
+| DELETE | /api/v1/requests/{id}/attachments/{attachment_id} | Soft-delete attachment | 200 OK |
+
+### Key Features
+- **Enriched responses**: All endpoints return human-readable data (apartment numbers, building addresses, user names)
+- **Comprehensive history**: Status, priority, and assignment changes logged with descriptive notes
+- **Attachment constraints**: max 10MB, allowed types: `image/*`, `application/pdf`
+- **Storage**: Files stored under `STORAGE_DIR` (default: `./storage`) with UUID filenames
+- **RBAC**: Role-based filtering ensures users only see authorized requests
 
 ## Voting Weights (Roadmap)
 Voting proposals will specify a `weight_strategy`:
@@ -170,9 +182,29 @@ Voting proposals will specify a `weight_strategy`:
 Result calculation will aggregate weights of yes/no votes; majority and consensus rules implemented incrementally.
 
 ## Feature Progress Map
-Implemented: Buildings, Apartments, Owner assignment, Soft delete + restore, Auth/JWT, Basic RBAC.
-In Progress (next sprint): Maintenance Requests + Attachments, RBAC tests, Voting strategy scaffolding, Global frontend state & i18n.
-Planned: Financials, Events/Calendar, Documents, Messaging (REST + WebSocket), Visitors, Analytics Dashboard.
+
+**✅ Fully Implemented:**
+- Buildings and Apartments CRUD with soft-delete/restore
+- Owner assignment (many-to-many)
+- User management with RBAC (5 roles)
+- JWT authentication with secure token handling
+- **Maintenance Requests**: Complete system with enriched data, comprehensive audit history, and file attachments
+- **Voting System**: Proposal creation, weighted voting methods, result tallying
+- **Water Meter System**: Reading tracking, webhook integration, CSV export, calibration monitoring
+- Announcements with pinning and comments
+
+**🚧 In Progress:**
+- Water meter analytics and visualization
+- Email notifications for maintenance requests
+- Backend integration tests for RBAC enforcement
+
+**📋 Planned:**
+- Financials module (invoicing, payments, cost tracking)
+- Events/Calendar system
+- Document management
+- Messaging system (REST + WebSocket)
+- Visitor management
+- Analytics Dashboard with reporting
 
 ## Testing Roadmap (Planned)
 

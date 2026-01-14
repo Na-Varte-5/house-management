@@ -1,15 +1,19 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
 use serde::Deserialize;
-use crate::components::{ErrorAlert, SuccessAlert};
+use std::collections::HashMap;
+use crate::components::ErrorAlert;
 use crate::contexts::AuthContext;
 use crate::routes::Route;
-use crate::services::{api_client, ApiError};
+use crate::services::api_client;
 
 #[derive(Deserialize, Clone, PartialEq)]
 struct MaintenanceRequest {
     id: u64,
     apartment_id: u64,
+    apartment_number: String,
+    building_id: u64,
+    building_address: String,
     request_type: String,
     priority: String,
     title: String,
@@ -76,6 +80,23 @@ pub fn maintenance_list_page() -> Html {
             .cloned()
             .collect()
     };
+
+    // Group requests by building
+    let mut grouped_requests: HashMap<u64, (String, Vec<MaintenanceRequest>)> = HashMap::new();
+    for req in filtered_requests.iter() {
+        grouped_requests
+            .entry(req.building_id)
+            .or_insert_with(|| (req.building_address.clone(), Vec::new()))
+            .1
+            .push(req.clone());
+    }
+
+    // Sort buildings by address
+    let mut building_groups: Vec<(u64, String, Vec<MaintenanceRequest>)> = grouped_requests
+        .into_iter()
+        .map(|(id, (addr, reqs))| (id, addr, reqs))
+        .collect();
+    building_groups.sort_by(|a, b| a.1.cmp(&b.1));
 
     // Priority badge color
     let priority_class = |priority: &str| match priority {
@@ -147,42 +168,53 @@ pub fn maintenance_list_page() -> Html {
                     }
                 </div>
             } else {
-                <div class="row">
+                <div>
                     {
-                        for filtered_requests.iter().map(|req| {
-                            let id = req.id;
-                            let navigator = navigator.clone();
+                        for building_groups.iter().map(|(building_id, building_address, reqs)| {
                             html! {
-                                <div class="col-md-6 col-lg-4 mb-3">
-                                    <div
-                                        class="card h-100 cursor-pointer"
-                                        style="cursor: pointer;"
-                                        onclick={{
-                                            Callback::from(move |_| {
-                                                navigator.push(&Route::MaintenanceDetail { id });
+                                <div class="mb-4" key={*building_id}>
+                                    <h4 class="mb-3 text-secondary">{building_address}</h4>
+                                    <div class="row">
+                                        {
+                                            for reqs.iter().map(|req| {
+                                                let id = req.id;
+                                                let navigator = navigator.clone();
+                                                html! {
+                                                    <div class="col-md-6 col-lg-4 mb-3">
+                                                        <div
+                                                            class="card h-100 cursor-pointer"
+                                                            style="cursor: pointer;"
+                                                            onclick={{
+                                                                Callback::from(move |_| {
+                                                                    navigator.push(&Route::MaintenanceDetail { id });
+                                                                })
+                                                            }}
+                                                        >
+                                                            <div class="card-body">
+                                                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                                                    <h5 class="card-title mb-0">{&req.title}</h5>
+                                                                    <span class={classes!("badge", priority_class(&req.priority))}>
+                                                                        {&req.priority}
+                                                                    </span>
+                                                                </div>
+                                                                <p class="card-text text-muted small mb-2">
+                                                                    {&req.description}
+                                                                </p>
+                                                                <div class="d-flex justify-content-between align-items-center">
+                                                                    <span class={classes!("badge", status_class(&req.status))}>
+                                                                        {&req.status}
+                                                                    </span>
+                                                                    <small class="text-muted">{&req.request_type}</small>
+                                                                </div>
+                                                                <small class="text-muted d-block mt-2">
+                                                                    {"Apartment "}{&req.apartment_number}
+                                                                </small>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                }
                                             })
-                                        }}
-                                    >
-                                        <div class="card-body">
-                                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                                <h5 class="card-title mb-0">{&req.title}</h5>
-                                                <span class={classes!("badge", priority_class(&req.priority))}>
-                                                    {&req.priority}
-                                                </span>
-                                            </div>
-                                            <p class="card-text text-muted small mb-2">
-                                                {&req.description}
-                                            </p>
-                                            <div class="d-flex justify-content-between align-items-center">
-                                                <span class={classes!("badge", status_class(&req.status))}>
-                                                    {&req.status}
-                                                </span>
-                                                <small class="text-muted">{&req.request_type}</small>
-                                            </div>
-                                            <small class="text-muted d-block mt-2">
-                                                {"Apartment #"}{req.apartment_id}
-                                            </small>
-                                        </div>
+                                        }
                                     </div>
                                 </div>
                             }

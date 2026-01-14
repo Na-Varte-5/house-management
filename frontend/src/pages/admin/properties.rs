@@ -1,8 +1,10 @@
 // Properties administration page: buildings, apartments, and owner assignments.
 use yew::prelude::*;
+use yew_router::prelude::*;
 use serde::{Deserialize, Serialize};
 use crate::components::{spinner::Spinner, AdminLayout, ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
+use crate::routes::Route;
 use crate::services::{api_client, ApiError};
 
 #[derive(Deserialize, Clone, PartialEq)]
@@ -27,6 +29,7 @@ struct AssignOwnerRequest { user_id: u64 }
 #[function_component(AdminPropertiesPage)]
 pub fn admin_properties_page() -> Html {
     let auth = use_context::<AuthContext>().expect("AuthContext not found");
+    let navigator = use_navigator().unwrap();
 
     if !auth.is_admin_or_manager() {
         return html! {
@@ -735,11 +738,17 @@ pub fn admin_properties_page() -> Html {
                                                 let id = b.id;
                                                 let selected_building = selected_building.clone();
                                                 let pending = pending_delete_building.clone();
+                                                let is_selected = *selected_building == Some(id);
+                                                let item_class = if is_selected {
+                                                    "list-group-item list-group-item-action active d-flex justify-content-between align-items-center"
+                                                } else {
+                                                    "list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                                                };
                                                 html! {
-                                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <li class={item_class}>
                                                         <span
                                                             onclick={{Callback::from(move |_| selected_building.set(Some(id)))}}
-                                                            style="cursor:pointer;"
+                                                            style="cursor:pointer; flex-grow: 1;"
                                                         >
                                                             {format!("{} ({:?})", b.address, b.construction_year.map(|y| y.to_string()).unwrap_or_else(|| "-".into()))}
                                                         </span>
@@ -846,20 +855,35 @@ pub fn admin_properties_page() -> Html {
                                                 let id = a.id;
                                                 let selected_apartment = selected_apartment.clone();
                                                 let pending = pending_delete_apartment.clone();
+                                                let nav = navigator.clone();
+                                                let is_selected = *selected_apartment == Some(id);
+                                                let item_class = if is_selected {
+                                                    "list-group-item list-group-item-action active d-flex justify-content-between align-items-center"
+                                                } else {
+                                                    "list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                                                };
                                                 html! {
-                                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <li class={item_class}>
                                                         <span
                                                             onclick={{Callback::from(move |_| selected_apartment.set(Some(id)))}}
-                                                            style="cursor:pointer;"
+                                                            style="cursor:pointer; flex-grow: 1;"
                                                         >
                                                             {format!("{} ({:.1} m²)", a.number, a.size_sq_m.unwrap_or(0.0))}
                                                         </span>
-                                                        <button
-                                                            class="btn btn-sm btn-outline-danger"
-                                                            onclick={{Callback::from(move |_| pending.set(Some(id)))}}
-                                                        >
-                                                            {"Delete"}
-                                                        </button>
+                                                        <div class="btn-group btn-group-sm">
+                                                            <button
+                                                                class="btn btn-outline-info"
+                                                                onclick={{Callback::from(move |_| nav.push(&Route::ApartmentMeters { apartment_id: id }))}}
+                                                            >
+                                                                <i class="bi bi-speedometer2"></i> {"Meters"}
+                                                            </button>
+                                                            <button
+                                                                class="btn btn-outline-danger"
+                                                                onclick={{Callback::from(move |_| pending.set(Some(id)))}}
+                                                            >
+                                                                {"Delete"}
+                                                            </button>
+                                                        </div>
                                                     </li>
                                                 }
                                             })
@@ -897,64 +921,82 @@ pub fn admin_properties_page() -> Html {
                                     </>
                                 }
 
-                                <hr class="my-2" />
-                                <h6 class="small fw-semibold">{"Owners of Selected Apartment"}</h6>
-                                if *loading_owners {
-                                    <Spinner />
-                                } else {
-                                    <ul class="list-group list-group-sm mt-1">
-                                        {
-                                            for apartment_owners.iter().map(|owner| {
-                                                let owner_id = owner.id;
-                                                let remove = remove_owner.clone();
-                                                html! {
-                                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                                        <span>{format!("{} ({})", owner.name, owner.email)}</span>
-                                                        <button
-                                                            class="btn btn-sm btn-outline-danger"
-                                                            onclick={{Callback::from(move |_| remove.emit(owner_id))}}
-                                                        >
-                                                            {"Remove"}
-                                                        </button>
-                                                    </li>
+                                // Only show owner management when an apartment is selected
+                                if selected_apartment.is_some() {
+                                    <>
+                                        <hr class="my-2" />
+                                        <h6 class="small fw-semibold">{"Owners of Selected Apartment"}</h6>
+                                        if *loading_owners {
+                                            <Spinner />
+                                        } else {
+                                            <ul class="list-group list-group-sm mt-1">
+                                                {
+                                                    for apartment_owners.iter().map(|owner| {
+                                                        let owner_id = owner.id;
+                                                        let remove = remove_owner.clone();
+                                                        html! {
+                                                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                                <span>{format!("{} ({})", owner.name, owner.email)}</span>
+                                                                <button
+                                                                    class="btn btn-sm btn-outline-danger"
+                                                                    onclick={{Callback::from(move |_| remove.emit(owner_id))}}
+                                                                >
+                                                                    {"Remove"}
+                                                                </button>
+                                                            </li>
+                                                        }
+                                                    })
                                                 }
-                                            })
+                                            </ul>
                                         }
-                                    </ul>
-                                }
 
-                                <hr class="my-2" />
-                                <h6 class="small fw-semibold">{"Assign Owner"}</h6>
-                                <input
-                                    class="form-control form-control-sm mb-2"
-                                    placeholder="Search users..."
-                                    value={(*user_query).clone()}
-                                    oninput={{
-                                        let user_query = user_query.clone();
-                                        Callback::from(move |e: InputEvent| {
-                                            let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                            user_query.set(input.value());
-                                        })
-                                    }}
-                                />
-                                <div class="list-group list-group-sm" style="max-height: 200px; overflow-y: auto;">
-                                    {
-                                        for filtered_users.iter().map(|u| {
-                                            let user_id = u.id;
-                                            let add = add_owner.clone();
-                                            html! {
-                                                <button
-                                                    type="button"
-                                                    class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-                                                    onclick={{Callback::from(move |_| add.emit(user_id))}}
-                                                >
-                                                    <span class="me-2">{&u.name}</span>
-                                                    <span class="small text-muted">{&u.email}</span>
-                                                </button>
+                                        <hr class="my-2" />
+                                    </>
+                                } else {
+                                    <>
+                                        <hr class="my-2" />
+                                        <div class="alert alert-info small mb-0">
+                                            <i class="bi bi-info-circle me-2"></i>
+                                            {"Select an apartment to manage its owners"}
+                                        </div>
+                                    </>
+                                }
+                                // Only show "Assign Owner" search when an apartment is selected
+                                if selected_apartment.is_some() {
+                                    <>
+                                        <h6 class="small fw-semibold">{"Assign Owner"}</h6>
+                                        <input
+                                            class="form-control form-control-sm mb-2"
+                                            placeholder="Search users..."
+                                            value={(*user_query).clone()}
+                                            oninput={{
+                                                let user_query = user_query.clone();
+                                                Callback::from(move |e: InputEvent| {
+                                                    let input: web_sys::HtmlInputElement = e.target_unchecked_into();
+                                                    user_query.set(input.value());
+                                                })
+                                            }}
+                                        />
+                                        <div class="list-group list-group-sm" style="max-height: 200px; overflow-y: auto;">
+                                            {
+                                                for filtered_users.iter().map(|u| {
+                                                    let user_id = u.id;
+                                                    let add = add_owner.clone();
+                                                    html! {
+                                                        <button
+                                                            type="button"
+                                                            class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                                                            onclick={{Callback::from(move |_| add.emit(user_id))}}
+                                                        >
+                                                            <span class="me-2">{&u.name}</span>
+                                                            <span class="small text-muted">{&u.email}</span>
+                                                        </button>
+                                                    }
+                                                })
                                             }
-                                        })
-                                    }
-                                </div>
+                                        </div>
+                                    </>
+                                }
                             </div>
                         </div>
                     </div>

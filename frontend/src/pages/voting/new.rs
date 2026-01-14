@@ -1,6 +1,6 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use crate::components::{ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
 use crate::routes::Route;
@@ -10,10 +10,17 @@ use crate::services::{api_client, ApiError};
 struct CreateProposalPayload {
     title: String,
     description: String,
+    building_id: Option<u64>,
     start_time: String,
     end_time: String,
     voting_method: String,
     eligible_roles: Vec<String>,
+}
+
+#[derive(Deserialize, Clone)]
+struct Building {
+    id: u64,
+    address: String,
 }
 
 #[function_component(VotingNewPage)]
@@ -31,10 +38,35 @@ pub fn voting_new_page() -> Html {
         };
     }
 
+    let buildings = use_state(|| Vec::<Building>::new());
+    let selected_building = use_state(|| None::<u64>);
+
     let title = use_state(String::default);
     let description = use_state(String::default);
-    let start_time = use_state(String::default);
-    let end_time = use_state(String::default);
+
+    // Set date defaults: start_time = now, end_time = now + 7 days
+    let start_time = use_state(|| {
+        let now = js_sys::Date::new_0();
+        let year = now.get_full_year() as i32;
+        let month = (now.get_month() as f64 + 1.0) as i32;
+        let day = now.get_date() as i32;
+        let hours = now.get_hours() as i32;
+        let minutes = now.get_minutes() as i32;
+        format!("{:04}-{:02}-{:02}T{:02}:{:02}", year, month, day, hours, minutes)
+    });
+
+    let end_time = use_state(|| {
+        let now = js_sys::Date::new_0();
+        // Add 7 days
+        now.set_date((now.get_date() as f64 + 7.0) as u32);
+        let year = now.get_full_year() as i32;
+        let month = (now.get_month() as f64 + 1.0) as i32;
+        let day = now.get_date() as i32;
+        let hours = now.get_hours() as i32;
+        let minutes = now.get_minutes() as i32;
+        format!("{:04}-{:02}-{:02}T{:02}:{:02}", year, month, day, hours, minutes)
+    });
+
     let voting_method = use_state(|| "SimpleMajority".to_string());
     let role_admin = use_state(|| false);
     let role_manager = use_state(|| false);
@@ -46,9 +78,28 @@ pub fn voting_new_page() -> Html {
     let error = use_state(|| None::<String>);
     let success = use_state(|| None::<String>);
 
+    let token = auth.token().map(|t| t.to_string());
+
+    // Load user's accessible buildings on mount
+    {
+        let buildings = buildings.clone();
+        let token = token.clone();
+
+        use_effect_with((), move |_| {
+            wasm_bindgen_futures::spawn_local(async move {
+                let client = api_client(token.as_deref());
+                if let Ok(list) = client.get::<Vec<Building>>("/buildings/my").await {
+                    buildings.set(list);
+                }
+            });
+            || ()
+        });
+    }
+
     let on_submit = {
         let title = title.clone();
         let description = description.clone();
+        let selected_building = selected_building.clone();
         let start_time = start_time.clone();
         let end_time = end_time.clone();
         let voting_method = voting_method.clone();
@@ -61,7 +112,7 @@ pub fn voting_new_page() -> Html {
         let error = error.clone();
         let success = success.clone();
         let navigator = navigator.clone();
-        let token = auth.token().map(|t| t.to_string());
+        let token = token.clone();
 
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
@@ -108,6 +159,7 @@ pub fn voting_new_page() -> Html {
 
             let title = title.clone();
             let description = description.clone();
+            let selected_building = selected_building.clone();
             let start_time = start_time.clone();
             let end_time = end_time.clone();
             let voting_method = voting_method.clone();
@@ -126,6 +178,7 @@ pub fn voting_new_page() -> Html {
                 let payload = CreateProposalPayload {
                     title: (*title).clone(),
                     description: (*description).clone(),
+                    building_id: *selected_building,
                     start_time: (*start_time).clone(),
                     end_time: (*end_time).clone(),
                     voting_method: (*voting_method).clone(),
@@ -223,6 +276,37 @@ pub fn voting_new_page() -> Html {
                                             })
                                         }}
                                     ></textarea>
+                                </div>
+
+                                // Building Scope
+                                <div class="mb-3">
+                                    <label class="form-label">
+                                        {"Building Scope"}
+                                        <span class="text-muted small ms-1">{"(optional)"}</span>
+                                    </label>
+                                    <select
+                                        class="form-select"
+                                        disabled={*submitting}
+                                        value={selected_building.as_ref().map(|id| id.to_string()).unwrap_or_default()}
+                                        onchange={{
+                                            let selected_building = selected_building.clone();
+                                            Callback::from(move |e: Event| {
+                                                let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
+                                                let value = select.value();
+                                                if value.is_empty() {
+                                                    selected_building.set(None);
+                                                } else {
+                                                    selected_building.set(value.parse().ok());
+                                                }
+                                            })
+                                        }}
+                                    >
+                                        <option value="">{"Global (visible to all buildings)"}</option>
+                                        {for buildings.iter().map(|b| html! {
+                                            <option value={b.id.to_string()}>{&b.address}</option>
+                                        })}
+                                    </select>
+                                    <div class="form-text">{"Leave as Global to make this proposal visible to all users, or select a building to restrict visibility"}</div>
                                 </div>
 
                                 // Voting Method
