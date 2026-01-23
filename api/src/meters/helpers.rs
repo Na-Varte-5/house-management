@@ -1,5 +1,5 @@
-use diesel::prelude::*;
 use crate::auth::AppError;
+use diesel::prelude::*;
 
 /// Check if a user owns a specific apartment
 pub(super) fn user_owns_apartment(

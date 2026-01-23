@@ -1,9 +1,9 @@
-use actix_web::{web, HttpResponse, Responder};
-use diesel::prelude::*;
+use super::types::{ApiKeyResponse, CreateApiKeyRequest};
+use crate::auth::{AppError, AuthContext};
 use crate::db::DbPool;
-use crate::auth::{AuthContext, AppError};
 use crate::models::WebhookApiKey;
-use super::types::{CreateApiKeyRequest, ApiKeyResponse};
+use actix_web::{HttpResponse, Responder, web};
+use diesel::prelude::*;
 
 /// List API keys (Admin only)
 #[utoipa::path(
@@ -24,7 +24,9 @@ pub async fn list_api_keys(
         return Err(AppError::Forbidden);
     }
 
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     use crate::schema::webhook_api_keys::dsl as wak;
 
@@ -70,7 +72,9 @@ pub async fn create_api_key(
     use crate::auth::crypto::hash_password;
     let api_key_hash = hash_password(&api_key)?;
 
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     use crate::schema::webhook_api_keys::dsl as wak;
 
@@ -82,9 +86,10 @@ pub async fn create_api_key(
         ))
         .execute(&mut conn)?;
 
-    let inserted_id: u64 = diesel::select(
-        diesel::dsl::sql::<diesel::sql_types::Unsigned<diesel::sql_types::BigInt>>("LAST_INSERT_ID()")
-    ).first(&mut conn)?;
+    let inserted_id: u64 = diesel::select(diesel::dsl::sql::<
+        diesel::sql_types::Unsigned<diesel::sql_types::BigInt>,
+    >("LAST_INSERT_ID()"))
+    .first(&mut conn)?;
 
     Ok(HttpResponse::Created().json(ApiKeyResponse {
         id: inserted_id,
@@ -117,7 +122,9 @@ pub async fn revoke_api_key(
     }
 
     let key_id = key_id.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     use crate::schema::webhook_api_keys::dsl as wak;
 

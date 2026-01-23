@@ -1,8 +1,8 @@
-use yew::prelude::*;
+use base64::{Engine as _, engine::general_purpose};
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 use web_sys::window;
-use base64::{Engine as _, engine::general_purpose};
+use yew::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct User {
@@ -128,12 +128,22 @@ pub fn auth_provider(props: &AuthProviderProps) -> Html {
 fn load_auth_from_storage() -> AuthState {
     let window = match window() {
         Some(w) => w,
-        None => return AuthState { token: None, user: None },
+        None => {
+            return AuthState {
+                token: None,
+                user: None,
+            };
+        }
     };
 
     let storage = match window.local_storage() {
         Ok(Some(s)) => s,
-        _ => return AuthState { token: None, user: None },
+        _ => {
+            return AuthState {
+                token: None,
+                user: None,
+            };
+        }
     };
 
     let token = storage.get_item("auth.token").ok().flatten();
@@ -144,7 +154,10 @@ fn load_auth_from_storage() -> AuthState {
         if !is_token_valid(token_str) {
             // Token is expired or invalid, clear storage
             clear_auth_from_storage();
-            return AuthState { token: None, user: None };
+            return AuthState {
+                token: None,
+                user: None,
+            };
         }
     }
 

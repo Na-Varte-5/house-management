@@ -3,8 +3,8 @@ use yew_router::prelude::*;
 
 use crate::components::auth_dropdown::AuthDropdown;
 use crate::contexts::AuthContext;
+use crate::i18n::{available_languages, current_language, set_language, t};
 use crate::routes::Route;
-use crate::i18n::{set_language, current_language, available_languages, t};
 
 #[function_component(Navbar)]
 pub fn navbar() -> Html {

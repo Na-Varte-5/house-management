@@ -1,11 +1,10 @@
+pub mod admin;
+pub mod building_apartments;
+pub mod buildings;
+pub mod health;
 pub mod home;
 pub mod login;
-pub mod buildings;
-pub mod building_apartments;
-pub mod admin;
-pub mod manage;
 pub mod maintenance;
-pub mod voting;
+pub mod manage;
 pub mod meters;
-pub mod health;
-
+pub mod voting;

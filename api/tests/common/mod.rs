@@ -1,4 +1,6 @@
-use actix_web::{web, App, HttpServer};
+#![allow(dead_code)] // Test utilities may not be used in all test files
+
+use actix_web::{App, HttpServer, web};
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
 use diesel_migrations::MigrationHarness;
@@ -127,8 +129,8 @@ impl TestUser {
 
 /// Create a test user in the database and return the user with ID
 pub async fn create_test_user(pool: &DbPool, mut user: TestUser) -> TestUser {
-    use api::schema::{users, roles, user_roles};
     use api::hash_password;
+    use api::schema::{roles, user_roles, users};
 
     let mut conn = pool.get().expect("Failed to get connection");
     let hashed_password = hash_password(&user.password).expect("Failed to hash password");
@@ -144,9 +146,11 @@ pub async fn create_test_user(pool: &DbPool, mut user: TestUser) -> TestUser {
         .expect("Failed to insert user");
 
     // Get user ID
-    let user_id: u64 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Unsigned<diesel::sql_types::BigInt>>("LAST_INSERT_ID()"))
-        .first(&mut conn)
-        .expect("Failed to get user ID");
+    let user_id: u64 = diesel::select(diesel::dsl::sql::<
+        diesel::sql_types::Unsigned<diesel::sql_types::BigInt>,
+    >("LAST_INSERT_ID()"))
+    .first(&mut conn)
+    .expect("Failed to get user ID");
 
     user.id = user_id;
 
@@ -163,9 +167,11 @@ pub async fn create_test_user(pool: &DbPool, mut user: TestUser) -> TestUser {
                     .execute(&mut conn)
                     .expect("Failed to insert role");
 
-                diesel::select(diesel::dsl::sql::<diesel::sql_types::Unsigned<diesel::sql_types::BigInt>>("LAST_INSERT_ID()"))
-                    .first(&mut conn)
-                    .expect("Failed to get role ID")
+                diesel::select(diesel::dsl::sql::<
+                    diesel::sql_types::Unsigned<diesel::sql_types::BigInt>,
+                >("LAST_INSERT_ID()"))
+                .first(&mut conn)
+                .expect("Failed to get role ID")
             });
 
         // Assign role to user
@@ -184,7 +190,7 @@ pub async fn create_test_user(pool: &DbPool, mut user: TestUser) -> TestUser {
 /// Login a test user and get JWT token
 pub async fn login_test_user(client: &reqwest::Client, base_url: &str, user: &TestUser) -> String {
     let response = client
-        .post(&format!("{}/login", base_url))
+        .post(format!("{}/login", base_url))
         .json(&serde_json::json!({
             "email": user.email,
             "password": user.password,
@@ -193,14 +199,29 @@ pub async fn login_test_user(client: &reqwest::Client, base_url: &str, user: &Te
         .await
         .expect("Failed to login");
 
-    assert!(response.status().is_success(), "Login failed for {}", user.email);
+    assert!(
+        response.status().is_success(),
+        "Login failed for {}",
+        user.email
+    );
 
-    let json: Value = response.json().await.expect("Failed to parse login response");
-    json["token"].as_str().expect("No token in response").to_string()
+    let json: Value = response
+        .json()
+        .await
+        .expect("Failed to parse login response");
+    json["token"]
+        .as_str()
+        .expect("No token in response")
+        .to_string()
 }
 
 /// Create a test user with token
-pub async fn create_and_login_user(pool: &DbPool, client: &reqwest::Client, base_url: &str, user: TestUser) -> TestUser {
+pub async fn create_and_login_user(
+    pool: &DbPool,
+    client: &reqwest::Client,
+    base_url: &str,
+    user: TestUser,
+) -> TestUser {
     let user = create_test_user(pool, user).await;
     let token = login_test_user(client, base_url, &user).await;
     TestUser {

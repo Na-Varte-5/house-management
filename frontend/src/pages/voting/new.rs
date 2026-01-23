@@ -1,10 +1,13 @@
-use yew::prelude::*;
-use yew_router::prelude::*;
-use serde::{Deserialize, Serialize};
-use crate::components::{ErrorAlert, SuccessAlert, TextInput, Textarea, Select, SelectOption, DateTimeInput, Checkbox, FormGroup};
+use crate::components::{
+    Checkbox, DateTimeInput, ErrorAlert, FormGroup, Select, SelectOption, SuccessAlert, TextInput,
+    Textarea,
+};
 use crate::contexts::AuthContext;
 use crate::routes::Route;
-use crate::services::{api_client, ApiError};
+use crate::services::{ApiError, api_client};
+use serde::{Deserialize, Serialize};
+use yew::prelude::*;
+use yew_router::prelude::*;
 
 #[derive(Serialize)]
 struct CreateProposalPayload {
@@ -31,7 +34,10 @@ fn now_datetime() -> String {
     let day = now.get_date() as i32;
     let hours = now.get_hours() as i32;
     let minutes = now.get_minutes() as i32;
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}", year, month, day, hours, minutes)
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}",
+        year, month, day, hours, minutes
+    )
 }
 
 // Helper function to add days to current datetime
@@ -43,7 +49,10 @@ fn datetime_plus_days(days: f64) -> String {
     let day = now.get_date() as i32;
     let hours = now.get_hours() as i32;
     let minutes = now.get_minutes() as i32;
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}", year, month, day, hours, minutes)
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}",
+        year, month, day, hours, minutes
+    )
 }
 
 #[function_component(VotingNewPage)]
@@ -195,15 +204,21 @@ pub fn voting_new_page() -> Html {
                     eligible_roles,
                 };
 
-                match client.post::<_, serde_json::Value>("/proposals", &payload).await {
+                match client
+                    .post::<_, serde_json::Value>("/proposals", &payload)
+                    .await
+                {
                     Ok(_) => {
                         success.set(Some("Proposal created successfully".to_string()));
                         gloo_timers::callback::Timeout::new(1500, move || {
                             navigator.push(&Route::Voting);
-                        }).forget();
+                        })
+                        .forget();
                     }
                     Err(ApiError::Forbidden) => {
-                        error.set(Some("You don't have permission to create proposals".to_string()));
+                        error.set(Some(
+                            "You don't have permission to create proposals".to_string(),
+                        ));
                         submitting.set(false);
                     }
                     Err(e) => {
@@ -292,7 +307,10 @@ pub fn voting_new_page() -> Html {
     let building_options = {
         let mut options = vec![SelectOption::new("", "Global (visible to all buildings)")];
         for building in buildings.iter() {
-            options.push(SelectOption::new(building.id.to_string(), &building.address));
+            options.push(SelectOption::new(
+                building.id.to_string(),
+                &building.address,
+            ));
         }
         options
     };
@@ -300,7 +318,10 @@ pub fn voting_new_page() -> Html {
     // Build voting method options
     let method_options = vec![
         SelectOption::new("SimpleMajority", "Simple Majority (1 person = 1 vote)"),
-        SelectOption::new("WeightedArea", "Weighted by Area (vote weight = apartment size)"),
+        SelectOption::new(
+            "WeightedArea",
+            "Weighted by Area (vote weight = apartment size)",
+        ),
         SelectOption::new("PerSeat", "Per Seat (1 apartment = 1 vote)"),
         SelectOption::new("Consensus", "Consensus (no 'No' votes allowed)"),
     ];

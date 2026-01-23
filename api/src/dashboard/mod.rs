@@ -1,4 +1,4 @@
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::{HttpResponse, Responder, web};
 use diesel::prelude::*;
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -39,7 +39,9 @@ pub async fn get_dashboard_stats(
     auth: AuthContext,
     pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
     let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
     let is_admin = auth.has_any_role(&["Admin"]);
     let is_manager = auth.has_any_role(&["Admin", "Manager"]);
@@ -48,8 +50,8 @@ pub async fn get_dashboard_stats(
     let building_ids = get_user_building_ids(user_id, is_admin, &mut conn)?;
 
     // Count open maintenance requests
-    use crate::schema::maintenance_requests::dsl as mr;
     use crate::schema::apartments::dsl as apt;
+    use crate::schema::maintenance_requests::dsl as mr;
 
     let maintenance_count = if is_admin {
         // Admin sees all open requests
@@ -73,7 +75,11 @@ pub async fn get_dashboard_stats(
         // Regular users see only their own requests or those assigned to them
         mr::maintenance_requests
             .filter(mr::status.eq("Open"))
-            .filter(mr::created_by.eq(user_id).or(mr::assigned_to.eq(Some(user_id))))
+            .filter(
+                mr::created_by
+                    .eq(user_id)
+                    .or(mr::assigned_to.eq(Some(user_id))),
+            )
             .count()
             .get_result::<i64>(&mut conn)?
     };
@@ -81,20 +87,15 @@ pub async fn get_dashboard_stats(
     // Get active proposals (Open status, accessible to user)
     use crate::schema::proposals::dsl as p;
 
-    let mut proposals_query = p::proposals
-        .filter(p::status.eq("Open"))
-        .into_boxed();
+    let mut proposals_query = p::proposals.filter(p::status.eq("Open")).into_boxed();
 
     if let Some(ref ids) = building_ids {
-        proposals_query = proposals_query.filter(
-            p::building_id.eq_any(ids).or(p::building_id.is_null())
-        );
+        proposals_query =
+            proposals_query.filter(p::building_id.eq_any(ids).or(p::building_id.is_null()));
     }
 
     // Load proposal IDs first (for both count and pending votes)
-    let active_proposal_ids: Vec<u64> = proposals_query
-        .select(p::id)
-        .load(&mut conn)?;
+    let active_proposal_ids: Vec<u64> = proposals_query.select(p::id).load(&mut conn)?;
 
     let active_proposals_count = active_proposal_ids.len() as i64;
 
@@ -139,7 +140,8 @@ pub async fn get_dashboard_stats(
     // Count meters due for calibration within 30 days
     use crate::schema::meters::dsl as m;
 
-    let thirty_days_from_now = chrono::Local::now().naive_local().date() + chrono::Duration::days(30);
+    let thirty_days_from_now =
+        chrono::Local::now().naive_local().date() + chrono::Duration::days(30);
 
     let meters_due_calibration = if is_admin {
         // Admin sees all meters
@@ -166,7 +168,7 @@ pub async fn get_dashboard_stats(
                         .filter(ar::is_active.eq(true))
                         .filter(apt::building_id.eq_any(ids))
                         .filter(apt::is_deleted.eq(false))
-                        .select(apt::id)
+                        .select(apt::id),
                 )
                 .load(&mut conn)?
         } else {

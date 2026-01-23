@@ -1,11 +1,47 @@
-use actix_web::{web, HttpResponse, Responder};
-use diesel::prelude::*;
+use crate::auth::{AppError, AuthContext};
 use crate::db::DbPool;
-use crate::auth::{AuthContext, AppError};
-use crate::models::{MaintenanceRequest, NewMaintenanceRequest, MaintenanceRequestHistory};
-use utoipa;
+use crate::models::{MaintenanceRequest, MaintenanceRequestHistory, NewMaintenanceRequest};
+use actix_web::{HttpResponse, Responder, web};
+use diesel::prelude::*;
 use serde::Serialize;
+use utoipa;
 pub mod attachments;
+
+// Type aliases for complex tuple types used in database queries
+type MaintenanceRequestQueryRow = (
+    u64,                           // id
+    u64,                           // apartment_id
+    u64,                           // created_by
+    Option<u64>,                   // assigned_to
+    String,                        // request_type
+    String,                        // priority
+    String,                        // title
+    String,                        // description
+    String,                        // status
+    Option<chrono::NaiveDateTime>, // created_at
+    String,                        // apartment_number
+    u64,                           // building_id
+    String,                        // building_address
+);
+
+type MaintenanceRequestDetailRow = (
+    u64,                           // id
+    u64,                           // apartment_id
+    u64,                           // created_by
+    Option<u64>,                   // assigned_to
+    String,                        // request_type
+    String,                        // priority
+    String,                        // title
+    String,                        // description
+    String,                        // status
+    Option<String>,                // resolution_notes
+    Option<chrono::NaiveDateTime>, // created_at
+    Option<chrono::NaiveDateTime>, // updated_at
+    String,                        // apartment_number
+    u64,                           // building_id
+    String,                        // building_address
+    String,                        // creator_name
+);
 
 /// Maintenance request with enriched data (apartment number and building address)
 #[derive(Serialize, utoipa::ToSchema)]
@@ -76,13 +112,18 @@ pub struct MaintenanceRequestHistoryEnriched {
     tag = "Maintenance",
     security(("bearer_auth" = []))
 )]
-pub async fn list_requests(auth: AuthContext, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
-    use crate::schema::maintenance_requests::dsl as mr;
+pub async fn list_requests(
+    auth: AuthContext,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    use crate::auth::get_user_building_ids;
     use crate::schema::apartments::dsl as apt;
     use crate::schema::buildings::dsl as bld;
-    use crate::auth::get_user_building_ids;
+    use crate::schema::maintenance_requests::dsl as mr;
 
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
     let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
     let is_admin = auth.has_any_role(&["Admin"]);
 
@@ -110,10 +151,14 @@ pub async fn list_requests(auth: AuthContext, pool: web::Data<DbPool>) -> Result
         }
     } else {
         // Regular users: show requests created by user or assigned to user
-        base.filter(mr::created_by.eq(user_id).or(mr::assigned_to.eq(Some(user_id))))
+        base.filter(
+            mr::created_by
+                .eq(user_id)
+                .or(mr::assigned_to.eq(Some(user_id))),
+        )
     };
 
-    let results: Vec<(u64, u64, u64, Option<u64>, String, String, String, String, String, Option<chrono::NaiveDateTime>, String, u64, String)> = filtered
+    let results: Vec<MaintenanceRequestQueryRow> = filtered
         .select((
             mr::id,
             mr::apartment_id,
@@ -133,21 +178,39 @@ pub async fn list_requests(auth: AuthContext, pool: web::Data<DbPool>) -> Result
 
     let enriched: Vec<MaintenanceRequestEnriched> = results
         .into_iter()
-        .map(|(id, apartment_id, created_by, assigned_to, request_type, priority, title, description, status, created_at, apt_number, bld_id, bld_addr)| MaintenanceRequestEnriched {
-            id,
-            apartment_id,
-            apartment_number: apt_number,
-            building_id: bld_id,
-            building_address: bld_addr,
-            request_type,
-            priority,
-            title,
-            description,
-            status,
-            created_by,
-            assigned_to,
-            created_at: created_at.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap_or_default(),
-        })
+        .map(
+            |(
+                id,
+                apartment_id,
+                created_by,
+                assigned_to,
+                request_type,
+                priority,
+                title,
+                description,
+                status,
+                created_at,
+                apt_number,
+                bld_id,
+                bld_addr,
+            )| MaintenanceRequestEnriched {
+                id,
+                apartment_id,
+                apartment_number: apt_number,
+                building_id: bld_id,
+                building_address: bld_addr,
+                request_type,
+                priority,
+                title,
+                description,
+                status,
+                created_by,
+                assigned_to,
+                created_at: created_at
+                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                    .unwrap_or_default(),
+            },
+        )
         .collect();
 
     Ok(HttpResponse::Ok().json(enriched))
@@ -172,17 +235,23 @@ pub async fn list_requests(auth: AuthContext, pool: web::Data<DbPool>) -> Result
     tag = "Maintenance",
     security(("bearer_auth" = []))
 )]
-pub async fn get_request(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
-    use crate::schema::maintenance_requests::dsl as mr;
+pub async fn get_request(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::apartments::dsl as apt;
     use crate::schema::buildings::dsl as bld;
+    use crate::schema::maintenance_requests::dsl as mr;
     use crate::schema::users::dsl as usr;
 
     let id = path.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     // Join with apartments, buildings, and creator user
-    let result: (u64, u64, u64, Option<u64>, String, String, String, String, String, Option<String>, Option<chrono::NaiveDateTime>, Option<chrono::NaiveDateTime>, String, u64, String, String) = mr::maintenance_requests
+    let result: MaintenanceRequestDetailRow = mr::maintenance_requests
         .inner_join(apt::apartments.on(apt::id.eq(mr::apartment_id)))
         .inner_join(bld::buildings.on(bld::id.eq(apt::building_id)))
         .inner_join(usr::users.on(usr::id.eq(mr::created_by)))
@@ -207,11 +276,31 @@ pub async fn get_request(auth: AuthContext, path: web::Path<u64>, pool: web::Dat
         ))
         .first(&mut conn)?;
 
-    let (req_id, apartment_id, created_by, assigned_to, request_type, priority, title, description, status, resolution_notes, created_at, updated_at, apt_number, bld_id, bld_addr, creator_name) = result;
+    let (
+        req_id,
+        apartment_id,
+        created_by,
+        assigned_to,
+        request_type,
+        priority,
+        title,
+        description,
+        status,
+        resolution_notes,
+        created_at,
+        updated_at,
+        apt_number,
+        bld_id,
+        bld_addr,
+        creator_name,
+    ) = result;
 
     let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
     // Check permission: admin/manager can see all, others can only see if they created or are assigned
-    if !(auth.has_any_role(&["Admin", "Manager"]) || created_by == user_id || assigned_to == Some(user_id)) {
+    if !(auth.has_any_role(&["Admin", "Manager"])
+        || created_by == user_id
+        || assigned_to == Some(user_id))
+    {
         return Err(AppError::Forbidden);
     }
 
@@ -242,8 +331,12 @@ pub async fn get_request(auth: AuthContext, path: web::Path<u64>, pool: web::Dat
         created_by_name: creator_name,
         assigned_to,
         assigned_to_name: assigned_name,
-        created_at: created_at.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap_or_default(),
-        updated_at: updated_at.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap_or_default(),
+        created_at: created_at
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_default(),
+        updated_at: updated_at
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_default(),
     };
 
     Ok(HttpResponse::Ok().json(detail))
@@ -266,10 +359,18 @@ pub async fn get_request(auth: AuthContext, path: web::Path<u64>, pool: web::Dat
     tag = "Maintenance",
     security(("bearer_auth" = []))
 )]
-pub async fn create_request(auth: AuthContext, pool: web::Data<DbPool>, payload: web::Json<NewMaintenanceRequest>) -> Result<impl Responder, AppError> {
+pub async fn create_request(
+    auth: AuthContext,
+    pool: web::Data<DbPool>,
+    payload: web::Json<NewMaintenanceRequest>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::maintenance_requests::dsl as mr;
-    if !auth.has_any_role(&["Homeowner", "Renter", "Admin", "Manager"]) { return Err(AppError::Forbidden); }
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    if !auth.has_any_role(&["Homeowner", "Renter", "Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
     let new = payload.into_inner();
     // default status Open
     diesel::insert_into(mr::maintenance_requests)
@@ -285,9 +386,10 @@ pub async fn create_request(auth: AuthContext, pool: web::Data<DbPool>, payload:
         .execute(&mut conn)?;
 
     // Get the inserted request ID
-    let inserted_id: u64 = diesel::select(
-        diesel::dsl::sql::<diesel::sql_types::Unsigned<diesel::sql_types::BigInt>>("LAST_INSERT_ID()")
-    ).first(&mut conn)?;
+    let inserted_id: u64 = diesel::select(diesel::dsl::sql::<
+        diesel::sql_types::Unsigned<diesel::sql_types::BigInt>,
+    >("LAST_INSERT_ID()"))
+    .first(&mut conn)?;
 
     // Return the ID in a JSON response
     #[derive(serde::Serialize)]
@@ -302,7 +404,7 @@ pub async fn create_request(auth: AuthContext, pool: web::Data<DbPool>, payload:
 pub struct StatusUpdatePayload {
     #[schema(example = "InProgress")]
     pub status: String,
-    pub note: Option<String>
+    pub note: Option<String>,
 }
 
 /// Update request status with audit trail
@@ -325,29 +427,51 @@ pub struct StatusUpdatePayload {
     tag = "Maintenance",
     security(("bearer_auth" = []))
 )]
-pub async fn update_status(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>, payload: web::Json<StatusUpdatePayload>) -> Result<impl Responder, AppError> {
-    use crate::schema::maintenance_requests::dsl as mr;
+pub async fn update_status(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+    payload: web::Json<StatusUpdatePayload>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::maintenance_request_history::dsl as hist;
+    use crate::schema::maintenance_requests::dsl as mr;
     use crate::schema::users::dsl as u;
 
-    if !auth.has_any_role(&["Admin", "Manager"]) { return Err(AppError::Forbidden); }
+    if !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
     let id = path.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     // Parse and validate user ID from JWT
-    let user_id = auth.claims.sub.parse::<u64>()
+    let user_id = auth
+        .claims
+        .sub
+        .parse::<u64>()
         .map_err(|_| AppError::Internal("invalid_user_id_in_jwt".into()))?;
 
     // Verify user exists in database
-    let user_exists = u::users.filter(u::id.eq(user_id)).count().get_result::<i64>(&mut conn)? > 0;
+    let user_exists = u::users
+        .filter(u::id.eq(user_id))
+        .count()
+        .get_result::<i64>(&mut conn)?
+        > 0;
     if !user_exists {
         return Err(AppError::Internal("user_not_found_in_database".into()));
     }
 
-    let current: MaintenanceRequest = mr::maintenance_requests.filter(mr::id.eq(id)).select(MaintenanceRequest::as_select()).first(&mut conn)?;
+    let current: MaintenanceRequest = mr::maintenance_requests
+        .filter(mr::id.eq(id))
+        .select(MaintenanceRequest::as_select())
+        .first(&mut conn)?;
     let new_status = payload.status.clone();
     diesel::update(mr::maintenance_requests.filter(mr::id.eq(id)))
-        .set((mr::status.eq(&new_status), mr::resolution_notes.eq(payload.note.clone())))
+        .set((
+            mr::status.eq(&new_status),
+            mr::resolution_notes.eq(payload.note.clone()),
+        ))
         .execute(&mut conn)?;
     diesel::insert_into(hist::maintenance_request_history)
         .values((
@@ -389,26 +513,45 @@ pub struct UpdateRequestPayload {
     tag = "Maintenance",
     security(("bearer_auth" = []))
 )]
-pub async fn update_request(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>, payload: web::Json<UpdateRequestPayload>) -> Result<impl Responder, AppError> {
-    use crate::schema::maintenance_requests::dsl as mr;
+pub async fn update_request(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+    payload: web::Json<UpdateRequestPayload>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::maintenance_request_history::dsl as hist;
+    use crate::schema::maintenance_requests::dsl as mr;
     use crate::schema::users::dsl as u;
 
-    if !auth.has_any_role(&["Admin", "Manager"]) { return Err(AppError::Forbidden); }
+    if !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
     let id = path.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     // Parse and validate user ID from JWT
-    let user_id = auth.claims.sub.parse::<u64>()
+    let user_id = auth
+        .claims
+        .sub
+        .parse::<u64>()
         .map_err(|_| AppError::Internal("invalid_user_id_in_jwt".into()))?;
 
     // Verify user exists in database
-    let user_exists = u::users.filter(u::id.eq(user_id)).count().get_result::<i64>(&mut conn)? > 0;
+    let user_exists = u::users
+        .filter(u::id.eq(user_id))
+        .count()
+        .get_result::<i64>(&mut conn)?
+        > 0;
     if !user_exists {
         return Err(AppError::Internal("user_not_found_in_database".into()));
     }
 
-    let current: MaintenanceRequest = mr::maintenance_requests.filter(mr::id.eq(id)).select(MaintenanceRequest::as_select()).first(&mut conn)?;
+    let current: MaintenanceRequest = mr::maintenance_requests
+        .filter(mr::id.eq(id))
+        .select(MaintenanceRequest::as_select())
+        .first(&mut conn)?;
     let current_status = current.status.clone();
 
     // Apply updates and log to history
@@ -433,7 +576,10 @@ pub async fn update_request(auth: AuthContext, path: web::Path<u64>, pool: web::
             .execute(&mut conn)?;
 
         // Log priority change to history
-        let note = format!("Priority changed from {} to {}", current.priority, new_priority);
+        let note = format!(
+            "Priority changed from {} to {}",
+            current.priority, new_priority
+        );
         diesel::insert_into(hist::maintenance_request_history)
             .values((
                 hist::request_id.eq(id),
@@ -464,7 +610,10 @@ pub async fn update_request(auth: AuthContext, path: web::Path<u64>, pool: web::
                 .select(u::name)
                 .first(&mut conn)
                 .unwrap_or_else(|_| format!("User #{}", prev_assigned));
-            format!("Reassigned from {} to {}", prev_assignee_name, new_assignee_name)
+            format!(
+                "Reassigned from {} to {}",
+                prev_assignee_name, new_assignee_name
+            )
         } else {
             format!("Assigned to {}", new_assignee_name)
         };
@@ -485,7 +634,7 @@ pub async fn update_request(auth: AuthContext, path: web::Path<u64>, pool: web::
     use crate::schema::buildings::dsl as bld;
     use crate::schema::users::dsl as usr;
 
-    let result: (u64, u64, u64, Option<u64>, String, String, String, String, String, Option<String>, Option<chrono::NaiveDateTime>, Option<chrono::NaiveDateTime>, String, u64, String, String) = mr::maintenance_requests
+    let result: MaintenanceRequestDetailRow = mr::maintenance_requests
         .inner_join(apt::apartments.on(apt::id.eq(mr::apartment_id)))
         .inner_join(bld::buildings.on(bld::id.eq(apt::building_id)))
         .inner_join(usr::users.on(usr::id.eq(mr::created_by)))
@@ -510,7 +659,24 @@ pub async fn update_request(auth: AuthContext, path: web::Path<u64>, pool: web::
         ))
         .first(&mut conn)?;
 
-    let (req_id, apartment_id, created_by, assigned_to, request_type, priority, title, description, status, resolution_notes, created_at, updated_at, apt_number, bld_id, bld_addr, creator_name) = result;
+    let (
+        req_id,
+        apartment_id,
+        created_by,
+        assigned_to,
+        request_type,
+        priority,
+        title,
+        description,
+        status,
+        resolution_notes,
+        created_at,
+        updated_at,
+        apt_number,
+        bld_id,
+        bld_addr,
+        creator_name,
+    ) = result;
 
     // Get assigned user name if assigned
     let assigned_name = if let Some(assigned_id) = assigned_to {
@@ -539,8 +705,12 @@ pub async fn update_request(auth: AuthContext, path: web::Path<u64>, pool: web::
         created_by_name: creator_name,
         assigned_to,
         assigned_to_name: assigned_name,
-        created_at: created_at.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap_or_default(),
-        updated_at: updated_at.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap_or_default(),
+        created_at: created_at
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_default(),
+        updated_at: updated_at
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_default(),
     };
 
     Ok(HttpResponse::Ok().json(detail))
@@ -565,16 +735,25 @@ pub async fn update_request(auth: AuthContext, path: web::Path<u64>, pool: web::
     tag = "Maintenance",
     security(("bearer_auth" = []))
 )]
-pub async fn list_history(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
+pub async fn list_history(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::maintenance_request_history::dsl as hist;
     use crate::schema::maintenance_requests::dsl as mr;
     use crate::schema::users::dsl as usr;
 
     let request_id = path.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     // simple permission check: allow if admin/manager or creator
-    let req: MaintenanceRequest = mr::maintenance_requests.filter(mr::id.eq(request_id)).select(MaintenanceRequest::as_select()).first(&mut conn)?;
+    let req: MaintenanceRequest = mr::maintenance_requests
+        .filter(mr::id.eq(request_id))
+        .select(MaintenanceRequest::as_select())
+        .first(&mut conn)?;
     let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
     if !(auth.has_any_role(&["Admin", "Manager"]) || req.created_by == user_id) {
         return Err(AppError::Forbidden);
@@ -584,10 +763,7 @@ pub async fn list_history(auth: AuthContext, path: web::Path<u64>, pool: web::Da
     let results: Vec<(MaintenanceRequestHistory, String)> = hist::maintenance_request_history
         .inner_join(usr::users.on(usr::id.eq(hist::changed_by)))
         .filter(hist::request_id.eq(request_id))
-        .select((
-            MaintenanceRequestHistory::as_select(),
-            usr::name,
-        ))
+        .select((MaintenanceRequestHistory::as_select(), usr::name))
         .order(hist::changed_at.asc())
         .load(&mut conn)?;
 
@@ -601,7 +777,9 @@ pub async fn list_history(auth: AuthContext, path: web::Path<u64>, pool: web::Da
             note: entry.note,
             changed_by: entry.changed_by,
             changed_by_name: user_name,
-            changed_at: entry.changed_at.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()),
+            changed_at: entry
+                .changed_at
+                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()),
         })
         .collect();
 
@@ -610,7 +788,9 @@ pub async fn list_history(auth: AuthContext, path: web::Path<u64>, pool: web::Da
 
 /// Assign a maintenance request to a user (Admin/Manager only)
 #[derive(serde::Deserialize, utoipa::ToSchema)]
-pub struct AssignPayload { pub user_id: u64 }
+pub struct AssignPayload {
+    pub user_id: u64,
+}
 
 /// Assign a maintenance request to a user
 ///
@@ -633,20 +813,37 @@ pub struct AssignPayload { pub user_id: u64 }
     tag = "Maintenance",
     security(("bearer_auth" = []))
 )]
-pub async fn assign_request(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>, payload: web::Json<AssignPayload>) -> Result<impl Responder, AppError> {
+pub async fn assign_request(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+    payload: web::Json<AssignPayload>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::maintenance_requests::dsl as mr;
     use crate::schema::users::dsl as u;
-    if !auth.has_any_role(&["Admin", "Manager"]) { return Err(AppError::Forbidden); }
+    if !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
     let id = path.into_inner();
     let target_user = payload.user_id;
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
     // verify user exists
-    let exists: Result<u64, _> = u::users.filter(u::id.eq(target_user)).select(u::id).first(&mut conn);
-    if exists.is_err() { return Err(AppError::BadRequest("user_not_found".into())); }
+    let exists: Result<u64, _> = u::users
+        .filter(u::id.eq(target_user))
+        .select(u::id)
+        .first(&mut conn);
+    if exists.is_err() {
+        return Err(AppError::BadRequest("user_not_found".into()));
+    }
     diesel::update(mr::maintenance_requests.filter(mr::id.eq(id)))
         .set(mr::assigned_to.eq(Some(target_user)))
         .execute(&mut conn)?;
-    let updated: MaintenanceRequest = mr::maintenance_requests.filter(mr::id.eq(id)).select(MaintenanceRequest::as_select()).first(&mut conn)?;
+    let updated: MaintenanceRequest = mr::maintenance_requests
+        .filter(mr::id.eq(id))
+        .select(MaintenanceRequest::as_select())
+        .first(&mut conn)?;
     Ok(HttpResponse::Ok().json(updated))
 }
 
@@ -669,15 +866,26 @@ pub async fn assign_request(auth: AuthContext, path: web::Path<u64>, pool: web::
     tag = "Maintenance",
     security(("bearer_auth" = []))
 )]
-pub async fn unassign_request(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
+pub async fn unassign_request(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::maintenance_requests::dsl as mr;
-    if !auth.has_any_role(&["Admin", "Manager"]) { return Err(AppError::Forbidden); }
+    if !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
     let id = path.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
     diesel::update(mr::maintenance_requests.filter(mr::id.eq(id)))
         .set(mr::assigned_to.eq::<Option<u64>>(None))
         .execute(&mut conn)?;
-    let updated: MaintenanceRequest = mr::maintenance_requests.filter(mr::id.eq(id)).select(MaintenanceRequest::as_select()).first(&mut conn)?;
+    let updated: MaintenanceRequest = mr::maintenance_requests
+        .filter(mr::id.eq(id))
+        .select(MaintenanceRequest::as_select())
+        .first(&mut conn)?;
     Ok(HttpResponse::Ok().json(updated))
 }
 
@@ -691,11 +899,32 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .route("/requests/{id}/assign", web::put().to(assign_request))
         .route("/requests/{id}/assign", web::delete().to(unassign_request))
         // attachment endpoints
-        .route("/requests/{id}/attachments", web::post().to(attachments::upload_attachment))
-        .route("/requests/{id}/attachments", web::get().to(attachments::list_attachments))
-        .route("/requests/{id}/attachments/deleted", web::get().to(attachments::list_deleted_attachments))
-        .route("/requests/{id}/attachments/{att_id}", web::get().to(attachments::get_attachment_metadata))
-        .route("/requests/{id}/attachments/{att_id}/download", web::get().to(attachments::download_attachment))
-        .route("/requests/{id}/attachments/{att_id}", web::delete().to(attachments::delete_attachment))
-        .route("/requests/{id}/attachments/{att_id}/restore", web::post().to(attachments::restore_attachment));
+        .route(
+            "/requests/{id}/attachments",
+            web::post().to(attachments::upload_attachment),
+        )
+        .route(
+            "/requests/{id}/attachments",
+            web::get().to(attachments::list_attachments),
+        )
+        .route(
+            "/requests/{id}/attachments/deleted",
+            web::get().to(attachments::list_deleted_attachments),
+        )
+        .route(
+            "/requests/{id}/attachments/{att_id}",
+            web::get().to(attachments::get_attachment_metadata),
+        )
+        .route(
+            "/requests/{id}/attachments/{att_id}/download",
+            web::get().to(attachments::download_attachment),
+        )
+        .route(
+            "/requests/{id}/attachments/{att_id}",
+            web::delete().to(attachments::delete_attachment),
+        )
+        .route(
+            "/requests/{id}/attachments/{att_id}/restore",
+            web::post().to(attachments::restore_attachment),
+        );
 }

@@ -1,8 +1,8 @@
+use crate::components::AdminLayout;
+use crate::contexts::AuthContext;
+use crate::routes::Route;
 use yew::prelude::*;
 use yew_router::prelude::*;
-use crate::contexts::AuthContext;
-use crate::components::AdminLayout;
-use crate::routes::Route;
 
 #[function_component(ManagePage)]
 pub fn manage_page() -> Html {

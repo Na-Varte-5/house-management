@@ -1,9 +1,9 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
 
+use crate::i18n::t;
 use crate::routes::Route;
 use crate::utils::auth::current_user;
-use crate::i18n::t;
 
 #[derive(Properties, PartialEq)]
 pub struct AdminSidebarProps {

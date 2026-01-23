@@ -1,21 +1,24 @@
-use actix_web::{web, HttpRequest, HttpResponse, Responder};
-use diesel::prelude::*;
-use crate::db::DbPool;
+use super::types::{WebhookBatchPayload, WebhookReadingPayload};
 use crate::auth::AppError;
+use crate::db::DbPool;
 use crate::models::{Meter, WebhookApiKey};
-use super::types::{WebhookReadingPayload, WebhookBatchPayload};
+use actix_web::{HttpRequest, HttpResponse, Responder, web};
+use diesel::prelude::*;
 
 /// Authenticate webhook requests via API key
 async fn authenticate_webhook(req: &HttpRequest, pool: &web::Data<DbPool>) -> Result<(), AppError> {
-    let api_key = req.headers()
+    let api_key = req
+        .headers()
         .get("X-API-Key")
         .and_then(|h| h.to_str().ok())
         .ok_or(AppError::Unauthorized)?;
 
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
-    use crate::schema::webhook_api_keys::dsl as wak;
     use crate::auth::crypto::verify_password;
+    use crate::schema::webhook_api_keys::dsl as wak;
 
     let keys: Vec<WebhookApiKey> = wak::webhook_api_keys
         .filter(wak::is_active.eq(true))
@@ -57,7 +60,9 @@ pub async fn webhook_meter_reading(
     // Authenticate via API key
     authenticate_webhook(&req, &pool).await?;
 
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     // Find meter by serial number
     use crate::schema::meters::dsl as m;
@@ -69,10 +74,15 @@ pub async fn webhook_meter_reading(
         .map_err(|_| AppError::NotFound)?;
 
     // Parse timestamp
-    let reading_timestamp = chrono::NaiveDateTime::parse_from_str(&payload.timestamp, "%Y-%m-%dT%H:%M:%SZ")
-        .or_else(|_| chrono::NaiveDateTime::parse_from_str(&payload.timestamp, "%Y-%m-%dT%H:%M:%S"))
-        .or_else(|_| chrono::NaiveDateTime::parse_from_str(&payload.timestamp, "%Y-%m-%d %H:%M:%S"))
-        .map_err(|_| AppError::BadRequest("Invalid timestamp format".into()))?;
+    let reading_timestamp =
+        chrono::NaiveDateTime::parse_from_str(&payload.timestamp, "%Y-%m-%dT%H:%M:%SZ")
+            .or_else(|_| {
+                chrono::NaiveDateTime::parse_from_str(&payload.timestamp, "%Y-%m-%dT%H:%M:%S")
+            })
+            .or_else(|_| {
+                chrono::NaiveDateTime::parse_from_str(&payload.timestamp, "%Y-%m-%d %H:%M:%S")
+            })
+            .map_err(|_| AppError::BadRequest("Invalid timestamp format".into()))?;
 
     use crate::schema::meter_readings::dsl as mr;
 
@@ -110,7 +120,9 @@ pub async fn webhook_meter_reading_batch(
     // Authenticate via API key
     authenticate_webhook(&req, &pool).await?;
 
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     for reading_payload in &payload.readings {
         // Find meter by serial number
@@ -123,10 +135,22 @@ pub async fn webhook_meter_reading_batch(
 
         if let Ok(meter) = meter_result {
             // Parse timestamp
-            if let Ok(reading_timestamp) = chrono::NaiveDateTime::parse_from_str(&reading_payload.timestamp, "%Y-%m-%dT%H:%M:%SZ")
-                .or_else(|_| chrono::NaiveDateTime::parse_from_str(&reading_payload.timestamp, "%Y-%m-%dT%H:%M:%S"))
-                .or_else(|_| chrono::NaiveDateTime::parse_from_str(&reading_payload.timestamp, "%Y-%m-%d %H:%M:%S"))
-            {
+            if let Ok(reading_timestamp) = chrono::NaiveDateTime::parse_from_str(
+                &reading_payload.timestamp,
+                "%Y-%m-%dT%H:%M:%SZ",
+            )
+            .or_else(|_| {
+                chrono::NaiveDateTime::parse_from_str(
+                    &reading_payload.timestamp,
+                    "%Y-%m-%dT%H:%M:%S",
+                )
+            })
+            .or_else(|_| {
+                chrono::NaiveDateTime::parse_from_str(
+                    &reading_payload.timestamp,
+                    "%Y-%m-%d %H:%M:%S",
+                )
+            }) {
                 use crate::schema::meter_readings::dsl as mr;
                 diesel::insert_into(mr::meter_readings)
                     .values((

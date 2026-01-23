@@ -1,9 +1,9 @@
-use yew::prelude::*;
-use serde::Deserialize;
-use yew_router::prelude::*;
-use crate::components::{TextInput, Select, SelectOption};
+use crate::components::{Select, SelectOption, TextInput};
 use crate::routes::Route;
 use crate::services::api_client;
+use serde::Deserialize;
+use yew::prelude::*;
+use yew_router::prelude::*;
 
 #[derive(Deserialize, Clone, PartialEq)]
 pub struct Building {
@@ -78,9 +78,7 @@ pub fn meter_list(props: &MeterListProps) -> Html {
 
     let on_meter_click = {
         let navigator = navigator.clone();
-        Callback::from(move |meter_id: u64| {
-            navigator.push(&Route::MeterDetail { id: meter_id })
-        })
+        Callback::from(move |meter_id: u64| navigator.push(&Route::MeterDetail { id: meter_id }))
     };
 
     // Callbacks for filters
@@ -103,7 +101,10 @@ pub fn meter_list(props: &MeterListProps) -> Html {
     let filter_building_options = {
         let mut options = vec![SelectOption::new("", "All Buildings")];
         for building in props.buildings.iter() {
-            options.push(SelectOption::new(building.id.to_string(), &building.address));
+            options.push(SelectOption::new(
+                building.id.to_string(),
+                &building.address,
+            ));
         }
         options
     };
@@ -118,107 +119,131 @@ pub fn meter_list(props: &MeterListProps) -> Html {
     // Filter meters based on search and filters
     let filtered_meters = {
         let query = (*search_query).clone().to_lowercase();
-        let building_filter = if filter_building.is_empty() { None } else { filter_building.parse::<u64>().ok() };
+        let building_filter = if filter_building.is_empty() {
+            None
+        } else {
+            filter_building.parse::<u64>().ok()
+        };
         let calibration_filter = (*filter_calibration).clone();
 
-        all_meters.iter().filter(|meter| {
-            // Search filter
-            let matches_search = query.is_empty() ||
-                meter.serial_number.to_lowercase().contains(&query) ||
-                meter.meter_type.to_lowercase().contains(&query) ||
-                meter.apartment_number.as_ref().map(|n| n.to_lowercase().contains(&query)).unwrap_or(false) ||
-                meter.building_address.as_ref().map(|b| b.to_lowercase().contains(&query)).unwrap_or(false);
+        all_meters
+            .iter()
+            .filter(|meter| {
+                // Search filter
+                let matches_search = query.is_empty()
+                    || meter.serial_number.to_lowercase().contains(&query)
+                    || meter.meter_type.to_lowercase().contains(&query)
+                    || meter
+                        .apartment_number
+                        .as_ref()
+                        .map(|n| n.to_lowercase().contains(&query))
+                        .unwrap_or(false)
+                    || meter
+                        .building_address
+                        .as_ref()
+                        .map(|b| b.to_lowercase().contains(&query))
+                        .unwrap_or(false);
 
-            // Building filter
-            let matches_building = building_filter.is_none() ||
-                meter.building_id == building_filter;
+                // Building filter
+                let matches_building =
+                    building_filter.is_none() || meter.building_id == building_filter;
 
-            // Calibration filter
-            let matches_calibration = match calibration_filter.as_str() {
-                "overdue" => {
-                    meter.calibration_due_date.as_ref().map(|due_date| {
-                        let parts: Vec<&str> = due_date.split('-').collect();
-                        if parts.len() == 3 {
-                            if let (Ok(year), Ok(month), Ok(day)) = (
-                                parts[0].parse::<i32>(),
-                                parts[1].parse::<u32>(),
-                                parts[2].parse::<u32>()
-                            ) {
-                                let now = js_sys::Date::new_0();
-                                let today_ms = now.get_time();
-                                let due_date_js = js_sys::Date::new_0();
-                                due_date_js.set_full_year(year as u32);
-                                due_date_js.set_month(month - 1);
-                                due_date_js.set_date(day);
-                                let due_ms = due_date_js.get_time();
-                                due_ms < today_ms
+                // Calibration filter
+                let matches_calibration = match calibration_filter.as_str() {
+                    "overdue" => meter
+                        .calibration_due_date
+                        .as_ref()
+                        .map(|due_date| {
+                            let parts: Vec<&str> = due_date.split('-').collect();
+                            if parts.len() == 3 {
+                                if let (Ok(year), Ok(month), Ok(day)) = (
+                                    parts[0].parse::<i32>(),
+                                    parts[1].parse::<u32>(),
+                                    parts[2].parse::<u32>(),
+                                ) {
+                                    let now = js_sys::Date::new_0();
+                                    let today_ms = now.get_time();
+                                    let due_date_js = js_sys::Date::new_0();
+                                    due_date_js.set_full_year(year as u32);
+                                    due_date_js.set_month(month - 1);
+                                    due_date_js.set_date(day);
+                                    let due_ms = due_date_js.get_time();
+                                    due_ms < today_ms
+                                } else {
+                                    false
+                                }
                             } else {
                                 false
                             }
-                        } else {
-                            false
-                        }
-                    }).unwrap_or(false)
-                }
-                "due_soon" => {
-                    meter.calibration_due_date.as_ref().map(|due_date| {
-                        let parts: Vec<&str> = due_date.split('-').collect();
-                        if parts.len() == 3 {
-                            if let (Ok(year), Ok(month), Ok(day)) = (
-                                parts[0].parse::<i32>(),
-                                parts[1].parse::<u32>(),
-                                parts[2].parse::<u32>()
-                            ) {
-                                let now = js_sys::Date::new_0();
-                                let today_ms = now.get_time();
-                                let due_date_js = js_sys::Date::new_0();
-                                due_date_js.set_full_year(year as u32);
-                                due_date_js.set_month(month - 1);
-                                due_date_js.set_date(day);
-                                let due_ms = due_date_js.get_time();
-                                let diff_ms = due_ms - today_ms;
-                                let days_until = (diff_ms / (1000.0 * 60.0 * 60.0 * 24.0)).floor() as i32;
-                                days_until >= 0 && days_until <= 30
+                        })
+                        .unwrap_or(false),
+                    "due_soon" => meter
+                        .calibration_due_date
+                        .as_ref()
+                        .map(|due_date| {
+                            let parts: Vec<&str> = due_date.split('-').collect();
+                            if parts.len() == 3 {
+                                if let (Ok(year), Ok(month), Ok(day)) = (
+                                    parts[0].parse::<i32>(),
+                                    parts[1].parse::<u32>(),
+                                    parts[2].parse::<u32>(),
+                                ) {
+                                    let now = js_sys::Date::new_0();
+                                    let today_ms = now.get_time();
+                                    let due_date_js = js_sys::Date::new_0();
+                                    due_date_js.set_full_year(year as u32);
+                                    due_date_js.set_month(month - 1);
+                                    due_date_js.set_date(day);
+                                    let due_ms = due_date_js.get_time();
+                                    let diff_ms = due_ms - today_ms;
+                                    let days_until =
+                                        (diff_ms / (1000.0 * 60.0 * 60.0 * 24.0)).floor() as i32;
+                                    days_until >= 0 && days_until <= 30
+                                } else {
+                                    false
+                                }
                             } else {
                                 false
                             }
-                        } else {
-                            false
-                        }
-                    }).unwrap_or(false)
-                }
-                "valid" => {
-                    meter.calibration_due_date.as_ref().map(|due_date| {
-                        let parts: Vec<&str> = due_date.split('-').collect();
-                        if parts.len() == 3 {
-                            if let (Ok(year), Ok(month), Ok(day)) = (
-                                parts[0].parse::<i32>(),
-                                parts[1].parse::<u32>(),
-                                parts[2].parse::<u32>()
-                            ) {
-                                let now = js_sys::Date::new_0();
-                                let today_ms = now.get_time();
-                                let due_date_js = js_sys::Date::new_0();
-                                due_date_js.set_full_year(year as u32);
-                                due_date_js.set_month(month - 1);
-                                due_date_js.set_date(day);
-                                let due_ms = due_date_js.get_time();
-                                let diff_ms = due_ms - today_ms;
-                                let days_until = (diff_ms / (1000.0 * 60.0 * 60.0 * 24.0)).floor() as i32;
-                                days_until > 30
+                        })
+                        .unwrap_or(false),
+                    "valid" => meter
+                        .calibration_due_date
+                        .as_ref()
+                        .map(|due_date| {
+                            let parts: Vec<&str> = due_date.split('-').collect();
+                            if parts.len() == 3 {
+                                if let (Ok(year), Ok(month), Ok(day)) = (
+                                    parts[0].parse::<i32>(),
+                                    parts[1].parse::<u32>(),
+                                    parts[2].parse::<u32>(),
+                                ) {
+                                    let now = js_sys::Date::new_0();
+                                    let today_ms = now.get_time();
+                                    let due_date_js = js_sys::Date::new_0();
+                                    due_date_js.set_full_year(year as u32);
+                                    due_date_js.set_month(month - 1);
+                                    due_date_js.set_date(day);
+                                    let due_ms = due_date_js.get_time();
+                                    let diff_ms = due_ms - today_ms;
+                                    let days_until =
+                                        (diff_ms / (1000.0 * 60.0 * 60.0 * 24.0)).floor() as i32;
+                                    days_until > 30
+                                } else {
+                                    false
+                                }
                             } else {
                                 false
                             }
-                        } else {
-                            false
-                        }
-                    }).unwrap_or(false)
-                }
-                _ => true
-            };
+                        })
+                        .unwrap_or(false),
+                    _ => true,
+                };
 
-            matches_search && matches_building && matches_calibration
-        }).cloned().collect::<Vec<_>>()
+                matches_search && matches_building && matches_calibration
+            })
+            .cloned()
+            .collect::<Vec<_>>()
     };
 
     html! {

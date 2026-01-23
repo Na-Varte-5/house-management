@@ -1,7 +1,7 @@
-use yew::prelude::*;
+use crate::services::{ApiError, api_client};
 use serde::{Deserialize, Serialize};
 use web_sys::HtmlInputElement;
-use crate::services::{api_client, ApiError};
+use yew::prelude::*;
 
 #[derive(Deserialize, Clone, PartialEq)]
 pub struct Meter {
@@ -41,8 +41,10 @@ pub struct MeterEditFormProps {
 pub fn meter_edit_form(props: &MeterEditFormProps) -> Html {
     let edit_serial = use_state(|| props.meter.serial_number.clone());
     let edit_meter_type = use_state(|| props.meter.meter_type.clone());
-    let edit_installation_date = use_state(|| props.meter.installation_date.clone().unwrap_or_default());
-    let edit_calibration_due = use_state(|| props.meter.calibration_due_date.clone().unwrap_or_default());
+    let edit_installation_date =
+        use_state(|| props.meter.installation_date.clone().unwrap_or_default());
+    let edit_calibration_due =
+        use_state(|| props.meter.calibration_due_date.clone().unwrap_or_default());
     let edit_visible = use_state(|| props.meter.is_visible_to_renters);
     let updating = use_state(|| false);
 
@@ -112,8 +114,16 @@ pub fn meter_edit_form(props: &MeterEditFormProps) -> Html {
                 meter_type: Some((*edit_meter_type).clone()),
                 serial_number: Some((*edit_serial).clone()),
                 is_visible_to_renters: Some(*edit_visible),
-                installation_date: if edit_installation_date.is_empty() { None } else { Some((*edit_installation_date).clone()) },
-                calibration_due_date: if edit_calibration_due.is_empty() { None } else { Some((*edit_calibration_due).clone()) },
+                installation_date: if edit_installation_date.is_empty() {
+                    None
+                } else {
+                    Some((*edit_installation_date).clone())
+                },
+                calibration_due_date: if edit_calibration_due.is_empty() {
+                    None
+                } else {
+                    Some((*edit_calibration_due).clone())
+                },
             };
 
             let token = token.clone();
@@ -123,7 +133,10 @@ pub fn meter_edit_form(props: &MeterEditFormProps) -> Html {
 
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                match client.put::<_, Meter>(&format!("/meters/{}", meter_id), &payload).await {
+                match client
+                    .put::<_, Meter>(&format!("/meters/{}", meter_id), &payload)
+                    .await
+                {
                     Ok(updated_meter) => {
                         on_success.emit(updated_meter);
                         updating.set(false);

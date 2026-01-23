@@ -1,5 +1,5 @@
-use yew::prelude::*;
 use super::types::UserInfo;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct OwnerManagementProps {
@@ -29,7 +29,8 @@ pub fn owner_management(props: &OwnerManagementProps) -> Html {
         props.all_users.iter().collect()
     } else {
         let query_lower = props.user_query.to_lowercase();
-        props.all_users
+        props
+            .all_users
             .iter()
             .filter(|u| {
                 u.name.to_lowercase().contains(&query_lower)

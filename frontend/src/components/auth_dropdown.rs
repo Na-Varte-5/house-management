@@ -1,8 +1,8 @@
 use crate::contexts::{AuthContext, User};
-use crate::services::{api_client, ApiError};
+use crate::services::{ApiError, api_client};
+use base64::{Engine as _, engine::general_purpose};
 use serde::{Deserialize, Serialize};
 use yew::prelude::*;
-use base64::{Engine as _, engine::general_purpose};
 
 #[derive(Deserialize, Clone, Debug)]
 struct LoginResponse {
@@ -81,7 +81,10 @@ pub fn auth_dropdown() -> Html {
                         password: pass_v.clone(),
                     };
 
-                    match client.post::<_, serde_json::Value>("/auth/register", &register_req).await {
+                    match client
+                        .post::<_, serde_json::Value>("/auth/register", &register_req)
+                        .await
+                    {
                         Ok(_) => {
                             // Auto-login after successful registration
                             let login_req = LoginRequest {
@@ -89,7 +92,10 @@ pub fn auth_dropdown() -> Html {
                                 password: pass_v,
                             };
 
-                            match client.post::<_, LoginResponse>("/auth/login", &login_req).await {
+                            match client
+                                .post::<_, LoginResponse>("/auth/login", &login_req)
+                                .await
+                            {
                                 Ok(resp) => {
                                     // Decode JWT to get user info
                                     if let Some(user) = decode_jwt_claims(&resp.token) {
@@ -104,7 +110,8 @@ pub fn auth_dropdown() -> Html {
                                 }
                                 Err(e) => {
                                     loading.set(false);
-                                    message.set(Some(format!("Registered, but login failed: {}", e)));
+                                    message
+                                        .set(Some(format!("Registered, but login failed: {}", e)));
                                 }
                             }
                         }
@@ -120,7 +127,10 @@ pub fn auth_dropdown() -> Html {
                         password: pass_v,
                     };
 
-                    match client.post::<_, LoginResponse>("/auth/login", &login_req).await {
+                    match client
+                        .post::<_, LoginResponse>("/auth/login", &login_req)
+                        .await
+                    {
                         Ok(resp) => {
                             // Decode JWT to get user info
                             if let Some(user) = decode_jwt_claims(&resp.token) {

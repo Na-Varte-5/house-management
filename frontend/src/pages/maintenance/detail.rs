@@ -1,15 +1,14 @@
-use yew::prelude::*;
-use yew_router::prelude::*;
-use serde::Deserialize;
-use crate::components::{ErrorAlert, SuccessAlert};
 use crate::components::maintenance::{
-    ManagementPanel, ManagementRequest, UserInfo,
-    HistoryTimeline, HistoryEntry,
-    AttachmentsList, Attachment
+    Attachment, AttachmentsList, HistoryEntry, HistoryTimeline, ManagementPanel, ManagementRequest,
+    UserInfo,
 };
+use crate::components::{ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
 use crate::routes::Route;
 use crate::services::api_client;
+use serde::Deserialize;
+use yew::prelude::*;
+use yew_router::prelude::*;
 
 #[derive(Deserialize, Clone, PartialEq)]
 struct MaintenanceRequest {
@@ -55,10 +54,19 @@ fn format_date(datetime_str: &str) -> String {
 
             // Format as "Jan 14, 2026 at 10:30"
             let month_name = match month {
-                "01" => "Jan", "02" => "Feb", "03" => "Mar", "04" => "Apr",
-                "05" => "May", "06" => "Jun", "07" => "Jul", "08" => "Aug",
-                "09" => "Sep", "10" => "Oct", "11" => "Nov", "12" => "Dec",
-                _ => month
+                "01" => "Jan",
+                "02" => "Feb",
+                "03" => "Mar",
+                "04" => "Apr",
+                "05" => "May",
+                "06" => "Jun",
+                "07" => "Jul",
+                "08" => "Aug",
+                "09" => "Sep",
+                "10" => "Oct",
+                "11" => "Nov",
+                "12" => "Dec",
+                _ => month,
             };
 
             let time_parts: Vec<&str> = time.split(':').collect();
@@ -106,7 +114,10 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
             let id = *id;
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                match client.get::<MaintenanceRequest>(&format!("/requests/{}", id)).await {
+                match client
+                    .get::<MaintenanceRequest>(&format!("/requests/{}", id))
+                    .await
+                {
                     Ok(req) => {
                         request.set(Some(req));
                         loading.set(false);
@@ -132,7 +143,10 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
             loading_history.set(true);
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                if let Ok(list) = client.get::<Vec<HistoryEntry>>(&format!("/requests/{}/history", id)).await {
+                if let Ok(list) = client
+                    .get::<Vec<HistoryEntry>>(&format!("/requests/{}/history", id))
+                    .await
+                {
                     history.set(list);
                 }
                 loading_history.set(false);
@@ -152,7 +166,10 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
             loading_attachments.set(true);
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                if let Ok(list) = client.get::<Vec<Attachment>>(&format!("/requests/{}/attachments", id)).await {
+                if let Ok(list) = client
+                    .get::<Vec<Attachment>>(&format!("/requests/{}/attachments", id))
+                    .await
+                {
                     attachments.set(list);
                 }
                 loading_attachments.set(false);
@@ -193,11 +210,17 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
                 // Reload request details
-                if let Ok(req) = client.get::<MaintenanceRequest>(&format!("/requests/{}", request_id)).await {
+                if let Ok(req) = client
+                    .get::<MaintenanceRequest>(&format!("/requests/{}", request_id))
+                    .await
+                {
                     request.set(Some(req));
                 }
                 // Reload history
-                if let Ok(list) = client.get::<Vec<HistoryEntry>>(&format!("/requests/{}/history", request_id)).await {
+                if let Ok(list) = client
+                    .get::<Vec<HistoryEntry>>(&format!("/requests/{}/history", request_id))
+                    .await
+                {
                     history.set(list);
                 }
             });

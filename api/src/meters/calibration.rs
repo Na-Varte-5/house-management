@@ -1,9 +1,9 @@
-use actix_web::{web, HttpResponse, Responder};
-use diesel::prelude::*;
-use crate::db::DbPool;
-use crate::auth::{AuthContext, AppError};
-use crate::models::Meter;
 use super::types::CalibrateMeterRequest;
+use crate::auth::{AppError, AuthContext};
+use crate::db::DbPool;
+use crate::models::Meter;
+use actix_web::{HttpResponse, Responder, web};
+use diesel::prelude::*;
 
 /// List meters needing calibration (Admin/Manager only)
 #[utoipa::path(
@@ -28,10 +28,16 @@ pub async fn list_calibration_due(
         return Err(AppError::Forbidden);
     }
 
-    let days_before = query.get("days_before").and_then(|d| d.parse::<i64>().ok()).unwrap_or(30);
-    let threshold_date = chrono::Utc::now().naive_utc().date() + chrono::Duration::days(days_before);
+    let days_before = query
+        .get("days_before")
+        .and_then(|d| d.parse::<i64>().ok())
+        .unwrap_or(30);
+    let threshold_date =
+        chrono::Utc::now().naive_utc().date() + chrono::Duration::days(days_before);
 
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     use crate::schema::meters::dsl as m;
 
@@ -71,7 +77,9 @@ pub async fn calibrate_meter(
     }
 
     let meter_id = meter_id.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     // Parse dates
     let cal_date = chrono::NaiveDate::parse_from_str(&payload.calibration_date, "%Y-%m-%d")

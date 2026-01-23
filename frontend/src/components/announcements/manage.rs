@@ -1,11 +1,13 @@
-use yew::prelude::*;
+use super::{
+    ActiveAnnouncementsList, AnnouncementItem, DeletedAnnouncement, DeletedAnnouncementsList,
+};
 use crate::components::announcement_editor::AnnouncementEditor;
 use crate::components::announcement_editor::AnnouncementFull;
 use crate::components::comment_list::CommentList;
-use super::{ActiveAnnouncementsList, AnnouncementItem, DeletedAnnouncementsList, DeletedAnnouncement};
 use crate::contexts::AuthContext;
-use crate::services::api_client;
 use crate::i18n::t;
+use crate::services::api_client;
+use yew::prelude::*;
 
 #[function_component(AnnouncementsManage)]
 pub fn announcements_manage() -> Html {
@@ -36,25 +38,45 @@ pub fn announcements_manage() -> Html {
                 let client = api_client(token.as_deref());
                 match client.get::<Vec<serde_json::Value>>("/announcements").await {
                     Ok(v) => {
-                        let mapped = v.into_iter().filter_map(|x| Some(AnnouncementItem {
-                            id: x.get("id")?.as_u64()?,
-                            title: x.get("title")?.as_str()?.to_string(),
-                            body_html: x.get("body_html")?.as_str()?.to_string(),
-                            body_md: x.get("body_md")?.as_str()?.to_string(),
-                            author_id: x.get("author_id")?.as_u64()?,
-                            author_name: x.get("author_name")?.as_str()?.to_string(),
-                            pinned: x.get("pinned")?.as_bool()?,
-                            public: x.get("public")?.as_bool()?,
-                            roles_csv: x.get("roles_csv").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                            comments_enabled: x.get("comments_enabled")?.as_bool()?,
-                            publish_at: x.get("publish_at").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                            expire_at: x.get("expire_at").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                            is_deleted: x.get("is_deleted")?.as_bool()?,
-                            building_id: x.get("building_id").and_then(|r| r.as_u64()),
-                            building_address: x.get("building_address").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                            apartment_id: x.get("apartment_id").and_then(|r| r.as_u64()),
-                            apartment_number: x.get("apartment_number").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                        })).collect();
+                        let mapped = v
+                            .into_iter()
+                            .filter_map(|x| {
+                                Some(AnnouncementItem {
+                                    id: x.get("id")?.as_u64()?,
+                                    title: x.get("title")?.as_str()?.to_string(),
+                                    body_html: x.get("body_html")?.as_str()?.to_string(),
+                                    body_md: x.get("body_md")?.as_str()?.to_string(),
+                                    author_id: x.get("author_id")?.as_u64()?,
+                                    author_name: x.get("author_name")?.as_str()?.to_string(),
+                                    pinned: x.get("pinned")?.as_bool()?,
+                                    public: x.get("public")?.as_bool()?,
+                                    roles_csv: x
+                                        .get("roles_csv")
+                                        .and_then(|r| r.as_str())
+                                        .map(|s| s.to_string()),
+                                    comments_enabled: x.get("comments_enabled")?.as_bool()?,
+                                    publish_at: x
+                                        .get("publish_at")
+                                        .and_then(|r| r.as_str())
+                                        .map(|s| s.to_string()),
+                                    expire_at: x
+                                        .get("expire_at")
+                                        .and_then(|r| r.as_str())
+                                        .map(|s| s.to_string()),
+                                    is_deleted: x.get("is_deleted")?.as_bool()?,
+                                    building_id: x.get("building_id").and_then(|r| r.as_u64()),
+                                    building_address: x
+                                        .get("building_address")
+                                        .and_then(|r| r.as_str())
+                                        .map(|s| s.to_string()),
+                                    apartment_id: x.get("apartment_id").and_then(|r| r.as_u64()),
+                                    apartment_number: x
+                                        .get("apartment_number")
+                                        .and_then(|r| r.as_str())
+                                        .map(|s| s.to_string()),
+                                })
+                            })
+                            .collect();
                         list2.set(mapped);
                         loading2.set(false);
                     }
@@ -73,18 +95,28 @@ pub fn announcements_manage() -> Html {
         let show_deleted_flag = show_deleted.clone();
         let token = token.clone();
         Callback::from(move |_| {
-            if !*show_deleted_flag { return; }
+            if !*show_deleted_flag {
+                return;
+            }
             let deleted_state2 = deleted_state.clone();
             let error2 = error.clone();
             let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                match client.get::<Vec<serde_json::Value>>("/announcements/deleted").await {
+                match client
+                    .get::<Vec<serde_json::Value>>("/announcements/deleted")
+                    .await
+                {
                     Ok(v) => {
-                        let mapped = v.into_iter().filter_map(|x| Some(DeletedAnnouncement {
-                            id: x.get("id")?.as_u64()?,
-                            title: x.get("title")?.as_str()?.to_string(),
-                        })).collect();
+                        let mapped = v
+                            .into_iter()
+                            .filter_map(|x| {
+                                Some(DeletedAnnouncement {
+                                    id: x.get("id")?.as_u64()?,
+                                    title: x.get("title")?.as_str()?.to_string(),
+                                })
+                            })
+                            .collect();
                         deleted_state2.set(mapped);
                     }
                     Err(e) => {
@@ -98,13 +130,19 @@ pub fn announcements_manage() -> Html {
     // Initial load
     {
         let fetch_active = fetch_active.clone();
-        use_effect_with((), move |_| { fetch_active.emit(()); || () });
+        use_effect_with((), move |_| {
+            fetch_active.emit(());
+            || ()
+        });
     }
 
     // Reload deleted when toggled
     {
         let fetch_deleted = fetch_deleted.clone();
-        use_effect_with(show_deleted.clone(), move |_| { fetch_deleted.emit(()); || () });
+        use_effect_with(show_deleted.clone(), move |_| {
+            fetch_deleted.emit(());
+            || ()
+        });
     }
 
     // Action handlers
@@ -118,7 +156,10 @@ pub fn announcements_manage() -> Html {
             let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                match client.post_empty::<serde_json::Value>(&format!("/announcements/{}/publish", id)).await {
+                match client
+                    .post_empty::<serde_json::Value>(&format!("/announcements/{}/publish", id))
+                    .await
+                {
                     Ok(_) => fetch_active2.emit(()),
                     Err(e) => error2.set(Some(format!("Publish failed: {}", e))),
                 }
@@ -134,7 +175,10 @@ pub fn announcements_manage() -> Html {
             let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                if let Ok(_) = client.post_empty::<serde_json::Value>(&format!("/announcements/{}/pin", id)).await {
+                if let Ok(_) = client
+                    .post_empty::<serde_json::Value>(&format!("/announcements/{}/pin", id))
+                    .await
+                {
                     fetch_active2.emit(());
                 }
             });
@@ -149,7 +193,10 @@ pub fn announcements_manage() -> Html {
             let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                if let Ok(_) = client.delete_no_response(&format!("/announcements/{}", id)).await {
+                if let Ok(_) = client
+                    .delete_no_response(&format!("/announcements/{}", id))
+                    .await
+                {
                     fetch_active2.emit(());
                 }
             });
@@ -166,7 +213,10 @@ pub fn announcements_manage() -> Html {
             let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                if let Ok(_) = client.post_empty::<serde_json::Value>(&format!("/announcements/{}/restore", id)).await {
+                if let Ok(_) = client
+                    .post_empty::<serde_json::Value>(&format!("/announcements/{}/restore", id))
+                    .await
+                {
                     fetch_active2.emit(());
                     fetch_deleted2.emit(());
                 }
@@ -184,8 +234,17 @@ pub fn announcements_manage() -> Html {
             let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                if let Ok(_) = client.delete_no_response(&format!("/announcements/{}/purge", id)).await {
-                    deleted_state2.set(deleted_state2.iter().cloned().filter(|a| a.id != id).collect());
+                if let Ok(_) = client
+                    .delete_no_response(&format!("/announcements/{}/purge", id))
+                    .await
+                {
+                    deleted_state2.set(
+                        deleted_state2
+                            .iter()
+                            .cloned()
+                            .filter(|a| a.id != id)
+                            .collect(),
+                    );
                     fetch_deleted2.emit(());
                 }
             });
@@ -196,14 +255,17 @@ pub fn announcements_manage() -> Html {
         let fetch_active = fetch_active.clone();
         let error = error.clone();
         let token = token.clone();
-        Callback::from(move |(id, current): (u64,bool)| {
+        Callback::from(move |(id, current): (u64, bool)| {
             let fetch_active2 = fetch_active.clone();
             let error2 = error.clone();
             let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let body = serde_json::json!({"comments_enabled": !current});
                 let client = api_client(token.as_deref());
-                match client.put::<_, serde_json::Value>(&format!("/announcements/{}", id), &body).await {
+                match client
+                    .put::<_, serde_json::Value>(&format!("/announcements/{}", id), &body)
+                    .await
+                {
                     Ok(_) => fetch_active2.emit(()),
                     Err(e) => error2.set(Some(format!("Toggle comments failed: {}", e))),
                 }
@@ -271,27 +333,28 @@ pub fn announcements_manage() -> Html {
     };
 
     let selected_item = selected.and_then(|id| list.iter().find(|a| a.id == id).cloned());
-    let now_iso: String = js_sys::Date::new_0().to_iso_string().as_string().unwrap_or_default();
+    let now_iso: String = js_sys::Date::new_0()
+        .to_iso_string()
+        .as_string()
+        .unwrap_or_default();
 
     // Convert editing item to full format
-    let editing_full: Option<AnnouncementFull> = (*editing)
-        .clone()
-        .map(|a| AnnouncementFull {
-            id: a.id,
-            title: a.title,
-            body_md: a.body_md,
-            body_html: a.body_html,
-            pinned: a.pinned,
-            public: a.public,
-            roles_csv: a.roles_csv,
-            building_id: a.building_id,
-            apartment_id: a.apartment_id,
-            comments_enabled: a.comments_enabled,
-            publish_at: a.publish_at,
-            expire_at: a.expire_at,
-        });
+    let editing_full: Option<AnnouncementFull> = (*editing).clone().map(|a| AnnouncementFull {
+        id: a.id,
+        title: a.title,
+        body_md: a.body_md,
+        body_html: a.body_html,
+        pinned: a.pinned,
+        public: a.public,
+        roles_csv: a.roles_csv,
+        building_id: a.building_id,
+        apartment_id: a.apartment_id,
+        comments_enabled: a.comments_enabled,
+        publish_at: a.publish_at,
+        expire_at: a.expire_at,
+    });
 
-    html!{
+    html! {
         <div class="announcements-manage mb-4">
             { if let Some(err) = &*error {
                 html!{<div class="alert alert-danger py-1 mb-2">{err}</div>}

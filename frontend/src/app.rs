@@ -1,21 +1,25 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
 
-use frontend::components::navbar::Navbar;
 use frontend::components::app_layout::AppLayout;
-use frontend::contexts::{AuthProvider, AuthContext};
-use frontend::pages::admin::AdminPage;
+use frontend::components::navbar::Navbar;
+use frontend::contexts::{AuthContext, AuthProvider};
 use frontend::pages::admin::AdminAnnouncementsPage;
+use frontend::pages::admin::AdminPage;
 use frontend::pages::admin::AdminPropertiesPage;
 use frontend::pages::building_apartments::BuildingApartmentsPage;
 use frontend::pages::buildings::BuildingsPage;
+use frontend::pages::health::HealthPage;
 use frontend::pages::home::Home;
 use frontend::pages::login::LoginPage;
+use frontend::pages::maintenance::{
+    MaintenanceDetailPage, MaintenanceListPage, MaintenanceNewPage,
+};
 use frontend::pages::manage::ManagePage;
-use frontend::pages::health::HealthPage;
-use frontend::pages::maintenance::{MaintenanceListPage, MaintenanceNewPage, MaintenanceDetailPage};
-use frontend::pages::voting::{VotingListPage, VotingNewPage, VotingDetailPage};
-use frontend::pages::meters::{MeterListPage, MeterDetailPage, MeterNewPage, MeterCalibrationPage, MeterManagementPage};
+use frontend::pages::meters::{
+    MeterCalibrationPage, MeterDetailPage, MeterListPage, MeterManagementPage, MeterNewPage,
+};
+use frontend::pages::voting::{VotingDetailPage, VotingListPage, VotingNewPage};
 use frontend::routes::Route;
 
 #[function_component(AppContent)]

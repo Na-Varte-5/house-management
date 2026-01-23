@@ -178,9 +178,11 @@ impl utoipa::Modify for SecurityAddon {
                     HttpBuilder::new()
                         .scheme(HttpAuthScheme::Bearer)
                         .bearer_format("JWT")
-                        .description(Some("JWT token obtained from `/api/v1/login` endpoint. \
-                                          Include in Authorization header as: `Bearer <token>`"))
-                        .build()
+                        .description(Some(
+                            "JWT token obtained from `/api/v1/login` endpoint. \
+                                          Include in Authorization header as: `Bearer <token>`",
+                        ))
+                        .build(),
                 ),
             );
         }

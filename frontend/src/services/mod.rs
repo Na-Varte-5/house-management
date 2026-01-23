@@ -1,3 +1,3 @@
 pub mod api;
 
-pub use api::{api_client, ApiClient, ApiError, ApiResult};
+pub use api::{ApiClient, ApiError, ApiResult, api_client};

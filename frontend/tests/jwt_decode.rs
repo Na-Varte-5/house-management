@@ -14,7 +14,10 @@ fn make_token(payload_json: &serde_json::Value) -> String {
 
 fn base64_url(data: &[u8]) -> String {
     let s = base64::engine::general_purpose::STANDARD.encode(data);
-    s.replace('+', "-").replace('/', "_").trim_end_matches('=').to_string()
+    s.replace('+', "-")
+        .replace('/', "_")
+        .trim_end_matches('=')
+        .to_string()
 }
 
 #[test]

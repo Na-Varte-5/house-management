@@ -22,7 +22,10 @@ pub async fn list_apartments(pool: web::Data<DbPool>) -> Result<impl Responder, 
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;
-    let list = apartments.filter(is_deleted.eq(false)).select(Apartment::as_select()).load(&mut conn)?;
+    let list = apartments
+        .filter(is_deleted.eq(false))
+        .select(Apartment::as_select())
+        .load(&mut conn)?;
     Ok(HttpResponse::Ok().json(list))
 }
 
@@ -80,11 +83,13 @@ pub async fn list_my_building_apartments(
     path: web::Path<u64>,
     pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
-    use crate::schema::apartments::dsl::*;
     use crate::schema::apartment_owners::dsl as ao_dsl;
+    use crate::schema::apartments::dsl::*;
 
     let building = path.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     // Admin/Manager can see all apartments in the building
     if auth.has_any_role(&["Admin", "Manager"]) {
@@ -96,14 +101,19 @@ pub async fn list_my_building_apartments(
     }
 
     // For regular users, get only their apartments in this building
-    let user_id: u64 = auth.claims.sub.parse().map_err(|_| AppError::Internal("invalid_user_id".into()))?;
+    let user_id: u64 = auth
+        .claims
+        .sub
+        .parse()
+        .map_err(|_| AppError::Internal("invalid_user_id".into()))?;
 
     let list = apartments
         .inner_join(ao_dsl::apartment_owners.on(ao_dsl::apartment_id.eq(id)))
         .filter(
-            building_id.eq(building)
+            building_id
+                .eq(building)
                 .and(is_deleted.eq(false))
-                .and(ao_dsl::user_id.eq(user_id))
+                .and(ao_dsl::user_id.eq(user_id)),
         )
         .select(Apartment::as_select())
         .load(&mut conn)?;
@@ -143,9 +153,10 @@ pub async fn create_apartment(
         .execute(&mut conn)?;
 
     // Get the inserted apartment
-    let inserted_id: u64 = diesel::select(
-        diesel::dsl::sql::<diesel::sql_types::Unsigned<diesel::sql_types::BigInt>>("LAST_INSERT_ID()")
-    ).first(&mut conn)?;
+    let inserted_id: u64 = diesel::select(diesel::dsl::sql::<
+        diesel::sql_types::Unsigned<diesel::sql_types::BigInt>,
+    >("LAST_INSERT_ID()"))
+    .first(&mut conn)?;
 
     let apartment: Apartment = a_dsl::apartments
         .filter(a_dsl::id.eq(inserted_id))
@@ -306,12 +317,22 @@ pub async fn remove_apartment_owner(
     tag = "Apartments",
     security(("bearer_auth" = []))
 )]
-pub async fn delete_apartment(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
+pub async fn delete_apartment(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::apartments::dsl as a_dsl;
-    if !auth.has_any_role(&["Admin", "Manager"]) { return Err(AppError::Forbidden); }
+    if !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
     let id = path.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
-    diesel::update(a_dsl::apartments.filter(a_dsl::id.eq(id))).set(a_dsl::is_deleted.eq(true)).execute(&mut conn)?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
+    diesel::update(a_dsl::apartments.filter(a_dsl::id.eq(id)))
+        .set(a_dsl::is_deleted.eq(true))
+        .execute(&mut conn)?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -329,11 +350,21 @@ pub async fn delete_apartment(auth: AuthContext, path: web::Path<u64>, pool: web
     tag = "Apartments",
     security(("bearer_auth" = []))
 )]
-pub async fn list_deleted_apartments(auth: AuthContext, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
+pub async fn list_deleted_apartments(
+    auth: AuthContext,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::apartments::dsl::*;
-    if !auth.has_any_role(&["Admin", "Manager"]) { return Err(AppError::Forbidden); }
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
-    let list = apartments.filter(is_deleted.eq(true)).select(Apartment::as_select()).load(&mut conn)?;
+    if !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
+    let list = apartments
+        .filter(is_deleted.eq(true))
+        .select(Apartment::as_select())
+        .load(&mut conn)?;
     Ok(HttpResponse::Ok().json(list))
 }
 
@@ -355,12 +386,22 @@ pub async fn list_deleted_apartments(auth: AuthContext, pool: web::Data<DbPool>)
     tag = "Apartments",
     security(("bearer_auth" = []))
 )]
-pub async fn restore_apartment(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
+pub async fn restore_apartment(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::apartments::dsl as a_dsl;
-    if !auth.has_any_role(&["Admin", "Manager"]) { return Err(AppError::Forbidden); }
+    if !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
     let id = path.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
-    diesel::update(a_dsl::apartments.filter(a_dsl::id.eq(id))).set(a_dsl::is_deleted.eq(false)).execute(&mut conn)?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
+    diesel::update(a_dsl::apartments.filter(a_dsl::id.eq(id)))
+        .set(a_dsl::is_deleted.eq(false))
+        .execute(&mut conn)?;
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -388,45 +429,45 @@ pub struct ApartmentWithBuilding {
     tag = "Apartments",
     security(("bearer_auth" = []))
 )]
-pub async fn list_my_apartments(auth: AuthContext, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
-    use crate::schema::apartments::dsl as a_dsl;
+pub async fn list_my_apartments(
+    auth: AuthContext,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::apartment_owners::dsl as ao_dsl;
+    use crate::schema::apartments::dsl as a_dsl;
     use crate::schema::buildings::dsl as b_dsl;
 
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
-    let user_id: u64 = auth.claims.sub.parse().map_err(|_| AppError::Internal("invalid_user_id".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
+    let user_id: u64 = auth
+        .claims
+        .sub
+        .parse()
+        .map_err(|_| AppError::Internal("invalid_user_id".into()))?;
 
-    let results: Vec<(String, u64, String)> = a_dsl::apartments
-        .inner_join(ao_dsl::apartment_owners.on(ao_dsl::apartment_id.eq(a_dsl::id)))
-        .inner_join(b_dsl::buildings.on(b_dsl::id.eq(a_dsl::building_id)))
-        .filter(
-            a_dsl::is_deleted.eq(false)
-                .and(b_dsl::is_deleted.eq(false))
-                .and(ao_dsl::user_id.eq(user_id))
-        )
-        .select((a_dsl::number, a_dsl::building_id, b_dsl::address))
-        .load(&mut conn)?;
-
-    // We also need apartment IDs, let me fix this query
     let apartments_with_ids: Vec<(u64, String, u64, String)> = a_dsl::apartments
         .inner_join(ao_dsl::apartment_owners.on(ao_dsl::apartment_id.eq(a_dsl::id)))
         .inner_join(b_dsl::buildings.on(b_dsl::id.eq(a_dsl::building_id)))
         .filter(
-            a_dsl::is_deleted.eq(false)
+            a_dsl::is_deleted
+                .eq(false)
                 .and(b_dsl::is_deleted.eq(false))
-                .and(ao_dsl::user_id.eq(user_id))
+                .and(ao_dsl::user_id.eq(user_id)),
         )
         .select((a_dsl::id, a_dsl::number, a_dsl::building_id, b_dsl::address))
         .load(&mut conn)?;
 
     let enriched: Vec<ApartmentWithBuilding> = apartments_with_ids
         .into_iter()
-        .map(|(id, number, building_id, building_address)| ApartmentWithBuilding {
-            id,
-            number,
-            building_id,
-            building_address,
-        })
+        .map(
+            |(id, number, building_id, building_address)| ApartmentWithBuilding {
+                id,
+                number,
+                building_id,
+                building_address,
+            },
+        )
         .collect();
 
     Ok(HttpResponse::Ok().json(enriched))
@@ -436,8 +477,14 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.route("/apartments", web::get().to(list_apartments))
         .route("/apartments", web::post().to(create_apartment))
         .route("/apartments/my", web::get().to(list_my_apartments))
-        .route("/apartments/deleted", web::get().to(list_deleted_apartments))
-        .route("/apartments/{id}/restore", web::post().to(restore_apartment))
+        .route(
+            "/apartments/deleted",
+            web::get().to(list_deleted_apartments),
+        )
+        .route(
+            "/apartments/{id}/restore",
+            web::post().to(restore_apartment),
+        )
         .route(
             "/buildings/{id}/apartments",
             web::get().to(list_building_apartments),

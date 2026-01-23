@@ -1,5 +1,5 @@
-use yew::prelude::*;
 use crate::components::spinner::Spinner;
+use yew::prelude::*;
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct AnnouncementItem {
@@ -37,7 +37,10 @@ pub struct ActiveAnnouncementsListProps {
 /// Component for displaying list of active announcements with action buttons
 #[function_component(ActiveAnnouncementsList)]
 pub fn active_announcements_list(props: &ActiveAnnouncementsListProps) -> Html {
-    let now_iso: String = js_sys::Date::new_0().to_iso_string().as_string().unwrap_or_default();
+    let now_iso: String = js_sys::Date::new_0()
+        .to_iso_string()
+        .as_string()
+        .unwrap_or_default();
 
     html! {
         <div>

@@ -1,14 +1,12 @@
-use yew::prelude::*;
-use yew_router::prelude::*;
-use crate::components::{ErrorAlert, SuccessAlert};
 use crate::components::meters::{
-    ReadingEntryForm, MeterEditForm,
-    ReadingHistory, MeterReading,
-    Meter as MeterComponent
+    Meter as MeterComponent, MeterEditForm, MeterReading, ReadingEntryForm, ReadingHistory,
 };
+use crate::components::{ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
 use crate::routes::Route;
 use crate::services::api_client;
+use yew::prelude::*;
+use yew_router::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct Props {
@@ -48,7 +46,10 @@ pub fn meter_detail_page(props: &Props) -> Html {
                 let client = api_client(token.as_deref());
 
                 // Load meter details
-                match client.get::<MeterComponent>(&format!("/meters/{}", id)).await {
+                match client
+                    .get::<MeterComponent>(&format!("/meters/{}", id))
+                    .await
+                {
                     Ok(m) => {
                         meter.set(Some(m));
                     }
@@ -60,7 +61,10 @@ pub fn meter_detail_page(props: &Props) -> Html {
                 }
 
                 // Load readings
-                match client.get::<Vec<MeterReading>>(&format!("/meters/{}/readings", id)).await {
+                match client
+                    .get::<Vec<MeterReading>>(&format!("/meters/{}/readings", id))
+                    .await
+                {
                     Ok(list) => {
                         readings.set(list);
                         loading.set(false);
@@ -80,7 +84,9 @@ pub fn meter_detail_page(props: &Props) -> Html {
         let meter = meter.clone();
         Callback::from(move |_| {
             if let Some(ref m) = *meter {
-                navigator.push(&Route::ApartmentMeters { apartment_id: m.apartment_id });
+                navigator.push(&Route::ApartmentMeters {
+                    apartment_id: m.apartment_id,
+                });
             } else {
                 navigator.push(&Route::Buildings);
             }
@@ -122,7 +128,10 @@ pub fn meter_detail_page(props: &Props) -> Html {
             let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                if let Ok(list) = client.get::<Vec<MeterReading>>(&format!("/meters/{}/readings", meter_id)).await {
+                if let Ok(list) = client
+                    .get::<Vec<MeterReading>>(&format!("/meters/{}/readings", meter_id))
+                    .await
+                {
                     readings.set(list);
                 }
             });
@@ -155,11 +164,17 @@ pub fn meter_detail_page(props: &Props) -> Html {
 
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                match client.get::<String>(&format!("/meters/{}/readings/export", meter_id)).await {
+                match client
+                    .get::<String>(&format!("/meters/{}/readings/export", meter_id))
+                    .await
+                {
                     Ok(_csv) => {
                         // Open in new tab
                         if let Some(window) = web_sys::window() {
-                            let _ = window.open_with_url(&format!("/api/v1/meters/{}/readings/export", meter_id));
+                            let _ = window.open_with_url(&format!(
+                                "/api/v1/meters/{}/readings/export",
+                                meter_id
+                            ));
                         }
                     }
                     Err(e) => {

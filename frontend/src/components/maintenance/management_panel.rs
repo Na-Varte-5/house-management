@@ -1,6 +1,6 @@
-use yew::prelude::*;
+use crate::services::{ApiError, api_client};
 use serde::{Deserialize, Serialize};
-use crate::services::{api_client, ApiError};
+use yew::prelude::*;
 
 #[derive(Deserialize, Clone, PartialEq)]
 pub struct MaintenanceRequest {
@@ -71,14 +71,18 @@ pub fn management_panel(props: &ManagementPanelProps) -> Html {
                         assigned_to: None,
                     };
 
-                    match client.put::<_, serde_json::Value>(&format!("/requests/{}", request_id), &update).await {
+                    match client
+                        .put::<_, serde_json::Value>(&format!("/requests/{}", request_id), &update)
+                        .await
+                    {
                         Ok(_) => {
                             on_success.emit("Status updated successfully".to_string());
                             on_update.emit(());
                             new_status.set(None);
                         }
                         Err(ApiError::Forbidden) => {
-                            on_error.emit("You don't have permission to update requests".to_string());
+                            on_error
+                                .emit("You don't have permission to update requests".to_string());
                         }
                         Err(e) => {
                             on_error.emit(format!("Failed to update status: {}", e));
@@ -118,14 +122,18 @@ pub fn management_panel(props: &ManagementPanelProps) -> Html {
                         assigned_to: None,
                     };
 
-                    match client.put::<_, serde_json::Value>(&format!("/requests/{}", request_id), &update).await {
+                    match client
+                        .put::<_, serde_json::Value>(&format!("/requests/{}", request_id), &update)
+                        .await
+                    {
                         Ok(_) => {
                             on_success.emit("Priority updated successfully".to_string());
                             on_update.emit(());
                             new_priority.set(None);
                         }
                         Err(ApiError::Forbidden) => {
-                            on_error.emit("You don't have permission to update requests".to_string());
+                            on_error
+                                .emit("You don't have permission to update requests".to_string());
                         }
                         Err(e) => {
                             on_error.emit(format!("Failed to update priority: {}", e));
@@ -165,14 +173,18 @@ pub fn management_panel(props: &ManagementPanelProps) -> Html {
                         assigned_to: Some(user_id),
                     };
 
-                    match client.put::<_, serde_json::Value>(&format!("/requests/{}", request_id), &update).await {
+                    match client
+                        .put::<_, serde_json::Value>(&format!("/requests/{}", request_id), &update)
+                        .await
+                    {
                         Ok(_) => {
                             on_success.emit("Request assigned successfully".to_string());
                             on_update.emit(());
                             new_assigned.set(None);
                         }
                         Err(ApiError::Forbidden) => {
-                            on_error.emit("You don't have permission to assign requests".to_string());
+                            on_error
+                                .emit("You don't have permission to assign requests".to_string());
                         }
                         Err(e) => {
                             on_error.emit(format!("Failed to assign request: {}", e));

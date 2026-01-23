@@ -1,11 +1,11 @@
-use yew::prelude::*;
-use yew_router::prelude::*;
-use serde::{Deserialize, Serialize};
-use web_sys::HtmlInputElement;
 use crate::components::{ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
 use crate::routes::Route;
-use crate::services::{api_client, ApiError};
+use crate::services::{ApiError, api_client};
+use serde::{Deserialize, Serialize};
+use web_sys::HtmlInputElement;
+use yew::prelude::*;
+use yew_router::prelude::*;
 
 #[derive(Serialize)]
 struct CreateMeterRequest {
@@ -108,7 +108,10 @@ pub fn meter_new_page() -> Html {
                 let id = *id;
                 wasm_bindgen_futures::spawn_local(async move {
                     let client = api_client(token.as_deref());
-                    match client.get::<Vec<Apartment>>(&format!("/buildings/{}/apartments", id)).await {
+                    match client
+                        .get::<Vec<Apartment>>(&format!("/buildings/{}/apartments", id))
+                        .await
+                    {
                         Ok(list) => {
                             apartments.set(list.clone());
                             // Auto-select first apartment
@@ -218,8 +221,16 @@ pub fn meter_new_page() -> Html {
                 meter_type: (*meter_type).clone(),
                 serial_number: (*serial_number).clone(),
                 is_visible_to_renters: *is_visible_to_renters,
-                installation_date: if installation_date.is_empty() { None } else { Some((*installation_date).clone()) },
-                calibration_due_date: if calibration_due_date.is_empty() { None } else { Some((*calibration_due_date).clone()) },
+                installation_date: if installation_date.is_empty() {
+                    None
+                } else {
+                    Some((*installation_date).clone())
+                },
+                calibration_due_date: if calibration_due_date.is_empty() {
+                    None
+                } else {
+                    Some((*calibration_due_date).clone())
+                },
             };
 
             let token = token.clone();
@@ -237,8 +248,11 @@ pub fn meter_new_page() -> Html {
 
                         // Navigate to meter detail after short delay
                         gloo_timers::callback::Timeout::new(1500, move || {
-                            navigator.push(&Route::ApartmentMeters { apartment_id: meter.apartment_id });
-                        }).forget();
+                            navigator.push(&Route::ApartmentMeters {
+                                apartment_id: meter.apartment_id,
+                            });
+                        })
+                        .forget();
                     }
                     Err(ApiError::Forbidden) => {
                         error.set(Some("Permission denied".to_string()));

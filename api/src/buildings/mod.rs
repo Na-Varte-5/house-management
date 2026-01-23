@@ -22,7 +22,10 @@ pub async fn list_buildings(pool: web::Data<DbPool>) -> Result<impl Responder, A
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;
-    let list = buildings.filter(is_deleted.eq(false)).select(Building::as_select()).load(&mut conn)?;
+    let list = buildings
+        .filter(is_deleted.eq(false))
+        .select(Building::as_select())
+        .load(&mut conn)?;
     Ok(HttpResponse::Ok().json(list))
 }
 
@@ -42,7 +45,10 @@ pub async fn list_buildings(pool: web::Data<DbPool>) -> Result<impl Responder, A
     ),
     tag = "Buildings"
 )]
-pub async fn get_building(path: web::Path<u64>, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
+pub async fn get_building(
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::buildings::dsl::*;
     let building_id = path.into_inner();
     let mut conn = pool
@@ -92,9 +98,10 @@ pub async fn create_building(
         .execute(&mut conn)?;
 
     // Get the inserted building
-    let inserted_id: u64 = diesel::select(
-        diesel::dsl::sql::<diesel::sql_types::Unsigned<diesel::sql_types::BigInt>>("LAST_INSERT_ID()")
-    ).first(&mut conn)?;
+    let inserted_id: u64 = diesel::select(diesel::dsl::sql::<
+        diesel::sql_types::Unsigned<diesel::sql_types::BigInt>,
+    >("LAST_INSERT_ID()"))
+    .first(&mut conn)?;
 
     let building: Building = b_dsl::buildings
         .filter(b_dsl::id.eq(inserted_id))
@@ -122,12 +129,22 @@ pub async fn create_building(
     tag = "Buildings",
     security(("bearer_auth" = []))
 )]
-pub async fn delete_building(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
+pub async fn delete_building(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::buildings::dsl as b_dsl;
-    if !auth.has_any_role(&["Admin", "Manager"]) { return Err(AppError::Forbidden); }
+    if !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
     let id = path.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
-    diesel::update(b_dsl::buildings.filter(b_dsl::id.eq(id))).set(b_dsl::is_deleted.eq(true)).execute(&mut conn)?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
+    diesel::update(b_dsl::buildings.filter(b_dsl::id.eq(id)))
+        .set(b_dsl::is_deleted.eq(true))
+        .execute(&mut conn)?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -145,11 +162,21 @@ pub async fn delete_building(auth: AuthContext, path: web::Path<u64>, pool: web:
     tag = "Buildings",
     security(("bearer_auth" = []))
 )]
-pub async fn list_deleted_buildings(auth: AuthContext, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
+pub async fn list_deleted_buildings(
+    auth: AuthContext,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::buildings::dsl::*;
-    if !auth.has_any_role(&["Admin", "Manager"]) { return Err(AppError::Forbidden); }
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
-    let list = buildings.filter(is_deleted.eq(true)).select(Building::as_select()).load(&mut conn)?;
+    if !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
+    let list = buildings
+        .filter(is_deleted.eq(true))
+        .select(Building::as_select())
+        .load(&mut conn)?;
     Ok(HttpResponse::Ok().json(list))
 }
 
@@ -171,12 +198,22 @@ pub async fn list_deleted_buildings(auth: AuthContext, pool: web::Data<DbPool>) 
     tag = "Buildings",
     security(("bearer_auth" = []))
 )]
-pub async fn restore_building(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
+pub async fn restore_building(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::buildings::dsl as b_dsl;
-    if !auth.has_any_role(&["Admin", "Manager"]) { return Err(AppError::Forbidden); }
+    if !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
     let id = path.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
-    diesel::update(b_dsl::buildings.filter(b_dsl::id.eq(id))).set(b_dsl::is_deleted.eq(false)).execute(&mut conn)?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
+    diesel::update(b_dsl::buildings.filter(b_dsl::id.eq(id)))
+        .set(b_dsl::is_deleted.eq(false))
+        .execute(&mut conn)?;
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -195,13 +232,22 @@ pub async fn restore_building(auth: AuthContext, path: web::Path<u64>, pool: web
     tag = "Buildings",
     security(("bearer_auth" = []))
 )]
-pub async fn list_my_buildings(auth: AuthContext, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
-    use crate::schema::buildings::dsl::*;
+pub async fn list_my_buildings(
+    auth: AuthContext,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
     use crate::auth::get_user_building_ids;
+    use crate::schema::buildings::dsl::*;
 
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
-    let user_id: u64 = auth.claims.sub.parse().map_err(|_| AppError::Internal("invalid_user_id".into()))?;
+    let user_id: u64 = auth
+        .claims
+        .sub
+        .parse()
+        .map_err(|_| AppError::Internal("invalid_user_id".into()))?;
     let is_admin = auth.has_any_role(&["Admin"]);
 
     // Get user's accessible buildings (includes owners, renters, and managers)
@@ -242,17 +288,19 @@ pub async fn list_my_buildings(auth: AuthContext, pool: web::Data<DbPool>) -> Re
 pub async fn list_building_managers(
     auth: AuthContext,
     path: web::Path<u64>,
-    pool: web::Data<DbPool>
+    pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
-    use crate::schema::{building_managers, users};
     use crate::models::User;
+    use crate::schema::{building_managers, users};
 
     if !auth.has_any_role(&["Admin"]) {
         return Err(AppError::Forbidden);
     }
 
     let building_id = path.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     let managers: Vec<User> = building_managers::table
         .inner_join(users::table.on(users::id.eq(building_managers::user_id)))
@@ -289,17 +337,19 @@ pub async fn assign_building_manager(
     auth: AuthContext,
     path: web::Path<u64>,
     payload: web::Json<AssignManagerPayload>,
-    pool: web::Data<DbPool>
+    pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
-    use crate::schema::{building_managers, buildings, users};
     use crate::models::BuildingManager;
+    use crate::schema::{building_managers, buildings, users};
 
     if !auth.has_any_role(&["Admin"]) {
         return Err(AppError::Forbidden);
     }
 
     let building_id = path.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     // Verify building exists
     buildings::table
@@ -354,7 +404,7 @@ pub async fn assign_building_manager(
 pub async fn remove_building_manager(
     auth: AuthContext,
     path: web::Path<(u64, u64)>,
-    pool: web::Data<DbPool>
+    pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
     use crate::schema::building_managers;
 
@@ -363,12 +413,14 @@ pub async fn remove_building_manager(
     }
 
     let (building_id, user_id) = path.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     diesel::delete(
         building_managers::table
             .filter(building_managers::building_id.eq(building_id))
-            .filter(building_managers::user_id.eq(user_id))
+            .filter(building_managers::user_id.eq(user_id)),
     )
     .execute(&mut conn)?;
 
@@ -383,7 +435,16 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .route("/buildings/{id}", web::get().to(get_building))
         .route("/buildings/{id}/restore", web::post().to(restore_building))
         .route("/buildings/{id}", web::delete().to(delete_building))
-        .route("/buildings/{id}/managers", web::get().to(list_building_managers))
-        .route("/buildings/{id}/managers", web::post().to(assign_building_manager))
-        .route("/buildings/{id}/managers/{user_id}", web::delete().to(remove_building_manager));
+        .route(
+            "/buildings/{id}/managers",
+            web::get().to(list_building_managers),
+        )
+        .route(
+            "/buildings/{id}/managers",
+            web::post().to(assign_building_manager),
+        )
+        .route(
+            "/buildings/{id}/managers/{user_id}",
+            web::delete().to(remove_building_manager),
+        );
 }

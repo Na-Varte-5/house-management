@@ -93,15 +93,27 @@ pub struct UserWithRoles {
     tag = "Users",
     security(("bearer_auth" = []))
 )]
-pub async fn list_users_with_roles(auth: AuthContext, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
-    if !auth.has_any_role(&["Admin"]) { return Err(AppError::Forbidden); }
+pub async fn list_users_with_roles(
+    auth: AuthContext,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    if !auth.has_any_role(&["Admin"]) {
+        return Err(AppError::Forbidden);
+    }
     use crate::schema::users::dsl as u;
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
     let all: Vec<User> = u::users.select(User::as_select()).load(&mut conn)?;
     let mut out = Vec::with_capacity(all.len());
     for usr in all.into_iter() {
         let roles = crate::auth::roles::get_user_roles(usr.id, &mut conn);
-        out.push(UserWithRoles { id: usr.id, email: usr.email, name: usr.name, roles });
+        out.push(UserWithRoles {
+            id: usr.id,
+            email: usr.email,
+            name: usr.name,
+            roles,
+        });
     }
     Ok(HttpResponse::Ok().json(out))
 }
@@ -184,17 +196,19 @@ pub async fn set_user_roles(
         }
     }
     // remove roles no longer present in payload
-    use crate::schema::user_roles::dsl as ur;
     use crate::schema::roles::dsl as rl;
+    use crate::schema::user_roles::dsl as ur;
     let current: Vec<(u64, String)> = ur::user_roles
         .inner_join(rl::roles.on(rl::id.eq(ur::role_id)))
         .filter(ur::user_id.eq(user_id))
         .select((rl::id, rl::name))
         .load(&mut conn)?;
-    let desired: std::collections::HashSet<&str> = payload.roles.iter().map(|s| s.as_str()).collect();
+    let desired: std::collections::HashSet<&str> =
+        payload.roles.iter().map(|s| s.as_str()).collect();
     for (rid, rname) in current {
         if !desired.contains(rname.as_str()) {
-            diesel::delete(ur::user_roles.filter(ur::user_id.eq(user_id).and(ur::role_id.eq(rid)))).execute(&mut conn)?;
+            diesel::delete(ur::user_roles.filter(ur::user_id.eq(user_id).and(ur::role_id.eq(rid))))
+                .execute(&mut conn)?;
         }
     }
     let assigned: Vec<String> = ur_schema::dsl::user_roles
@@ -223,10 +237,17 @@ pub async fn set_user_roles(
     tag = "Users",
     security(("bearer_auth" = []))
 )]
-pub async fn list_public_users(auth: AuthContext, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
-    if !auth.has_any_role(&["Admin", "Manager"]) { return Err(AppError::Forbidden); }
+pub async fn list_public_users(
+    auth: AuthContext,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    if !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
     use crate::schema::users::dsl as u;
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
     let raw: Vec<User> = u::users.select(User::as_select()).load(&mut conn)?;
     let list: Vec<PublicUser> = raw.into_iter().map(PublicUser::from).collect();
     Ok(HttpResponse::Ok().json(list))

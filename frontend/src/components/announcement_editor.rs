@@ -45,7 +45,7 @@ pub struct EditorProps {
     #[prop_or_default]
     pub existing: Option<AnnouncementFull>,
     #[prop_or_default]
-    pub on_cancel: Callback<()> ,
+    pub on_cancel: Callback<()>,
 }
 
 #[function_component(AnnouncementEditor)]
@@ -61,8 +61,8 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
     let error = use_state(|| None::<String>);
     let active_tab = use_state(|| "edit".to_string());
     let selected_roles = use_state(|| Vec::<String>::new());
-    let buildings = use_state(|| Vec::<(u64,String)>::new());
-    let apartments = use_state(|| Vec::<(u64,u64,String)>::new()); // (id, building_id, number)
+    let buildings = use_state(|| Vec::<(u64, String)>::new());
+    let apartments = use_state(|| Vec::<(u64, u64, String)>::new()); // (id, building_id, number)
     let selected_building = use_state(|| None::<u64>);
     let selected_apartment = use_state(|| None::<u64>);
 
@@ -74,10 +74,15 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
                 return format!("<em class='text-muted'>{}</em>", t("preview-empty"));
             }
             let mut buf = String::new();
-            let parser = pulldown_cmark::Parser::new_ext(current_md, pulldown_cmark::Options::all());
+            let parser =
+                pulldown_cmark::Parser::new_ext(current_md, pulldown_cmark::Options::all());
             pulldown_cmark::html::push_html(&mut buf, parser);
             let sanitized = ammonia::Builder::default().clean(&buf).to_string();
-            if sanitized.trim().is_empty() { format!("<pre>{}</pre>", html_escape::encode_text(current_md)) } else { sanitized }
+            if sanitized.trim().is_empty() {
+                format!("<pre>{}</pre>", html_escape::encode_text(current_md))
+            } else {
+                sanitized
+            }
         })
     };
 
@@ -103,7 +108,17 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
                 comments_state.set(a.comments_enabled);
                 publish_state.set(a.publish_at.clone().unwrap_or_default().trim().to_string());
                 expire_state.set(a.expire_at.clone().unwrap_or_default().trim().to_string());
-                selected_roles_state.set(a.roles_csv.clone().map(|csv| csv.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()).unwrap_or_default());
+                selected_roles_state.set(
+                    a.roles_csv
+                        .clone()
+                        .map(|csv| {
+                            csv.split(',')
+                                .map(|s| s.trim().to_string())
+                                .filter(|s| !s.is_empty())
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                );
                 selected_building_state.set(a.building_id);
                 selected_apartment_state.set(a.apartment_id);
             } else {
@@ -127,10 +142,21 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
         let buildings_state = buildings.clone();
         use_effect_with((), move |_| {
             wasm_bindgen_futures::spawn_local(async move {
-                if let Ok(resp) = reqwasm::http::Request::get(&api_url("/api/v1/buildings")).send().await {
+                if let Ok(resp) = reqwasm::http::Request::get(&api_url("/api/v1/buildings"))
+                    .send()
+                    .await
+                {
                     if resp.ok() {
                         if let Ok(list) = resp.json::<Vec<serde_json::Value>>().await {
-                            let mapped = list.into_iter().filter_map(|v| Some((v.get("id")?.as_u64()?, v.get("address")?.as_str()?.to_string()))).collect();
+                            let mapped = list
+                                .into_iter()
+                                .filter_map(|v| {
+                                    Some((
+                                        v.get("id")?.as_u64()?,
+                                        v.get("address")?.as_str()?.to_string(),
+                                    ))
+                                })
+                                .collect();
                             buildings_state.set(mapped);
                         }
                     }
@@ -151,7 +177,16 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
                     if let Ok(resp) = reqwasm::http::Request::get(&api_url(&url)).send().await {
                         if resp.ok() {
                             if let Ok(list) = resp.json::<Vec<serde_json::Value>>().await {
-                                let mapped = list.into_iter().filter_map(|v| Some((v.get("id")?.as_u64()?, v.get("building_id")?.as_u64()?, v.get("number")?.as_str()?.to_string()))).collect();
+                                let mapped = list
+                                    .into_iter()
+                                    .filter_map(|v| {
+                                        Some((
+                                            v.get("id")?.as_u64()?,
+                                            v.get("building_id")?.as_u64()?,
+                                            v.get("number")?.as_str()?.to_string(),
+                                        ))
+                                    })
+                                    .collect();
                                 apartments_state2.set(mapped);
                             }
                         }
@@ -180,14 +215,24 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
         let selected_apartment = selected_apartment.clone();
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
-            if (*title).trim().is_empty() { error.set(Some(t("announcement-title-label"))); return; }
-            if (*body_md).trim().is_empty() { error.set(Some(t("announcement-body-label"))); return; }
+            if (*title).trim().is_empty() {
+                error.set(Some(t("announcement-title-label")));
+                return;
+            }
+            if (*body_md).trim().is_empty() {
+                error.set(Some(t("announcement-body-label")));
+                return;
+            }
             error.set(None);
             saving.set(true);
             if let Some(ex) = &existing {
                 // Update existing announcement
                 let id = ex.id;
-                let roles_string = if selected_roles.is_empty() { None } else { Some(selected_roles.join(",")) };
+                let roles_string = if selected_roles.is_empty() {
+                    None
+                } else {
+                    Some(selected_roles.join(","))
+                };
                 let payload = serde_json::json!({
                     "title": (*title).clone(),
                     "body_md": (*body_md).clone(),
@@ -204,25 +249,45 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
                 let error2 = error.clone();
                 let on_updated_cb = on_updated.clone();
                 wasm_bindgen_futures::spawn_local(async move {
-                    let mut req = reqwasm::http::Request::put(&api_url(&format!("/api/v1/announcements/{}", id)))
-                        .header("Content-Type", "application/json");
-                    if let Some(tok) = get_token() { req = req.header("Authorization", &format!("Bearer {}", tok)); }
+                    let mut req = reqwasm::http::Request::put(&api_url(&format!(
+                        "/api/v1/announcements/{}",
+                        id
+                    )))
+                    .header("Content-Type", "application/json");
+                    if let Some(tok) = get_token() {
+                        req = req.header("Authorization", &format!("Bearer {}", tok));
+                    }
                     match req.body(payload.to_string()).send().await {
                         Ok(resp) => {
                             if resp.ok() {
                                 match resp.json::<AnnouncementFull>().await {
-                                    Ok(updated) => { on_updated_cb.emit(updated); }
-                                    Err(_) => error2.set(Some(t("error-load-failed")))
+                                    Ok(updated) => {
+                                        on_updated_cb.emit(updated);
+                                    }
+                                    Err(_) => error2.set(Some(t("error-load-failed"))),
                                 }
-                            } else { error2.set(Some(format!("{} {}", t("error-load-failed"), resp.status()))); }
+                            } else {
+                                error2.set(Some(format!(
+                                    "{} {}",
+                                    t("error-load-failed"),
+                                    resp.status()
+                                )));
+                            }
                             saving2.set(false);
                         }
-                        Err(_) => { error2.set(Some(t("error-network"))); saving2.set(false); }
+                        Err(_) => {
+                            error2.set(Some(t("error-network")));
+                            saving2.set(false);
+                        }
                     }
                 });
             } else {
                 // Create new
-                let roles_csv_opt = if selected_roles.is_empty() { None } else { Some(selected_roles.join(",")) };
+                let roles_csv_opt = if selected_roles.is_empty() {
+                    None
+                } else {
+                    Some(selected_roles.join(","))
+                };
                 let payload = CreatePayload {
                     title: (*title).clone(),
                     body_md: (*body_md).clone(),
@@ -232,8 +297,16 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
                     building_id: *selected_building,
                     apartment_id: *selected_apartment,
                     comments_enabled: *comments_enabled,
-                    publish_at: if publish_at.trim().is_empty() { None } else { Some(datetime_local_to_naive(&publish_at)) },
-                    expire_at: if expire_at.trim().is_empty() { None } else { Some(datetime_local_to_naive(&expire_at)) },
+                    publish_at: if publish_at.trim().is_empty() {
+                        None
+                    } else {
+                        Some(datetime_local_to_naive(&publish_at))
+                    },
+                    expire_at: if expire_at.trim().is_empty() {
+                        None
+                    } else {
+                        Some(datetime_local_to_naive(&expire_at))
+                    },
                 };
                 let saving2 = saving.clone();
                 let error2 = error.clone();
@@ -241,27 +314,53 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
                 wasm_bindgen_futures::spawn_local(async move {
                     let mut req = reqwasm::http::Request::post(&api_url("/api/v1/announcements"))
                         .header("Content-Type", "application/json");
-                    if let Some(tok) = get_token() { req = req.header("Authorization", &format!("Bearer {}", tok)); }
-                    match req.body(serde_json::to_string(&payload).unwrap()).send().await {
+                    if let Some(tok) = get_token() {
+                        req = req.header("Authorization", &format!("Bearer {}", tok));
+                    }
+                    match req
+                        .body(serde_json::to_string(&payload).unwrap())
+                        .send()
+                        .await
+                    {
                         Ok(resp) => {
                             if resp.ok() {
                                 match resp.json::<AnnouncementFull>().await {
-                                    Ok(created) => { on_created_outer.emit(created); }
-                                    Err(_) => { error2.set(Some(t("error-load-failed"))); }
+                                    Ok(created) => {
+                                        on_created_outer.emit(created);
+                                    }
+                                    Err(_) => {
+                                        error2.set(Some(t("error-load-failed")));
+                                    }
                                 }
                             } else {
-                                error2.set(Some(format!("{} ({}): {}", t("error-post-failed"), resp.status(), resp.text().await.unwrap_or_default())));
+                                error2.set(Some(format!(
+                                    "{} ({}): {}",
+                                    t("error-post-failed"),
+                                    resp.status(),
+                                    resp.text().await.unwrap_or_default()
+                                )));
                             }
                             saving2.set(false);
                         }
-                        Err(_) => { error2.set(Some(t("error-network"))); saving2.set(false); }
+                        Err(_) => {
+                            error2.set(Some(t("error-network")));
+                            saving2.set(false);
+                        }
                     }
                 });
             }
         })
     };
 
-    let publish_now_btn = if let Some(ex) = &props.existing { if ex.publish_at.is_none() { Some(ex.id) } else { None } } else { None };
+    let publish_now_btn = if let Some(ex) = &props.existing {
+        if ex.publish_at.is_none() {
+            Some(ex.id)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     let on_publish_now = {
         let on_published = props.on_published.clone();
         let saving = saving.clone();
@@ -272,16 +371,32 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
             let error2 = error.clone();
             let on_published_cb = on_published.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let mut req = reqwasm::http::Request::post(&api_url(&format!("/api/v1/announcements/{}/publish", id)))
-                    .header("Content-Type", "application/json");
-                if let Some(tok) = get_token() { req = req.header("Authorization", &format!("Bearer {}", tok)); }
+                let mut req = reqwasm::http::Request::post(&api_url(&format!(
+                    "/api/v1/announcements/{}/publish",
+                    id
+                )))
+                .header("Content-Type", "application/json");
+                if let Some(tok) = get_token() {
+                    req = req.header("Authorization", &format!("Bearer {}", tok));
+                }
                 match req.send().await {
                     Ok(resp) => {
                         if resp.ok() {
-                            if let Ok(updated) = resp.json::<AnnouncementFull>().await { on_published_cb.emit(updated); }
-                        } else { error2.set(Some(format!("{} {}", t("error-post-failed"), resp.status()))); }
+                            if let Ok(updated) = resp.json::<AnnouncementFull>().await {
+                                on_published_cb.emit(updated);
+                            }
+                        } else {
+                            error2.set(Some(format!(
+                                "{} {}",
+                                t("error-post-failed"),
+                                resp.status()
+                            )));
+                        }
                     }
-                    Err(_) => { error2.set(Some(t("error-network"))); saving2.set(false); }
+                    Err(_) => {
+                        error2.set(Some(t("error-network")));
+                        saving2.set(false);
+                    }
                 }
             });
         })
@@ -399,5 +514,9 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
 
 fn datetime_local_to_naive(val: &str) -> String {
     // HTML datetime-local gives YYYY-MM-DDTHH:MM; append :00 seconds if missing
-    if val.len() == 16 { format!("{}:00", val) } else { val.to_string() }
+    if val.len() == 16 {
+        format!("{}:00", val)
+    } else {
+        val.to_string()
+    }
 }

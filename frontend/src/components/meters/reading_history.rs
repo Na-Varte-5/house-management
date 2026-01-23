@@ -1,5 +1,5 @@
-use yew::prelude::*;
 use serde::Deserialize;
+use yew::prelude::*;
 
 #[derive(Deserialize, Clone, PartialEq)]
 pub struct MeterReading {

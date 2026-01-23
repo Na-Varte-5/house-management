@@ -1,8 +1,8 @@
-use unic_langid::LanguageIdentifier;
 use fluent_bundle::{FluentBundle, FluentResource};
-use std::collections::HashMap;
 use once_cell::sync::Lazy;
 use std::cell::RefCell;
+use std::collections::HashMap;
+use unic_langid::LanguageIdentifier;
 use web_sys::window;
 
 static _CURRENT_LANG: Lazy<LanguageIdentifier> = Lazy::new(|| "en".parse().unwrap());
@@ -36,7 +36,17 @@ pub fn t(key: &str) -> String {
                 }
             }
         }
-        if lang != "en" { if let Some(bundle) = bundles.get("en") { if let Some(msg) = bundle.get_message(key) { if let Some(pattern) = msg.value() { let mut errors = vec![]; let value = bundle.format_pattern(pattern, None, &mut errors); return value.to_string(); } } } }
+        if lang != "en" {
+            if let Some(bundle) = bundles.get("en") {
+                if let Some(msg) = bundle.get_message(key) {
+                    if let Some(pattern) = msg.value() {
+                        let mut errors = vec![];
+                        let value = bundle.format_pattern(pattern, None, &mut errors);
+                        return value.to_string();
+                    }
+                }
+            }
+        }
         key.to_string()
     })
 }
@@ -66,5 +76,9 @@ pub fn set_language(lang: &str) {
     });
 }
 
-pub fn current_language() -> String { CURRENT_LANG_CODE.with(|c| c.borrow().clone()) }
-pub fn available_languages() -> Vec<String> { BUNDLES.with(|b| b.keys().cloned().collect()) }
+pub fn current_language() -> String {
+    CURRENT_LANG_CODE.with(|c| c.borrow().clone())
+}
+pub fn available_languages() -> Vec<String> {
+    BUNDLES.with(|b| b.keys().cloned().collect())
+}

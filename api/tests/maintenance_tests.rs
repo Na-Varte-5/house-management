@@ -11,7 +11,7 @@ async fn create_test_building_and_apartment(
 ) -> (u64, u64) {
     // Create building
     let building_response = client
-        .post(&format!("{}/buildings", base_url))
+        .post(format!("{}/buildings", base_url))
         .bearer_auth(token)
         .json(&serde_json::json!({
             "name": "Test Building",
@@ -21,12 +21,15 @@ async fn create_test_building_and_apartment(
         .await
         .expect("Failed to create building");
 
-    let building: Value = building_response.json().await.expect("Failed to parse response");
+    let building: Value = building_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let building_id = building["id"].as_u64().expect("No building ID");
 
     // Create apartment
     let apartment_response = client
-        .post(&format!("{}/apartments", base_url))
+        .post(format!("{}/apartments", base_url))
         .bearer_auth(token)
         .json(&serde_json::json!({
             "building_id": building_id,
@@ -38,7 +41,10 @@ async fn create_test_building_and_apartment(
         .await
         .expect("Failed to create apartment");
 
-    let apartment: Value = apartment_response.json().await.expect("Failed to parse response");
+    let apartment: Value = apartment_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let apartment_id = apartment["id"].as_u64().expect("No apartment ID");
 
     (building_id, apartment_id)
@@ -48,18 +54,29 @@ async fn create_test_building_and_apartment(
 async fn test_homeowner_can_create_maintenance_request() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
-    let homeowner = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::homeowner()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let homeowner = create_and_login_user(
+        &server.pool,
+        &client,
+        &server.base_url,
+        TestUser::homeowner(),
+    )
+    .await;
 
     let (_building_id, apartment_id) = create_test_building_and_apartment(
         &client,
         &server.base_url,
         admin.token.as_ref().unwrap(),
-    ).await;
+    )
+    .await;
 
     // Assign apartment to homeowner
     client
-        .post(&format!("{}/apartments/{}/owners", server.base_url, apartment_id))
+        .post(format!(
+            "{}/apartments/{}/owners",
+            server.base_url, apartment_id
+        ))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({"user_id": homeowner.id}))
         .send()
@@ -68,7 +85,7 @@ async fn test_homeowner_can_create_maintenance_request() {
 
     // Create maintenance request
     let response = client
-        .post(&format!("{}/requests", server.base_url))
+        .post(format!("{}/requests", server.base_url))
         .bearer_auth(homeowner.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "apartment_id": apartment_id,
@@ -90,18 +107,24 @@ async fn test_homeowner_can_create_maintenance_request() {
 async fn test_renter_can_create_maintenance_request() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
-    let renter = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::renter()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let renter =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::renter()).await;
 
     let (_building_id, apartment_id) = create_test_building_and_apartment(
         &client,
         &server.base_url,
         admin.token.as_ref().unwrap(),
-    ).await;
+    )
+    .await;
 
     // Assign apartment to renter
     client
-        .post(&format!("{}/apartments/{}/owners", server.base_url, apartment_id))
+        .post(format!(
+            "{}/apartments/{}/owners",
+            server.base_url, apartment_id
+        ))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({"user_id": renter.id}))
         .send()
@@ -110,7 +133,7 @@ async fn test_renter_can_create_maintenance_request() {
 
     // Create maintenance request
     let response = client
-        .post(&format!("{}/requests", server.base_url))
+        .post(format!("{}/requests", server.base_url))
         .bearer_auth(renter.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "apartment_id": apartment_id,
@@ -129,18 +152,29 @@ async fn test_renter_can_create_maintenance_request() {
 async fn test_list_maintenance_requests() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
-    let homeowner = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::homeowner()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let homeowner = create_and_login_user(
+        &server.pool,
+        &client,
+        &server.base_url,
+        TestUser::homeowner(),
+    )
+    .await;
 
     let (_building_id, apartment_id) = create_test_building_and_apartment(
         &client,
         &server.base_url,
         admin.token.as_ref().unwrap(),
-    ).await;
+    )
+    .await;
 
     // Assign apartment to homeowner
     client
-        .post(&format!("{}/apartments/{}/owners", server.base_url, apartment_id))
+        .post(format!(
+            "{}/apartments/{}/owners",
+            server.base_url, apartment_id
+        ))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({"user_id": homeowner.id}))
         .send()
@@ -150,7 +184,7 @@ async fn test_list_maintenance_requests() {
     // Create multiple requests
     for i in 1..=3 {
         client
-            .post(&format!("{}/requests", server.base_url))
+            .post(format!("{}/requests", server.base_url))
             .bearer_auth(homeowner.token.as_ref().unwrap())
             .json(&serde_json::json!({
                 "apartment_id": apartment_id,
@@ -165,7 +199,7 @@ async fn test_list_maintenance_requests() {
 
     // List requests
     let response = client
-        .get(&format!("{}/requests", server.base_url))
+        .get(format!("{}/requests", server.base_url))
         .bearer_auth(homeowner.token.as_ref().unwrap())
         .send()
         .await
@@ -181,19 +215,31 @@ async fn test_list_maintenance_requests() {
 async fn test_manager_can_update_request_status() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
-    let manager = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::manager()).await;
-    let homeowner = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::homeowner()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let manager =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::manager()).await;
+    let homeowner = create_and_login_user(
+        &server.pool,
+        &client,
+        &server.base_url,
+        TestUser::homeowner(),
+    )
+    .await;
 
     let (_building_id, apartment_id) = create_test_building_and_apartment(
         &client,
         &server.base_url,
         admin.token.as_ref().unwrap(),
-    ).await;
+    )
+    .await;
 
     // Assign apartment to homeowner
     client
-        .post(&format!("{}/apartments/{}/owners", server.base_url, apartment_id))
+        .post(format!(
+            "{}/apartments/{}/owners",
+            server.base_url, apartment_id
+        ))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({"user_id": homeowner.id}))
         .send()
@@ -202,7 +248,7 @@ async fn test_manager_can_update_request_status() {
 
     // Create maintenance request
     let create_response = client
-        .post(&format!("{}/requests", server.base_url))
+        .post(format!("{}/requests", server.base_url))
         .bearer_auth(homeowner.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "apartment_id": apartment_id,
@@ -214,12 +260,18 @@ async fn test_manager_can_update_request_status() {
         .await
         .expect("Failed to create request");
 
-    let request: Value = create_response.json().await.expect("Failed to parse response");
+    let request: Value = create_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let request_id = request["id"].as_u64().expect("No request ID");
 
     // Update status
     let response = client
-        .put(&format!("{}/requests/{}/status", server.base_url, request_id))
+        .put(format!(
+            "{}/requests/{}/status",
+            server.base_url, request_id
+        ))
         .bearer_auth(manager.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "status": "InProgress",
@@ -237,18 +289,29 @@ async fn test_manager_can_update_request_status() {
 async fn test_homeowner_cannot_update_request_status() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
-    let homeowner = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::homeowner()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let homeowner = create_and_login_user(
+        &server.pool,
+        &client,
+        &server.base_url,
+        TestUser::homeowner(),
+    )
+    .await;
 
     let (_building_id, apartment_id) = create_test_building_and_apartment(
         &client,
         &server.base_url,
         admin.token.as_ref().unwrap(),
-    ).await;
+    )
+    .await;
 
     // Assign apartment to homeowner
     client
-        .post(&format!("{}/apartments/{}/owners", server.base_url, apartment_id))
+        .post(format!(
+            "{}/apartments/{}/owners",
+            server.base_url, apartment_id
+        ))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({"user_id": homeowner.id}))
         .send()
@@ -257,7 +320,7 @@ async fn test_homeowner_cannot_update_request_status() {
 
     // Create maintenance request
     let create_response = client
-        .post(&format!("{}/requests", server.base_url))
+        .post(format!("{}/requests", server.base_url))
         .bearer_auth(homeowner.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "apartment_id": apartment_id,
@@ -269,12 +332,18 @@ async fn test_homeowner_cannot_update_request_status() {
         .await
         .expect("Failed to create request");
 
-    let request: Value = create_response.json().await.expect("Failed to parse response");
+    let request: Value = create_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let request_id = request["id"].as_u64().expect("No request ID");
 
     // Try to update status as homeowner
     let response = client
-        .put(&format!("{}/requests/{}/status", server.base_url, request_id))
+        .put(format!(
+            "{}/requests/{}/status",
+            server.base_url, request_id
+        ))
         .bearer_auth(homeowner.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "status": "Resolved",
@@ -290,19 +359,31 @@ async fn test_homeowner_cannot_update_request_status() {
 async fn test_admin_can_assign_request() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
-    let manager = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::manager()).await;
-    let homeowner = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::homeowner()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let manager =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::manager()).await;
+    let homeowner = create_and_login_user(
+        &server.pool,
+        &client,
+        &server.base_url,
+        TestUser::homeowner(),
+    )
+    .await;
 
     let (_building_id, apartment_id) = create_test_building_and_apartment(
         &client,
         &server.base_url,
         admin.token.as_ref().unwrap(),
-    ).await;
+    )
+    .await;
 
     // Assign apartment to homeowner
     client
-        .post(&format!("{}/apartments/{}/owners", server.base_url, apartment_id))
+        .post(format!(
+            "{}/apartments/{}/owners",
+            server.base_url, apartment_id
+        ))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({"user_id": homeowner.id}))
         .send()
@@ -311,7 +392,7 @@ async fn test_admin_can_assign_request() {
 
     // Create maintenance request
     let create_response = client
-        .post(&format!("{}/requests", server.base_url))
+        .post(format!("{}/requests", server.base_url))
         .bearer_auth(homeowner.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "apartment_id": apartment_id,
@@ -323,12 +404,18 @@ async fn test_admin_can_assign_request() {
         .await
         .expect("Failed to create request");
 
-    let request: Value = create_response.json().await.expect("Failed to parse response");
+    let request: Value = create_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let request_id = request["id"].as_u64().expect("No request ID");
 
     // Assign to manager
     let response = client
-        .post(&format!("{}/requests/{}/assign", server.base_url, request_id))
+        .post(format!(
+            "{}/requests/{}/assign",
+            server.base_url, request_id
+        ))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "user_id": manager.id,
@@ -341,7 +428,7 @@ async fn test_admin_can_assign_request() {
 
     // Verify assignment
     let get_response = client
-        .get(&format!("{}/requests/{}", server.base_url, request_id))
+        .get(format!("{}/requests/{}", server.base_url, request_id))
         .bearer_auth(admin.token.as_ref().unwrap())
         .send()
         .await
@@ -355,18 +442,29 @@ async fn test_admin_can_assign_request() {
 async fn test_get_request_detail() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
-    let homeowner = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::homeowner()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let homeowner = create_and_login_user(
+        &server.pool,
+        &client,
+        &server.base_url,
+        TestUser::homeowner(),
+    )
+    .await;
 
     let (_building_id, apartment_id) = create_test_building_and_apartment(
         &client,
         &server.base_url,
         admin.token.as_ref().unwrap(),
-    ).await;
+    )
+    .await;
 
     // Assign apartment to homeowner
     client
-        .post(&format!("{}/apartments/{}/owners", server.base_url, apartment_id))
+        .post(format!(
+            "{}/apartments/{}/owners",
+            server.base_url, apartment_id
+        ))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({"user_id": homeowner.id}))
         .send()
@@ -375,7 +473,7 @@ async fn test_get_request_detail() {
 
     // Create maintenance request
     let create_response = client
-        .post(&format!("{}/requests", server.base_url))
+        .post(format!("{}/requests", server.base_url))
         .bearer_auth(homeowner.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "apartment_id": apartment_id,
@@ -387,12 +485,15 @@ async fn test_get_request_detail() {
         .await
         .expect("Failed to create request");
 
-    let request: Value = create_response.json().await.expect("Failed to parse response");
+    let request: Value = create_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let request_id = request["id"].as_u64().expect("No request ID");
 
     // Get request detail
     let response = client
-        .get(&format!("{}/requests/{}", server.base_url, request_id))
+        .get(format!("{}/requests/{}", server.base_url, request_id))
         .bearer_auth(homeowner.token.as_ref().unwrap())
         .send()
         .await
@@ -411,24 +512,33 @@ async fn test_get_request_detail() {
 async fn test_user_cannot_see_other_users_requests() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
 
-    let homeowner1 = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::homeowner()).await;
+    let homeowner1 = create_and_login_user(
+        &server.pool,
+        &client,
+        &server.base_url,
+        TestUser::homeowner(),
+    )
+    .await;
 
     let mut homeowner2 = TestUser::homeowner();
     homeowner2.email = "homeowner2@test.com".to_string();
-    let homeowner2 = create_and_login_user(&server.pool, &client, &server.base_url, homeowner2).await;
+    let homeowner2 =
+        create_and_login_user(&server.pool, &client, &server.base_url, homeowner2).await;
 
     // Create apartments
     let (_building_id, apartment1_id) = create_test_building_and_apartment(
         &client,
         &server.base_url,
         admin.token.as_ref().unwrap(),
-    ).await;
+    )
+    .await;
 
     // Create second apartment in same building
     let apartment2_response = client
-        .post(&format!("{}/apartments", &server.base_url))
+        .post(format!("{}/apartments", &server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "building_id": _building_id,
@@ -440,12 +550,18 @@ async fn test_user_cannot_see_other_users_requests() {
         .await
         .expect("Failed to create apartment");
 
-    let apartment2: Value = apartment2_response.json().await.expect("Failed to parse response");
+    let apartment2: Value = apartment2_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let apartment2_id = apartment2["id"].as_u64().expect("No apartment ID");
 
     // Assign apartments
     client
-        .post(&format!("{}/apartments/{}/owners", server.base_url, apartment1_id))
+        .post(format!(
+            "{}/apartments/{}/owners",
+            server.base_url, apartment1_id
+        ))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({"user_id": homeowner1.id}))
         .send()
@@ -453,7 +569,10 @@ async fn test_user_cannot_see_other_users_requests() {
         .expect("Failed to assign owner");
 
     client
-        .post(&format!("{}/apartments/{}/owners", server.base_url, apartment2_id))
+        .post(format!(
+            "{}/apartments/{}/owners",
+            server.base_url, apartment2_id
+        ))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({"user_id": homeowner2.id}))
         .send()
@@ -462,7 +581,7 @@ async fn test_user_cannot_see_other_users_requests() {
 
     // Create request for homeowner2
     client
-        .post(&format!("{}/requests", server.base_url))
+        .post(format!("{}/requests", server.base_url))
         .bearer_auth(homeowner2.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "apartment_id": apartment2_id,
@@ -476,7 +595,7 @@ async fn test_user_cannot_see_other_users_requests() {
 
     // Homeowner1 lists requests - should not see homeowner2's request
     let response = client
-        .get(&format!("{}/requests", server.base_url))
+        .get(format!("{}/requests", server.base_url))
         .bearer_auth(homeowner1.token.as_ref().unwrap())
         .send()
         .await

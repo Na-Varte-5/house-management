@@ -1,7 +1,7 @@
-use yew::prelude::*;
-use serde::{Deserialize, Serialize};
-use crate::components::{TextInput, Select, SelectOption, DateTimeInput, FormGroup};
+use crate::components::{DateTimeInput, FormGroup, Select, SelectOption, TextInput};
 use crate::services::api_client;
+use serde::{Deserialize, Serialize};
+use yew::prelude::*;
 
 #[derive(Deserialize, Clone, PartialEq)]
 pub struct Building {
@@ -77,7 +77,10 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
             if let Ok(building_id) = building_str.parse::<u64>() {
                 wasm_bindgen_futures::spawn_local(async move {
                     let client = api_client(token.as_deref());
-                    if let Ok(list) = client.get::<Vec<Apartment>>(&format!("/buildings/{}/apartments", building_id)).await {
+                    if let Ok(list) = client
+                        .get::<Vec<Apartment>>(&format!("/buildings/{}/apartments", building_id))
+                        .await
+                    {
                         apartments.set(list);
                     }
                 });
@@ -143,11 +146,22 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
                     apartment_id: apt_id,
                     meter_type: (*meter_type).clone(),
                     serial_number: (*serial_number).clone(),
-                    installation_date: if installation_date.is_empty() { None } else { Some((*installation_date).clone()) },
-                    calibration_due_date: if calibration_due.is_empty() { None } else { Some((*calibration_due).clone()) },
+                    installation_date: if installation_date.is_empty() {
+                        None
+                    } else {
+                        Some((*installation_date).clone())
+                    },
+                    calibration_due_date: if calibration_due.is_empty() {
+                        None
+                    } else {
+                        Some((*calibration_due).clone())
+                    },
                 };
 
-                match client.post::<_, serde_json::Value>("/meters", &new_meter).await {
+                match client
+                    .post::<_, serde_json::Value>("/meters", &new_meter)
+                    .await
+                {
                     Ok(_) => {
                         // Reset form
                         selected_building.set("".to_string());
@@ -206,7 +220,10 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
     let building_options = {
         let mut options = vec![SelectOption::new("", "Select building...")];
         for building in buildings.iter() {
-            options.push(SelectOption::new(building.id.to_string(), &building.address));
+            options.push(SelectOption::new(
+                building.id.to_string(),
+                &building.address,
+            ));
         }
         options
     };
@@ -214,7 +231,10 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
     let apartment_options = {
         let mut options = vec![SelectOption::new("", "Select apartment...")];
         for apartment in apartments.iter() {
-            options.push(SelectOption::new(apartment.id.to_string(), &apartment.number));
+            options.push(SelectOption::new(
+                apartment.id.to_string(),
+                &apartment.number,
+            ));
         }
         options
     };

@@ -1,10 +1,10 @@
 // Refactored Properties administration page using modular components
-use yew::prelude::*;
-use crate::components::{AdminLayout, ErrorAlert, SuccessAlert};
 use crate::components::properties::*;
+use crate::components::{AdminLayout, ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
 use crate::routes::Route;
 use crate::services::api_client;
+use yew::prelude::*;
 
 #[function_component(AdminPropertiesPage)]
 pub fn admin_properties_page() -> Html {
@@ -79,7 +79,10 @@ pub fn admin_properties_page() -> Html {
                 loading.set(true);
                 wasm_bindgen_futures::spawn_local(async move {
                     let client = api_client(token.as_deref());
-                    match client.get::<Vec<Apartment>>(&format!("/buildings/{}/apartments", bid)).await {
+                    match client
+                        .get::<Vec<Apartment>>(&format!("/buildings/{}/apartments", bid))
+                        .await
+                    {
                         Ok(list) => apartments.set(list),
                         Err(e) => error.set(Some(format!("Failed to load apartments: {}", e))),
                     }
@@ -106,7 +109,10 @@ pub fn admin_properties_page() -> Html {
                 loading.set(true);
                 wasm_bindgen_futures::spawn_local(async move {
                     let client = api_client(token.as_deref());
-                    match client.get::<Vec<UserInfo>>(&format!("/apartments/{}/owners", aid)).await {
+                    match client
+                        .get::<Vec<UserInfo>>(&format!("/apartments/{}/owners", aid))
+                        .await
+                    {
                         Ok(list) => owners.set(list),
                         Err(e) => error.set(Some(format!("Failed to load owners: {}", e))),
                     }
@@ -186,7 +192,10 @@ pub fn admin_properties_page() -> Html {
                     construction_year: year.parse::<i32>().ok(),
                 };
 
-                match client.post::<_, serde_json::Value>("/buildings", &new_building).await {
+                match client
+                    .post::<_, serde_json::Value>("/buildings", &new_building)
+                    .await
+                {
                     Ok(_) => {
                         if let Ok(list) = client.get::<Vec<Building>>("/buildings").await {
                             buildings.set(list);
@@ -240,9 +249,15 @@ pub fn admin_properties_page() -> Html {
                         size_sq_m: apt_size.parse::<f64>().ok(),
                     };
 
-                    match client.post::<_, serde_json::Value>("/apartments", &new_apt).await {
+                    match client
+                        .post::<_, serde_json::Value>("/apartments", &new_apt)
+                        .await
+                    {
                         Ok(_) => {
-                            if let Ok(list) = client.get::<Vec<Apartment>>(&format!("/buildings/{}/apartments", bid)).await {
+                            if let Ok(list) = client
+                                .get::<Vec<Apartment>>(&format!("/buildings/{}/apartments", bid))
+                                .await
+                            {
                                 apartments.set(list);
                                 apt_number.set(String::new());
                                 apt_size.set(String::new());
@@ -276,7 +291,10 @@ pub fn admin_properties_page() -> Html {
 
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                match client.delete_no_response(&format!("/buildings/{}", id)).await {
+                match client
+                    .delete_no_response(&format!("/buildings/{}", id))
+                    .await
+                {
                     Ok(_) => {
                         if let Ok(list) = client.get::<Vec<Building>>("/buildings").await {
                             buildings.set(list);
@@ -313,10 +331,16 @@ pub fn admin_properties_page() -> Html {
 
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                match client.delete_no_response(&format!("/apartments/{}", id)).await {
+                match client
+                    .delete_no_response(&format!("/apartments/{}", id))
+                    .await
+                {
                     Ok(_) => {
                         if let Some(bid) = *selected_building {
-                            if let Ok(list) = client.get::<Vec<Apartment>>(&format!("/buildings/{}/apartments", bid)).await {
+                            if let Ok(list) = client
+                                .get::<Vec<Apartment>>(&format!("/buildings/{}/apartments", bid))
+                                .await
+                            {
                                 apartments.set(list);
                             }
                         }
@@ -354,9 +378,18 @@ pub fn admin_properties_page() -> Html {
                     let client = api_client(token.as_deref());
                     let payload = AssignOwnerRequest { user_id };
 
-                    match client.post::<_, serde_json::Value>(&format!("/apartments/{}/owners", aid), &payload).await {
+                    match client
+                        .post::<_, serde_json::Value>(
+                            &format!("/apartments/{}/owners", aid),
+                            &payload,
+                        )
+                        .await
+                    {
                         Ok(_) => {
-                            if let Ok(list) = client.get::<Vec<UserInfo>>(&format!("/apartments/{}/owners", aid)).await {
+                            if let Ok(list) = client
+                                .get::<Vec<UserInfo>>(&format!("/apartments/{}/owners", aid))
+                                .await
+                            {
                                 apartment_owners.set(list);
                                 user_query.set(String::new());
                                 success.set(Some("Owner assigned successfully".to_string()));
@@ -388,9 +421,15 @@ pub fn admin_properties_page() -> Html {
 
                 wasm_bindgen_futures::spawn_local(async move {
                     let client = api_client(token.as_deref());
-                    match client.delete_no_response(&format!("/apartments/{}/owners/{}", aid, user_id)).await {
+                    match client
+                        .delete_no_response(&format!("/apartments/{}/owners/{}", aid, user_id))
+                        .await
+                    {
                         Ok(_) => {
-                            if let Ok(list) = client.get::<Vec<UserInfo>>(&format!("/apartments/{}/owners", aid)).await {
+                            if let Ok(list) = client
+                                .get::<Vec<UserInfo>>(&format!("/apartments/{}/owners", aid))
+                                .await
+                            {
                                 apartment_owners.set(list);
                                 success.set(Some("Owner removed successfully".to_string()));
                             }

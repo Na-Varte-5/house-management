@@ -78,7 +78,10 @@ pub fn announcement_list() -> Html {
         return html! {<div class="alert alert-info">{ t("announcement-no-items") }</div>};
     }
 
-    let now_str: String = js_sys::Date::new_0().to_iso_string().as_string().unwrap_or_default();
+    let now_str: String = js_sys::Date::new_0()
+        .to_iso_string()
+        .as_string()
+        .unwrap_or_default();
 
     let rendered_cards: Html = {
         let list_iter = anns_opt.unwrap();
@@ -86,27 +89,41 @@ pub fn announcement_list() -> Html {
         for a in list_iter.iter() {
             let status_badges: Html = {
                 let mut badges: Vec<Html> = Vec::new();
-                if a.pinned { badges.push(html!{<span class="badge bg-warning text-dark me-2">{ t("announcement-status-pinned") }</span>}); }
-                if let Some(p) = &a.publish_at { if p > &now_str { badges.push(html!{<span class="badge bg-info text-dark me-2">{ t("announcement-status-scheduled") }</span>}); } }
-                if let Some(e) = &a.expire_at { if e < &now_str { badges.push(html!{<span class="badge bg-dark me-2">{ t("announcement-status-expired") }</span>}); } }
+                if a.pinned {
+                    badges.push(html!{<span class="badge bg-warning text-dark me-2">{ t("announcement-status-pinned") }</span>});
+                }
+                if let Some(p) = &a.publish_at {
+                    if p > &now_str {
+                        badges.push(html!{<span class="badge bg-info text-dark me-2">{ t("announcement-status-scheduled") }</span>});
+                    }
+                }
+                if let Some(e) = &a.expire_at {
+                    if e < &now_str {
+                        badges.push(html!{<span class="badge bg-dark me-2">{ t("announcement-status-expired") }</span>});
+                    }
+                }
                 html! {<>{ for badges }</>}
             };
             let audience_badges: Html = {
                 let mut badges: Vec<Html> = Vec::new();
-                if a.public { badges.push(html!{<span class="badge bg-success me-1">{ t("announcement-public-label") }</span>}); } else { badges.push(html!{<span class="badge bg-secondary me-1">{ t("announcement-private-label") }</span>}); }
+                if a.public {
+                    badges.push(html!{<span class="badge bg-success me-1">{ t("announcement-public-label") }</span>});
+                } else {
+                    badges.push(html!{<span class="badge bg-secondary me-1">{ t("announcement-private-label") }</span>});
+                }
                 if let Some(csv) = &a.roles_csv {
-                    for role in csv
-                        .split(',')
-                        .map(|r| r.trim())
-                        .filter(|r| !r.is_empty())
-                    {
+                    for role in csv.split(',').map(|r| r.trim()).filter(|r| !r.is_empty()) {
                         badges.push(html! {
                             <span class="badge bg-primary me-1">{role}</span>
                         });
                     }
                 }
-                if let Some(addr) = &a.building_address { badges.push(html!{<span class="badge bg-info text-dark me-1">{format!("{} {}", t("announcement-building-prefix"), addr)}</span>}); }
-                if let Some(num) = &a.apartment_number { badges.push(html!{<span class="badge bg-warning text-dark me-1">{format!("{} {}", t("announcement-apartment-prefix"), num)}</span>}); }
+                if let Some(addr) = &a.building_address {
+                    badges.push(html!{<span class="badge bg-info text-dark me-1">{format!("{} {}", t("announcement-building-prefix"), addr)}</span>});
+                }
+                if let Some(num) = &a.apartment_number {
+                    badges.push(html!{<span class="badge bg-warning text-dark me-1">{format!("{} {}", t("announcement-apartment-prefix"), num)}</span>});
+                }
                 html! {<div class="mt-1">{ for badges }</div>}
             };
 

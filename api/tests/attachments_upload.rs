@@ -5,5 +5,4 @@
 #[test]
 fn upload_attachment_happy_path() {
     // TODO: spin up test server, create user & request, perform multipart upload, assert list & download.
-    assert!(true);
 }

@@ -72,8 +72,8 @@ impl ApiClient {
         T: for<'de> Deserialize<'de>,
     {
         let url = format!("{}{}", self.base_url, endpoint);
-        let body_json = serde_json::to_string(body)
-            .map_err(|e| ApiError::ParseError(e.to_string()))?;
+        let body_json =
+            serde_json::to_string(body).map_err(|e| ApiError::ParseError(e.to_string()))?;
 
         let mut request = Request::post(&url)
             .header("Content-Type", "application/json")
@@ -117,8 +117,8 @@ impl ApiClient {
         T: for<'de> Deserialize<'de>,
     {
         let url = format!("{}{}", self.base_url, endpoint);
-        let body_json = serde_json::to_string(body)
-            .map_err(|e| ApiError::ParseError(e.to_string()))?;
+        let body_json =
+            serde_json::to_string(body).map_err(|e| ApiError::ParseError(e.to_string()))?;
 
         let mut request = Request::put(&url)
             .header("Content-Type", "application/json")
@@ -186,8 +186,12 @@ impl ApiClient {
                     .await
                     .map_err(|e| ApiError::ParseError(e.to_string()))?;
 
-                serde_json::from_str(&text)
-                    .map_err(|e| ApiError::ParseError(format!("Failed to parse response: {} - Body: {}", e, text)))
+                serde_json::from_str(&text).map_err(|e| {
+                    ApiError::ParseError(format!(
+                        "Failed to parse response: {} - Body: {}",
+                        e, text
+                    ))
+                })
             }
             401 => {
                 // Clear auth from localStorage on 401
@@ -204,7 +208,10 @@ impl ApiClient {
                 let text = response.text().await.unwrap_or_default();
                 Err(ApiError::ServerError(text))
             }
-            _ => Err(ApiError::ServerError(format!("Unexpected status: {}", status))),
+            _ => Err(ApiError::ServerError(format!(
+                "Unexpected status: {}",
+                status
+            ))),
         }
     }
 
@@ -228,7 +235,10 @@ impl ApiClient {
                 let text = response.text().await.unwrap_or_default();
                 Err(ApiError::ServerError(text))
             }
-            _ => Err(ApiError::ServerError(format!("Unexpected status: {}", status))),
+            _ => Err(ApiError::ServerError(format!(
+                "Unexpected status: {}",
+                status
+            ))),
         }
     }
 }

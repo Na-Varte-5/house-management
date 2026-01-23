@@ -1,11 +1,10 @@
-use api::{
-    apartments, announcements, auth, buildings, dashboard, maintenance, users, voting, meters,
-    AppConfig, DbPool, JwtKeys, MIGRATIONS,
-    openapi::ApiDoc,
-};
-use api::i18n::{get_message, init_translations, negotiate_language};
 use actix_cors::Cors;
 use actix_web::{App, HttpRequest, HttpServer, Responder, web};
+use api::i18n::{get_message, init_translations, negotiate_language};
+use api::{
+    AppConfig, DbPool, JwtKeys, MIGRATIONS, announcements, apartments, auth, buildings, dashboard,
+    maintenance, meters, openapi::ApiDoc, users, voting,
+};
 use diesel::mysql::MysqlConnection;
 use diesel::r2d2::ConnectionManager;
 use diesel_migrations::MigrationHarness;
@@ -60,7 +59,12 @@ async fn main() -> std::io::Result<()> {
     let jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| "dev-secret-change-me".to_string());
     let keys = JwtKeys::from_secret(&jwt_secret);
     let app_config = AppConfig::load();
-    println!("AppConfig: attachments_path={}, max_size={}, mime_types={:?}", app_config.attachments_base_path, app_config.max_attachment_size_bytes, app_config.allowed_mime_types);
+    println!(
+        "AppConfig: attachments_path={}, max_size={}, mime_types={:?}",
+        app_config.attachments_base_path,
+        app_config.max_attachment_size_bytes,
+        app_config.allowed_mime_types
+    );
 
     let openapi = ApiDoc::openapi();
 
@@ -70,8 +74,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(keys.clone()))
             .app_data(web::Data::new(app_config.clone()))
             .service(
-                SwaggerUi::new("/swagger-ui/{_:.*}")
-                    .url("/api-docs/openapi.json", openapi.clone())
+                SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", openapi.clone()),
             )
             .service(
                 web::scope("/api/v1")

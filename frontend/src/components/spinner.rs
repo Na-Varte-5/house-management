@@ -22,7 +22,11 @@ pub struct SpinnerProps {
 
 #[function_component(Spinner)]
 pub fn spinner(props: &SpinnerProps) -> Html {
-    let size_class = if props.small { " spinner-border-sm" } else { "" };
+    let size_class = if props.small {
+        " spinner-border-sm"
+    } else {
+        ""
+    };
     let color_class = format!(" text-{}", props.color);
     let mut classes = format!("spinner-border{}{}", size_class, color_class);
     if !props.class.is_empty() {
@@ -31,7 +35,7 @@ pub fn spinner(props: &SpinnerProps) -> Html {
     }
     let spinner = html! {<div class={classes} role="status"><span class="visually-hidden">{props.label.clone()}</span></div>};
     if props.center {
-        html!{<div class="d-flex justify-content-center align-items-center">{spinner}</div>}
+        html! {<div class="d-flex justify-content-center align-items-center">{spinner}</div>}
     } else {
         spinner
     }

@@ -1,7 +1,7 @@
+use crate::models::Meter;
+use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-use bigdecimal::BigDecimal;
-use crate::models::Meter;
 
 /// Request to create a new meter
 #[derive(Deserialize, ToSchema)]

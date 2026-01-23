@@ -1,7 +1,11 @@
-use crate::schema::{apartment_owners, apartment_renters, apartments, building_managers, buildings, users, maintenance_requests, maintenance_request_attachments, maintenance_request_history, proposals, votes, proposal_results, meters, meter_readings, webhook_api_keys};
+use crate::schema::{
+    apartment_owners, apartment_renters, apartments, building_managers, buildings,
+    maintenance_request_attachments, maintenance_request_history, maintenance_requests,
+    meter_readings, meters, proposal_results, proposals, users, votes, webhook_api_keys,
+};
+use bigdecimal::BigDecimal; // for voting weights
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
-use bigdecimal::BigDecimal; // for voting weights
 use utoipa::ToSchema;
 
 #[derive(Queryable, Selectable, Serialize, Debug, ToSchema)]
@@ -247,18 +251,97 @@ pub enum VotingMethod {
     PerSeat,
     Consensus,
 }
-impl std::fmt::Display for VotingMethod { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{}", match self { Self::SimpleMajority => "SimpleMajority", Self::WeightedArea => "WeightedArea", Self::PerSeat => "PerSeat", Self::Consensus => "Consensus" }) } }
-impl std::str::FromStr for VotingMethod { type Err = (); fn from_str(s: &str) -> Result<Self, Self::Err> { Ok(match s { "SimpleMajority" => Self::SimpleMajority, "WeightedArea" => Self::WeightedArea, "PerSeat" => Self::PerSeat, "Consensus" => Self::Consensus, _ => return Err(()), }) } }
+impl std::fmt::Display for VotingMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::SimpleMajority => "SimpleMajority",
+                Self::WeightedArea => "WeightedArea",
+                Self::PerSeat => "PerSeat",
+                Self::Consensus => "Consensus",
+            }
+        )
+    }
+}
+impl std::str::FromStr for VotingMethod {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "SimpleMajority" => Self::SimpleMajority,
+            "WeightedArea" => Self::WeightedArea,
+            "PerSeat" => Self::PerSeat,
+            "Consensus" => Self::Consensus,
+            _ => return Err(()),
+        })
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub enum VoteChoice { Yes, No, Abstain }
-impl std::fmt::Display for VoteChoice { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{}", match self { Self::Yes => "Yes", Self::No => "No", Self::Abstain => "Abstain" }) } }
-impl std::str::FromStr for VoteChoice { type Err = (); fn from_str(s: &str) -> Result<Self, Self::Err> { Ok(match s { "Yes" => Self::Yes, "No" => Self::No, "Abstain" => Self::Abstain, _ => return Err(()), }) } }
+pub enum VoteChoice {
+    Yes,
+    No,
+    Abstain,
+}
+impl std::fmt::Display for VoteChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Yes => "Yes",
+                Self::No => "No",
+                Self::Abstain => "Abstain",
+            }
+        )
+    }
+}
+impl std::str::FromStr for VoteChoice {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "Yes" => Self::Yes,
+            "No" => Self::No,
+            "Abstain" => Self::Abstain,
+            _ => return Err(()),
+        })
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub enum ProposalStatus { Scheduled, Open, Closed, Tallied }
-impl std::fmt::Display for ProposalStatus { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{}", match self { Self::Scheduled => "Scheduled", Self::Open => "Open", Self::Closed => "Closed", Self::Tallied => "Tallied" }) } }
-impl std::str::FromStr for ProposalStatus { type Err = (); fn from_str(s: &str) -> Result<Self, Self::Err> { Ok(match s { "Scheduled" => Self::Scheduled, "Open" => Self::Open, "Closed" => Self::Closed, "Tallied" => Self::Tallied, _ => return Err(()), }) } }
+pub enum ProposalStatus {
+    Scheduled,
+    Open,
+    Closed,
+    Tallied,
+}
+impl std::fmt::Display for ProposalStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Scheduled => "Scheduled",
+                Self::Open => "Open",
+                Self::Closed => "Closed",
+                Self::Tallied => "Tallied",
+            }
+        )
+    }
+}
+impl std::str::FromStr for ProposalStatus {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "Scheduled" => Self::Scheduled,
+            "Open" => Self::Open,
+            "Closed" => Self::Closed,
+            "Tallied" => Self::Tallied,
+            _ => return Err(()),
+        })
+    }
+}
 
 #[derive(Serialize, ToSchema)]
 pub struct PublicUser {
@@ -378,12 +461,16 @@ pub enum MeterType {
 
 impl std::fmt::Display for MeterType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Self::ColdWater => "ColdWater",
-            Self::HotWater => "HotWater",
-            Self::Gas => "Gas",
-            Self::Electricity => "Electricity",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::ColdWater => "ColdWater",
+                Self::HotWater => "HotWater",
+                Self::Gas => "Gas",
+                Self::Electricity => "Electricity",
+            }
+        )
     }
 }
 
@@ -434,10 +521,14 @@ pub enum ReadingSource {
 
 impl std::fmt::Display for ReadingSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Self::Webhook => "Webhook",
-            Self::Manual => "Manual",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Webhook => "Webhook",
+                Self::Manual => "Manual",
+            }
+        )
     }
 }
 

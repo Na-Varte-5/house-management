@@ -1,10 +1,10 @@
-use actix_web::{web, HttpResponse, Responder};
-use diesel::prelude::*;
-use crate::db::DbPool;
-use crate::auth::{AuthContext, AppError};
-use crate::models::{Meter, MeterReading, MeterType};
-use super::types::{CreateMeterRequest, UpdateMeterRequest, MeterWithLastReading};
 use super::helpers::user_owns_apartment;
+use super::types::{CreateMeterRequest, MeterWithLastReading, UpdateMeterRequest};
+use crate::auth::{AppError, AuthContext};
+use crate::db::DbPool;
+use crate::models::{Meter, MeterReading, MeterType};
+use actix_web::{HttpResponse, Responder, web};
+use diesel::prelude::*;
 
 /// List meters for an apartment
 #[utoipa::path(
@@ -30,7 +30,9 @@ pub async fn list_apartment_meters(
     let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
     let is_admin_or_manager = auth.has_any_role(&["Admin", "Manager"]);
 
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     // Check access: Admin/Manager can see all, others only if they own the apartment
     if !is_admin_or_manager && !user_owns_apartment(user_id, apartment_id, &mut conn)? {
@@ -94,7 +96,9 @@ pub async fn get_meter(
     let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
     let is_admin_or_manager = auth.has_any_role(&["Admin", "Manager"]);
 
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     use crate::schema::meters::dsl as m;
 
@@ -135,17 +139,25 @@ pub async fn create_meter(
     }
 
     // Validate meter type
-    let _: MeterType = payload.meter_type.parse()
+    let _: MeterType = payload
+        .meter_type
+        .parse()
         .map_err(|_| AppError::BadRequest("Invalid meter type".into()))?;
 
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     use crate::schema::meters::dsl as m;
 
     // Parse dates
-    let installation_date = payload.installation_date.as_ref()
+    let installation_date = payload
+        .installation_date
+        .as_ref()
         .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
-    let calibration_due_date = payload.calibration_due_date.as_ref()
+    let calibration_due_date = payload
+        .calibration_due_date
+        .as_ref()
         .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
 
     diesel::insert_into(m::meters)
@@ -159,9 +171,10 @@ pub async fn create_meter(
         ))
         .execute(&mut conn)?;
 
-    let inserted_id: u64 = diesel::select(
-        diesel::dsl::sql::<diesel::sql_types::Unsigned<diesel::sql_types::BigInt>>("LAST_INSERT_ID()")
-    ).first(&mut conn)?;
+    let inserted_id: u64 = diesel::select(diesel::dsl::sql::<
+        diesel::sql_types::Unsigned<diesel::sql_types::BigInt>,
+    >("LAST_INSERT_ID()"))
+    .first(&mut conn)?;
 
     let meter: Meter = m::meters
         .filter(m::id.eq(inserted_id))
@@ -198,13 +211,16 @@ pub async fn update_meter(
     }
 
     let meter_id = meter_id.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     use crate::schema::meters::dsl as m;
 
     // Validate meter type if provided
     if let Some(ref mt) = payload.meter_type {
-        let _: MeterType = mt.parse()
+        let _: MeterType = mt
+            .parse()
             .map_err(|_| AppError::BadRequest("Invalid meter type".into()))?;
     }
 
@@ -272,7 +288,9 @@ pub async fn deactivate_meter(
     }
 
     let meter_id = meter_id.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     use crate::schema::meters::dsl as m;
 

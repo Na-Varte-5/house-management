@@ -1,5 +1,5 @@
-use diesel::prelude::*;
 use crate::auth::error::AppError;
+use diesel::prelude::*;
 
 /// Returns Option<Vec<u64>> of building IDs the user can access.
 /// Returns None for Admin (no filter needed - sees all buildings).
@@ -15,9 +15,7 @@ pub fn get_user_building_ids(
     }
 
     use crate::schema::{
-        apartment_owners::dsl as ao,
-        apartment_renters::dsl as ar,
-        apartments::dsl as apt,
+        apartment_owners::dsl as ao, apartment_renters::dsl as ar, apartments::dsl as apt,
         building_managers::dsl as bm,
     };
 

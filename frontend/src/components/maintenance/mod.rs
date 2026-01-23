@@ -1,7 +1,7 @@
-mod management_panel;
-mod history_timeline;
 mod attachments_list;
+mod history_timeline;
+mod management_panel;
 
-pub use management_panel::{ManagementPanel, MaintenanceRequest as ManagementRequest, UserInfo};
-pub use history_timeline::{HistoryTimeline, HistoryEntry};
-pub use attachments_list::{AttachmentsList, Attachment};
+pub use attachments_list::{Attachment, AttachmentsList};
+pub use history_timeline::{HistoryEntry, HistoryTimeline};
+pub use management_panel::{MaintenanceRequest as ManagementRequest, ManagementPanel, UserInfo};

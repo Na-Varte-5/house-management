@@ -1,7 +1,7 @@
-use yew::prelude::*;
+use crate::services::{ApiError, api_client};
 use serde::Serialize;
 use web_sys::HtmlInputElement;
-use crate::services::{api_client, ApiError};
+use yew::prelude::*;
 
 #[derive(Serialize)]
 struct CreateReadingRequest {
@@ -76,7 +76,13 @@ pub fn reading_entry_form(props: &ReadingEntryFormProps) -> Html {
 
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                match client.post::<_, serde_json::Value>(&format!("/meters/{}/readings", meter_id), &payload).await {
+                match client
+                    .post::<_, serde_json::Value>(
+                        &format!("/meters/{}/readings", meter_id),
+                        &payload,
+                    )
+                    .await
+                {
                     Ok(_) => {
                         on_success.emit("Reading recorded successfully".to_string());
                         submitting.set(false);

@@ -1,7 +1,7 @@
+use crate::contexts::auth::AuthContext;
+use crate::routes::Route;
 use yew::prelude::*;
 use yew_router::prelude::*;
-use crate::routes::Route;
-use crate::contexts::auth::AuthContext;
 
 #[derive(Properties, PartialEq)]
 pub struct MainSidebarProps {

@@ -88,7 +88,11 @@ pub fn comment_list(props: &CommentListProps) -> Html {
                                 comments_state.set(mapped);
                             }
                         } else {
-                            error_state.set(Some(format!("{}: {}", t("error-load-failed"), resp.status())));
+                            error_state.set(Some(format!(
+                                "{}: {}",
+                                t("error-load-failed"),
+                                resp.status()
+                            )));
                         }
                         loading.set(false);
                     }

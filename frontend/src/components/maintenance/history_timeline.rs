@@ -1,5 +1,5 @@
-use yew::prelude::*;
 use serde::Deserialize;
+use yew::prelude::*;
 
 #[derive(Deserialize, Clone, PartialEq)]
 pub struct HistoryEntry {
@@ -37,10 +37,19 @@ fn format_date(datetime_str: &str) -> String {
 
             // Format as "Jan 14, 2026 at 10:30"
             let month_name = match month {
-                "01" => "Jan", "02" => "Feb", "03" => "Mar", "04" => "Apr",
-                "05" => "May", "06" => "Jun", "07" => "Jul", "08" => "Aug",
-                "09" => "Sep", "10" => "Oct", "11" => "Nov", "12" => "Dec",
-                _ => month
+                "01" => "Jan",
+                "02" => "Feb",
+                "03" => "Mar",
+                "04" => "Apr",
+                "05" => "May",
+                "06" => "Jun",
+                "07" => "Jul",
+                "08" => "Aug",
+                "09" => "Sep",
+                "10" => "Oct",
+                "11" => "Nov",
+                "12" => "Dec",
+                _ => month,
             };
 
             let time_parts: Vec<&str> = time.split(':').collect();

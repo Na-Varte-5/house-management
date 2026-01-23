@@ -1,5 +1,5 @@
-use yew::prelude::*;
 use web_sys::HtmlSelectElement;
+use yew::prelude::*;
 
 #[derive(Clone, PartialEq)]
 pub struct SelectOption {

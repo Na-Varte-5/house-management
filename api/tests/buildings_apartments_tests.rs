@@ -8,10 +8,11 @@ use serde_json::Value;
 async fn test_admin_can_create_building() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
 
     let response = client
-        .post(&format!("{}/buildings", server.base_url))
+        .post(format!("{}/buildings", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "name": "Test Building",
@@ -32,10 +33,11 @@ async fn test_admin_can_create_building() {
 async fn test_manager_can_create_building() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let manager = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::manager()).await;
+    let manager =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::manager()).await;
 
     let response = client
-        .post(&format!("{}/buildings", server.base_url))
+        .post(format!("{}/buildings", server.base_url))
         .bearer_auth(manager.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "name": "Manager Building",
@@ -52,10 +54,16 @@ async fn test_manager_can_create_building() {
 async fn test_homeowner_cannot_create_building() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let homeowner = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::homeowner()).await;
+    let homeowner = create_and_login_user(
+        &server.pool,
+        &client,
+        &server.base_url,
+        TestUser::homeowner(),
+    )
+    .await;
 
     let response = client
-        .post(&format!("{}/buildings", server.base_url))
+        .post(format!("{}/buildings", server.base_url))
         .bearer_auth(homeowner.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "name": "Homeowner Building",
@@ -72,12 +80,13 @@ async fn test_homeowner_cannot_create_building() {
 async fn test_list_buildings() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
 
     // Create some buildings
     for i in 1..=3 {
         client
-            .post(&format!("{}/buildings", server.base_url))
+            .post(format!("{}/buildings", server.base_url))
             .bearer_auth(admin.token.as_ref().unwrap())
             .json(&serde_json::json!({
                 "name": format!("Building {}", i),
@@ -90,7 +99,7 @@ async fn test_list_buildings() {
 
     // List buildings
     let response = client
-        .get(&format!("{}/buildings", server.base_url))
+        .get(format!("{}/buildings", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .send()
         .await
@@ -106,11 +115,12 @@ async fn test_list_buildings() {
 async fn test_update_building() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
 
     // Create building
     let create_response = client
-        .post(&format!("{}/buildings", server.base_url))
+        .post(format!("{}/buildings", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "name": "Old Name",
@@ -120,12 +130,15 @@ async fn test_update_building() {
         .await
         .expect("Failed to create building");
 
-    let building: Value = create_response.json().await.expect("Failed to parse response");
+    let building: Value = create_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let building_id = building["id"].as_u64().expect("No ID");
 
     // Update building
     let response = client
-        .put(&format!("{}/buildings/{}", server.base_url, building_id))
+        .put(format!("{}/buildings/{}", server.base_url, building_id))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "name": "New Name",
@@ -145,11 +158,12 @@ async fn test_update_building() {
 async fn test_soft_delete_building() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
 
     // Create building
     let create_response = client
-        .post(&format!("{}/buildings", server.base_url))
+        .post(format!("{}/buildings", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "name": "To Delete",
@@ -159,12 +173,15 @@ async fn test_soft_delete_building() {
         .await
         .expect("Failed to create building");
 
-    let building: Value = create_response.json().await.expect("Failed to parse response");
+    let building: Value = create_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let building_id = building["id"].as_u64().expect("No ID");
 
     // Delete building
     let response = client
-        .delete(&format!("{}/buildings/{}", server.base_url, building_id))
+        .delete(format!("{}/buildings/{}", server.base_url, building_id))
         .bearer_auth(admin.token.as_ref().unwrap())
         .send()
         .await
@@ -174,13 +191,16 @@ async fn test_soft_delete_building() {
 
     // Verify not in active list
     let list_response = client
-        .get(&format!("{}/buildings", server.base_url))
+        .get(format!("{}/buildings", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .send()
         .await
         .expect("Failed to list buildings");
 
-    let buildings: Value = list_response.json().await.expect("Failed to parse response");
+    let buildings: Value = list_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let buildings_array = buildings.as_array().expect("Expected array");
     assert!(!buildings_array.iter().any(|b| b["id"] == building_id));
 }
@@ -189,11 +209,12 @@ async fn test_soft_delete_building() {
 async fn test_restore_deleted_building() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
 
     // Create and delete building
     let create_response = client
-        .post(&format!("{}/buildings", server.base_url))
+        .post(format!("{}/buildings", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "name": "To Restore",
@@ -203,11 +224,14 @@ async fn test_restore_deleted_building() {
         .await
         .expect("Failed to create building");
 
-    let building: Value = create_response.json().await.expect("Failed to parse response");
+    let building: Value = create_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let building_id = building["id"].as_u64().expect("No ID");
 
     client
-        .delete(&format!("{}/buildings/{}", server.base_url, building_id))
+        .delete(format!("{}/buildings/{}", server.base_url, building_id))
         .bearer_auth(admin.token.as_ref().unwrap())
         .send()
         .await
@@ -215,7 +239,10 @@ async fn test_restore_deleted_building() {
 
     // Restore building
     let response = client
-        .post(&format!("{}/buildings/{}/restore", server.base_url, building_id))
+        .post(format!(
+            "{}/buildings/{}/restore",
+            server.base_url, building_id
+        ))
         .bearer_auth(admin.token.as_ref().unwrap())
         .send()
         .await
@@ -225,13 +252,16 @@ async fn test_restore_deleted_building() {
 
     // Verify back in active list
     let list_response = client
-        .get(&format!("{}/buildings", server.base_url))
+        .get(format!("{}/buildings", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .send()
         .await
         .expect("Failed to list buildings");
 
-    let buildings: Value = list_response.json().await.expect("Failed to parse response");
+    let buildings: Value = list_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let buildings_array = buildings.as_array().expect("Expected array");
     assert!(buildings_array.iter().any(|b| b["id"] == building_id));
 }
@@ -240,11 +270,12 @@ async fn test_restore_deleted_building() {
 async fn test_create_apartment() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
 
     // Create building first
     let building_response = client
-        .post(&format!("{}/buildings", server.base_url))
+        .post(format!("{}/buildings", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "name": "Test Building",
@@ -254,12 +285,15 @@ async fn test_create_apartment() {
         .await
         .expect("Failed to create building");
 
-    let building: Value = building_response.json().await.expect("Failed to parse response");
+    let building: Value = building_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let building_id = building["id"].as_u64().expect("No building ID");
 
     // Create apartment
     let response = client
-        .post(&format!("{}/apartments", server.base_url))
+        .post(format!("{}/apartments", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "building_id": building_id,
@@ -281,11 +315,12 @@ async fn test_create_apartment() {
 async fn test_list_apartments_for_building() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
 
     // Create building
     let building_response = client
-        .post(&format!("{}/buildings", server.base_url))
+        .post(format!("{}/buildings", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "name": "Test Building",
@@ -295,13 +330,16 @@ async fn test_list_apartments_for_building() {
         .await
         .expect("Failed to create building");
 
-    let building: Value = building_response.json().await.expect("Failed to parse response");
+    let building: Value = building_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let building_id = building["id"].as_u64().expect("No building ID");
 
     // Create apartments
     for i in 1..=3 {
         client
-            .post(&format!("{}/apartments", server.base_url))
+            .post(format!("{}/apartments", server.base_url))
             .bearer_auth(admin.token.as_ref().unwrap())
             .json(&serde_json::json!({
                 "building_id": building_id,
@@ -316,7 +354,10 @@ async fn test_list_apartments_for_building() {
 
     // List apartments
     let response = client
-        .get(&format!("{}/buildings/{}/apartments", server.base_url, building_id))
+        .get(format!(
+            "{}/buildings/{}/apartments",
+            server.base_url, building_id
+        ))
         .bearer_auth(admin.token.as_ref().unwrap())
         .send()
         .await
@@ -332,12 +373,19 @@ async fn test_list_apartments_for_building() {
 async fn test_apartment_owner_assignment() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
-    let homeowner = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::homeowner()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let homeowner = create_and_login_user(
+        &server.pool,
+        &client,
+        &server.base_url,
+        TestUser::homeowner(),
+    )
+    .await;
 
     // Create building and apartment
     let building_response = client
-        .post(&format!("{}/buildings", server.base_url))
+        .post(format!("{}/buildings", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "name": "Test Building",
@@ -347,11 +395,14 @@ async fn test_apartment_owner_assignment() {
         .await
         .expect("Failed to create building");
 
-    let building: Value = building_response.json().await.expect("Failed to parse response");
+    let building: Value = building_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let building_id = building["id"].as_u64().expect("No building ID");
 
     let apartment_response = client
-        .post(&format!("{}/apartments", server.base_url))
+        .post(format!("{}/apartments", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "building_id": building_id,
@@ -363,12 +414,18 @@ async fn test_apartment_owner_assignment() {
         .await
         .expect("Failed to create apartment");
 
-    let apartment: Value = apartment_response.json().await.expect("Failed to parse response");
+    let apartment: Value = apartment_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let apartment_id = apartment["id"].as_u64().expect("No apartment ID");
 
     // Assign owner
     let response = client
-        .post(&format!("{}/apartments/{}/owners", server.base_url, apartment_id))
+        .post(format!(
+            "{}/apartments/{}/owners",
+            server.base_url, apartment_id
+        ))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "user_id": homeowner.id,
@@ -381,14 +438,16 @@ async fn test_apartment_owner_assignment() {
 
     // Verify assignment
     let get_response = client
-        .get(&format!("{}/apartments/{}", server.base_url, apartment_id))
+        .get(format!("{}/apartments/{}", server.base_url, apartment_id))
         .bearer_auth(admin.token.as_ref().unwrap())
         .send()
         .await
         .expect("Failed to get apartment");
 
     let apartment_with_owners: Value = get_response.json().await.expect("Failed to parse response");
-    let owners = apartment_with_owners["owners"].as_array().expect("Expected owners array");
+    let owners = apartment_with_owners["owners"]
+        .as_array()
+        .expect("Expected owners array");
     assert_eq!(owners.len(), 1);
     assert_eq!(owners[0]["id"], homeowner.id);
 }

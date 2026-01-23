@@ -1,6 +1,6 @@
-use yew::prelude::*;
-use serde::Deserialize;
 use crate::services::api_client;
+use serde::Deserialize;
+use yew::prelude::*;
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 struct HealthResponse {

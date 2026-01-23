@@ -1,9 +1,9 @@
-use actix_web::{web, HttpResponse, Responder};
-use diesel::prelude::*;
-use bigdecimal::{BigDecimal, FromPrimitive};
+use crate::auth::{AppError, AuthContext};
 use crate::db::DbPool;
-use crate::auth::{AuthContext, AppError};
-use crate::models::{Proposal, Vote, ProposalResult, NewProposal, VotingMethod, VoteChoice};
+use crate::models::{NewProposal, Proposal, ProposalResult, Vote, VoteChoice, VotingMethod};
+use actix_web::{HttpResponse, Responder, web};
+use bigdecimal::{BigDecimal, FromPrimitive};
+use diesel::prelude::*;
 use std::str::FromStr;
 use utoipa;
 
@@ -21,11 +21,16 @@ use utoipa;
     tag = "Voting",
     security(("bearer_auth" = []))
 )]
-pub async fn list_proposals(auth: AuthContext, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
-    use crate::schema::proposals::dsl as p;
+pub async fn list_proposals(
+    auth: AuthContext,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
     use crate::auth::get_user_building_ids;
+    use crate::schema::proposals::dsl as p;
 
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     // Get user's accessible buildings
     let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
@@ -37,9 +42,7 @@ pub async fn list_proposals(auth: AuthContext, pool: web::Data<DbPool>) -> Resul
 
     // If user has restricted access, filter by accessible buildings OR global proposals
     if let Some(ref ids) = building_ids {
-        query = query.filter(
-            p::building_id.eq_any(ids).or(p::building_id.is_null())
-        );
+        query = query.filter(p::building_id.eq_any(ids).or(p::building_id.is_null()));
     }
 
     let proposals = query
@@ -82,14 +85,20 @@ pub struct ProposalWithVotes {
     tag = "Voting",
     security(("bearer_auth" = []))
 )]
-pub async fn get_proposal(auth: AuthContext, path: web::Path<u64>, pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
+pub async fn get_proposal(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    use crate::schema::proposal_results::dsl as pr;
     use crate::schema::proposals::dsl as p;
     use crate::schema::votes::dsl as v;
-    use crate::schema::proposal_results::dsl as pr;
 
     let id = path.into_inner();
     let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     let proposal: Proposal = p::proposals
         .filter(p::id.eq(id))
@@ -108,7 +117,8 @@ pub async fn get_proposal(auth: AuthContext, path: web::Path<u64>, pool: web::Da
     let total_votes = votes.len() as i64;
 
     // Check if user has voted
-    let user_vote = votes.iter()
+    let user_vote = votes
+        .iter()
         .find(|v| v.user_id == user_id)
         .map(|v| v.choice.clone());
 
@@ -140,11 +150,11 @@ pub async fn get_proposal(auth: AuthContext, path: web::Path<u64>, pool: web::Da
 pub struct CreateProposalPayload {
     pub title: String,
     pub description: String,
-    pub building_id: Option<u64>,  // If None, proposal is global (visible to all)
+    pub building_id: Option<u64>, // If None, proposal is global (visible to all)
     #[schema(example = "2026-01-20T10:00")]
-    pub start_time: String,  // ISO datetime string (YYYY-MM-DDTHH:MM)
+    pub start_time: String, // ISO datetime string (YYYY-MM-DDTHH:MM)
     #[schema(example = "2026-01-27T18:00")]
-    pub end_time: String,    // ISO datetime string (YYYY-MM-DDTHH:MM)
+    pub end_time: String, // ISO datetime string (YYYY-MM-DDTHH:MM)
     #[schema(example = "SimpleMajority")]
     pub voting_method: String,
     pub eligible_roles: Vec<String>,
@@ -170,7 +180,7 @@ pub struct CreateProposalPayload {
 pub async fn create_proposal(
     auth: AuthContext,
     pool: web::Data<DbPool>,
-    payload: web::Json<CreateProposalPayload>
+    payload: web::Json<CreateProposalPayload>,
 ) -> Result<impl Responder, AppError> {
     use crate::schema::proposals::dsl as p;
 
@@ -178,7 +188,9 @@ pub async fn create_proposal(
         return Err(AppError::Forbidden);
     }
 
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
     let created_by = auth.claims.sub.parse::<u64>().unwrap_or(0);
 
     // Parse datetimes
@@ -198,10 +210,9 @@ pub async fn create_proposal(
         let accessible_buildings = get_user_building_ids(created_by, is_admin, &mut conn)?;
 
         // If user has restricted access, verify they can access this building
-        if let Some(buildings) = accessible_buildings {
-            if !buildings.contains(&building_id) {
-                return Err(AppError::Forbidden);
-            }
+        if let Some(buildings) = accessible_buildings
+            && !buildings.contains(&building_id) {
+            return Err(AppError::Forbidden);
         }
     }
 
@@ -242,8 +253,10 @@ pub async fn create_proposal(
         .execute(&mut conn)?;
 
     // Get the last inserted ID
-    let inserted_id: u64 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Unsigned<diesel::sql_types::BigInt>>("LAST_INSERT_ID()"))
-        .first(&mut conn)?;
+    let inserted_id: u64 = diesel::select(diesel::dsl::sql::<
+        diesel::sql_types::Unsigned<diesel::sql_types::BigInt>,
+    >("LAST_INSERT_ID()"))
+    .first(&mut conn)?;
 
     // Fetch and return the created proposal
     let created_proposal: Proposal = p::proposals
@@ -258,7 +271,7 @@ pub async fn create_proposal(
 #[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct CastVotePayload {
     #[schema(example = "Yes")]
-    pub choice: String,  // "Yes", "No", "Abstain"
+    pub choice: String, // "Yes", "No", "Abstain"
 }
 
 /// Cast or update a vote on a proposal
@@ -287,16 +300,18 @@ pub async fn cast_vote(
     auth: AuthContext,
     path: web::Path<u64>,
     pool: web::Data<DbPool>,
-    payload: web::Json<CastVotePayload>
+    payload: web::Json<CastVotePayload>,
 ) -> Result<impl Responder, AppError> {
+    use crate::schema::apartment_owners::dsl as ao;
+    use crate::schema::apartments::dsl as apt;
     use crate::schema::proposals::dsl as p;
     use crate::schema::votes::dsl as v;
-    use crate::schema::apartments::dsl as apt;
-    use crate::schema::apartment_owners::dsl as ao;
 
     let proposal_id = path.into_inner();
     let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     // Validate vote choice
     VoteChoice::from_str(&payload.choice)
@@ -310,7 +325,9 @@ pub async fn cast_vote(
 
     // Check if proposal is open
     if proposal.status != "Open" {
-        return Err(AppError::BadRequest("Proposal is not open for voting".into()));
+        return Err(AppError::BadRequest(
+            "Proposal is not open for voting".into(),
+        ));
     }
 
     // Check if user is eligible
@@ -321,9 +338,7 @@ pub async fn cast_vote(
 
     // Calculate vote weight based on voting method
     let weight = match VotingMethod::from_str(&proposal.voting_method).unwrap() {
-        VotingMethod::SimpleMajority | VotingMethod::PerSeat => {
-            BigDecimal::from_f64(1.0).unwrap()
-        },
+        VotingMethod::SimpleMajority | VotingMethod::PerSeat => BigDecimal::from_f64(1.0).unwrap(),
         VotingMethod::WeightedArea => {
             // Weight by total apartment area owned by user
             let areas: Vec<Option<f64>> = ao::apartment_owners
@@ -332,12 +347,10 @@ pub async fn cast_vote(
                 .select(apt::size_sq_m)
                 .load(&mut conn)?;
 
-            let total: f64 = areas.into_iter().filter_map(|a| a).sum();
+            let total: f64 = areas.into_iter().flatten().sum();
             BigDecimal::from_f64(total).unwrap_or_else(|| BigDecimal::from_f64(0.0).unwrap())
-        },
-        VotingMethod::Consensus => {
-            BigDecimal::from_f64(1.0).unwrap()
-        },
+        }
+        VotingMethod::Consensus => BigDecimal::from_f64(1.0).unwrap(),
     };
 
     // Check if vote already exists
@@ -351,10 +364,7 @@ pub async fn cast_vote(
     if let Some(existing) = existing_vote {
         // Update existing vote
         diesel::update(v::votes.filter(v::id.eq(existing.id)))
-            .set((
-                v::weight_decimal.eq(&weight),
-                v::choice.eq(&payload.choice),
-            ))
+            .set((v::weight_decimal.eq(&weight), v::choice.eq(&payload.choice)))
             .execute(&mut conn)?;
     } else {
         // Insert new vote
@@ -403,18 +413,20 @@ pub async fn cast_vote(
 pub async fn tally_results(
     auth: AuthContext,
     path: web::Path<u64>,
-    pool: web::Data<DbPool>
+    pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
+    use crate::schema::proposal_results::dsl as pr;
     use crate::schema::proposals::dsl as p;
     use crate::schema::votes::dsl as v;
-    use crate::schema::proposal_results::dsl as pr;
 
     if !auth.has_any_role(&["Admin", "Manager"]) {
         return Err(AppError::Forbidden);
     }
 
     let proposal_id = path.into_inner();
-    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     // Get proposal
     let proposal: Proposal = p::proposals
@@ -429,17 +441,20 @@ pub async fn tally_results(
         .load(&mut conn)?;
 
     // Calculate totals
-    let yes_weight: BigDecimal = votes.iter()
+    let yes_weight: BigDecimal = votes
+        .iter()
         .filter(|v| v.choice == "Yes")
         .map(|v| v.weight_decimal.clone())
         .sum();
 
-    let no_weight: BigDecimal = votes.iter()
+    let no_weight: BigDecimal = votes
+        .iter()
         .filter(|v| v.choice == "No")
         .map(|v| v.weight_decimal.clone())
         .sum();
 
-    let abstain_weight: BigDecimal = votes.iter()
+    let abstain_weight: BigDecimal = votes
+        .iter()
         .filter(|v| v.choice == "Abstain")
         .map(|v| v.weight_decimal.clone())
         .sum();
@@ -450,10 +465,8 @@ pub async fn tally_results(
     let passed = match VotingMethod::from_str(&proposal.voting_method).unwrap() {
         VotingMethod::SimpleMajority | VotingMethod::WeightedArea | VotingMethod::PerSeat => {
             yes_weight > no_weight
-        },
-        VotingMethod::Consensus => {
-            no_weight == BigDecimal::from_f64(0.0).unwrap()
-        },
+        }
+        VotingMethod::Consensus => no_weight == BigDecimal::from_f64(0.0).unwrap(),
     };
 
     // Check if result already exists

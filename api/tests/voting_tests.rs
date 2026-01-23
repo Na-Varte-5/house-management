@@ -8,13 +8,20 @@ use serde_json::Value;
 async fn test_admin_can_create_proposal() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
 
-    let start_time = chrono::Local::now().naive_local().format("%Y-%m-%dT%H:%M").to_string();
-    let end_time = (chrono::Local::now() + chrono::Duration::days(7)).naive_local().format("%Y-%m-%dT%H:%M").to_string();
+    let start_time = chrono::Local::now()
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
+    let end_time = (chrono::Local::now() + chrono::Duration::days(7))
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
 
     let response = client
-        .post(&format!("{}/proposals", server.base_url))
+        .post(format!("{}/proposals", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "title": "Test Proposal",
@@ -38,13 +45,20 @@ async fn test_admin_can_create_proposal() {
 async fn test_manager_can_create_proposal() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let manager = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::manager()).await;
+    let manager =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::manager()).await;
 
-    let start_time = chrono::Local::now().naive_local().format("%Y-%m-%dT%H:%M").to_string();
-    let end_time = (chrono::Local::now() + chrono::Duration::days(7)).naive_local().format("%Y-%m-%dT%H:%M").to_string();
+    let start_time = chrono::Local::now()
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
+    let end_time = (chrono::Local::now() + chrono::Duration::days(7))
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
 
     let response = client
-        .post(&format!("{}/proposals", server.base_url))
+        .post(format!("{}/proposals", server.base_url))
         .bearer_auth(manager.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "title": "Manager Proposal",
@@ -65,13 +79,25 @@ async fn test_manager_can_create_proposal() {
 async fn test_homeowner_cannot_create_proposal() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let homeowner = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::homeowner()).await;
+    let homeowner = create_and_login_user(
+        &server.pool,
+        &client,
+        &server.base_url,
+        TestUser::homeowner(),
+    )
+    .await;
 
-    let start_time = chrono::Local::now().naive_local().format("%Y-%m-%dT%H:%M").to_string();
-    let end_time = (chrono::Local::now() + chrono::Duration::days(7)).naive_local().format("%Y-%m-%dT%H:%M").to_string();
+    let start_time = chrono::Local::now()
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
+    let end_time = (chrono::Local::now() + chrono::Duration::days(7))
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
 
     let response = client
-        .post(&format!("{}/proposals", server.base_url))
+        .post(format!("{}/proposals", server.base_url))
         .bearer_auth(homeowner.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "title": "Homeowner Proposal",
@@ -92,15 +118,22 @@ async fn test_homeowner_cannot_create_proposal() {
 async fn test_list_proposals() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
 
-    let start_time = chrono::Local::now().naive_local().format("%Y-%m-%dT%H:%M").to_string();
-    let end_time = (chrono::Local::now() + chrono::Duration::days(7)).naive_local().format("%Y-%m-%dT%H:%M").to_string();
+    let start_time = chrono::Local::now()
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
+    let end_time = (chrono::Local::now() + chrono::Duration::days(7))
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
 
     // Create proposals
     for i in 1..=3 {
         client
-            .post(&format!("{}/proposals", server.base_url))
+            .post(format!("{}/proposals", server.base_url))
             .bearer_auth(admin.token.as_ref().unwrap())
             .json(&serde_json::json!({
                 "title": format!("Proposal {}", i),
@@ -117,7 +150,7 @@ async fn test_list_proposals() {
 
     // List proposals
     let response = client
-        .get(&format!("{}/proposals", server.base_url))
+        .get(format!("{}/proposals", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .send()
         .await
@@ -133,15 +166,28 @@ async fn test_list_proposals() {
 async fn test_eligible_user_can_vote() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
-    let homeowner = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::homeowner()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let homeowner = create_and_login_user(
+        &server.pool,
+        &client,
+        &server.base_url,
+        TestUser::homeowner(),
+    )
+    .await;
 
     // Create proposal
-    let start_time = chrono::Local::now().naive_local().format("%Y-%m-%dT%H:%M").to_string();
-    let end_time = (chrono::Local::now() + chrono::Duration::days(7)).naive_local().format("%Y-%m-%dT%H:%M").to_string();
+    let start_time = chrono::Local::now()
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
+    let end_time = (chrono::Local::now() + chrono::Duration::days(7))
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
 
     let proposal_response = client
-        .post(&format!("{}/proposals", server.base_url))
+        .post(format!("{}/proposals", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "title": "Vote Test",
@@ -155,12 +201,18 @@ async fn test_eligible_user_can_vote() {
         .await
         .expect("Failed to create proposal");
 
-    let proposal: Value = proposal_response.json().await.expect("Failed to parse response");
+    let proposal: Value = proposal_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let proposal_id = proposal["id"].as_u64().expect("No proposal ID");
 
     // Cast vote
     let response = client
-        .post(&format!("{}/proposals/{}/vote", server.base_url, proposal_id))
+        .post(format!(
+            "{}/proposals/{}/vote",
+            server.base_url, proposal_id
+        ))
         .bearer_auth(homeowner.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "choice": "Yes",
@@ -179,15 +231,23 @@ async fn test_eligible_user_can_vote() {
 async fn test_ineligible_user_cannot_vote() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
-    let renter = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::renter()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let renter =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::renter()).await;
 
     // Create proposal only for Homeowners
-    let start_time = chrono::Local::now().naive_local().format("%Y-%m-%dT%H:%M").to_string();
-    let end_time = (chrono::Local::now() + chrono::Duration::days(7)).naive_local().format("%Y-%m-%dT%H:%M").to_string();
+    let start_time = chrono::Local::now()
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
+    let end_time = (chrono::Local::now() + chrono::Duration::days(7))
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
 
     let proposal_response = client
-        .post(&format!("{}/proposals", server.base_url))
+        .post(format!("{}/proposals", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "title": "Homeowner Only",
@@ -201,12 +261,18 @@ async fn test_ineligible_user_cannot_vote() {
         .await
         .expect("Failed to create proposal");
 
-    let proposal: Value = proposal_response.json().await.expect("Failed to parse response");
+    let proposal: Value = proposal_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let proposal_id = proposal["id"].as_u64().expect("No proposal ID");
 
     // Try to vote as renter
     let response = client
-        .post(&format!("{}/proposals/{}/vote", server.base_url, proposal_id))
+        .post(format!(
+            "{}/proposals/{}/vote",
+            server.base_url, proposal_id
+        ))
         .bearer_auth(renter.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "choice": "Yes",
@@ -222,15 +288,28 @@ async fn test_ineligible_user_cannot_vote() {
 async fn test_user_can_change_vote() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
-    let homeowner = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::homeowner()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let homeowner = create_and_login_user(
+        &server.pool,
+        &client,
+        &server.base_url,
+        TestUser::homeowner(),
+    )
+    .await;
 
     // Create proposal
-    let start_time = chrono::Local::now().naive_local().format("%Y-%m-%dT%H:%M").to_string();
-    let end_time = (chrono::Local::now() + chrono::Duration::days(7)).naive_local().format("%Y-%m-%dT%H:%M").to_string();
+    let start_time = chrono::Local::now()
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
+    let end_time = (chrono::Local::now() + chrono::Duration::days(7))
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
 
     let proposal_response = client
-        .post(&format!("{}/proposals", server.base_url))
+        .post(format!("{}/proposals", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "title": "Change Vote Test",
@@ -244,12 +323,18 @@ async fn test_user_can_change_vote() {
         .await
         .expect("Failed to create proposal");
 
-    let proposal: Value = proposal_response.json().await.expect("Failed to parse response");
+    let proposal: Value = proposal_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let proposal_id = proposal["id"].as_u64().expect("No proposal ID");
 
     // Cast first vote (Yes)
     client
-        .post(&format!("{}/proposals/{}/vote", server.base_url, proposal_id))
+        .post(format!(
+            "{}/proposals/{}/vote",
+            server.base_url, proposal_id
+        ))
         .bearer_auth(homeowner.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "choice": "Yes",
@@ -260,7 +345,10 @@ async fn test_user_can_change_vote() {
 
     // Change vote to No
     let response = client
-        .post(&format!("{}/proposals/{}/vote", server.base_url, proposal_id))
+        .post(format!(
+            "{}/proposals/{}/vote",
+            server.base_url, proposal_id
+        ))
         .bearer_auth(homeowner.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "choice": "No",
@@ -275,13 +363,16 @@ async fn test_user_can_change_vote() {
 
     // Verify the vote was changed
     let proposal_detail = client
-        .get(&format!("{}/proposals/{}", server.base_url, proposal_id))
+        .get(format!("{}/proposals/{}", server.base_url, proposal_id))
         .bearer_auth(homeowner.token.as_ref().unwrap())
         .send()
         .await
         .expect("Failed to get proposal");
 
-    let detail: Value = proposal_detail.json().await.expect("Failed to parse response");
+    let detail: Value = proposal_detail
+        .json()
+        .await
+        .expect("Failed to parse response");
     assert_eq!(detail["user_vote"], "No");
     assert_eq!(detail["no_count"], 1);
     assert_eq!(detail["yes_count"], 0);
@@ -291,23 +382,38 @@ async fn test_user_can_change_vote() {
 async fn test_tally_simple_majority_passes() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
 
     // Create multiple homeowners for voting
-    let homeowner1 = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::homeowner()).await;
+    let homeowner1 = create_and_login_user(
+        &server.pool,
+        &client,
+        &server.base_url,
+        TestUser::homeowner(),
+    )
+    .await;
     let mut homeowner2 = TestUser::homeowner();
     homeowner2.email = "homeowner2@test.com".to_string();
-    let homeowner2 = create_and_login_user(&server.pool, &client, &server.base_url, homeowner2).await;
+    let homeowner2 =
+        create_and_login_user(&server.pool, &client, &server.base_url, homeowner2).await;
     let mut homeowner3 = TestUser::homeowner();
     homeowner3.email = "homeowner3@test.com".to_string();
-    let homeowner3 = create_and_login_user(&server.pool, &client, &server.base_url, homeowner3).await;
+    let homeowner3 =
+        create_and_login_user(&server.pool, &client, &server.base_url, homeowner3).await;
 
     // Create proposal
-    let start_time = chrono::Local::now().naive_local().format("%Y-%m-%dT%H:%M").to_string();
-    let end_time = (chrono::Local::now() + chrono::Duration::days(7)).naive_local().format("%Y-%m-%dT%H:%M").to_string();
+    let start_time = chrono::Local::now()
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
+    let end_time = (chrono::Local::now() + chrono::Duration::days(7))
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
 
     let proposal_response = client
-        .post(&format!("{}/proposals", server.base_url))
+        .post(format!("{}/proposals", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "title": "Tally Test",
@@ -321,12 +427,18 @@ async fn test_tally_simple_majority_passes() {
         .await
         .expect("Failed to create proposal");
 
-    let proposal: Value = proposal_response.json().await.expect("Failed to parse response");
+    let proposal: Value = proposal_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let proposal_id = proposal["id"].as_u64().expect("No proposal ID");
 
     // Cast votes: 2 Yes, 1 No
     client
-        .post(&format!("{}/proposals/{}/vote", server.base_url, proposal_id))
+        .post(format!(
+            "{}/proposals/{}/vote",
+            server.base_url, proposal_id
+        ))
         .bearer_auth(homeowner1.token.as_ref().unwrap())
         .json(&serde_json::json!({"choice": "Yes"}))
         .send()
@@ -334,7 +446,10 @@ async fn test_tally_simple_majority_passes() {
         .expect("Failed to vote");
 
     client
-        .post(&format!("{}/proposals/{}/vote", server.base_url, proposal_id))
+        .post(format!(
+            "{}/proposals/{}/vote",
+            server.base_url, proposal_id
+        ))
         .bearer_auth(homeowner2.token.as_ref().unwrap())
         .json(&serde_json::json!({"choice": "Yes"}))
         .send()
@@ -342,7 +457,10 @@ async fn test_tally_simple_majority_passes() {
         .expect("Failed to vote");
 
     client
-        .post(&format!("{}/proposals/{}/vote", server.base_url, proposal_id))
+        .post(format!(
+            "{}/proposals/{}/vote",
+            server.base_url, proposal_id
+        ))
         .bearer_auth(homeowner3.token.as_ref().unwrap())
         .json(&serde_json::json!({"choice": "No"}))
         .send()
@@ -351,7 +469,10 @@ async fn test_tally_simple_majority_passes() {
 
     // Tally results
     let response = client
-        .post(&format!("{}/proposals/{}/tally", server.base_url, proposal_id))
+        .post(format!(
+            "{}/proposals/{}/tally",
+            server.base_url, proposal_id
+        ))
         .bearer_auth(admin.token.as_ref().unwrap())
         .send()
         .await
@@ -366,19 +487,33 @@ async fn test_tally_simple_majority_passes() {
 async fn test_tally_simple_majority_fails() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
 
-    let homeowner1 = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::homeowner()).await;
+    let homeowner1 = create_and_login_user(
+        &server.pool,
+        &client,
+        &server.base_url,
+        TestUser::homeowner(),
+    )
+    .await;
     let mut homeowner2 = TestUser::homeowner();
     homeowner2.email = "homeowner2@test.com".to_string();
-    let homeowner2 = create_and_login_user(&server.pool, &client, &server.base_url, homeowner2).await;
+    let homeowner2 =
+        create_and_login_user(&server.pool, &client, &server.base_url, homeowner2).await;
 
     // Create proposal
-    let start_time = chrono::Local::now().naive_local().format("%Y-%m-%dT%H:%M").to_string();
-    let end_time = (chrono::Local::now() + chrono::Duration::days(7)).naive_local().format("%Y-%m-%dT%H:%M").to_string();
+    let start_time = chrono::Local::now()
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
+    let end_time = (chrono::Local::now() + chrono::Duration::days(7))
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
 
     let proposal_response = client
-        .post(&format!("{}/proposals", server.base_url))
+        .post(format!("{}/proposals", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "title": "Fail Test",
@@ -392,12 +527,18 @@ async fn test_tally_simple_majority_fails() {
         .await
         .expect("Failed to create proposal");
 
-    let proposal: Value = proposal_response.json().await.expect("Failed to parse response");
+    let proposal: Value = proposal_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let proposal_id = proposal["id"].as_u64().expect("No proposal ID");
 
     // Cast votes: 1 Yes, 2 No
     client
-        .post(&format!("{}/proposals/{}/vote", server.base_url, proposal_id))
+        .post(format!(
+            "{}/proposals/{}/vote",
+            server.base_url, proposal_id
+        ))
         .bearer_auth(homeowner1.token.as_ref().unwrap())
         .json(&serde_json::json!({"choice": "Yes"}))
         .send()
@@ -405,7 +546,10 @@ async fn test_tally_simple_majority_fails() {
         .expect("Failed to vote");
 
     client
-        .post(&format!("{}/proposals/{}/vote", server.base_url, proposal_id))
+        .post(format!(
+            "{}/proposals/{}/vote",
+            server.base_url, proposal_id
+        ))
         .bearer_auth(homeowner2.token.as_ref().unwrap())
         .json(&serde_json::json!({"choice": "No"}))
         .send()
@@ -414,7 +558,10 @@ async fn test_tally_simple_majority_fails() {
 
     // Tally results
     let response = client
-        .post(&format!("{}/proposals/{}/tally", server.base_url, proposal_id))
+        .post(format!(
+            "{}/proposals/{}/tally",
+            server.base_url, proposal_id
+        ))
         .bearer_auth(admin.token.as_ref().unwrap())
         .send()
         .await
@@ -429,15 +576,28 @@ async fn test_tally_simple_majority_fails() {
 async fn test_homeowner_cannot_tally() {
     let server = TestServer::start().await;
     let client = reqwest::Client::new();
-    let admin = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
-    let homeowner = create_and_login_user(&server.pool, &client, &server.base_url, TestUser::homeowner()).await;
+    let admin =
+        create_and_login_user(&server.pool, &client, &server.base_url, TestUser::admin()).await;
+    let homeowner = create_and_login_user(
+        &server.pool,
+        &client,
+        &server.base_url,
+        TestUser::homeowner(),
+    )
+    .await;
 
     // Create proposal
-    let start_time = chrono::Local::now().naive_local().format("%Y-%m-%dT%H:%M").to_string();
-    let end_time = (chrono::Local::now() + chrono::Duration::days(7)).naive_local().format("%Y-%m-%dT%H:%M").to_string();
+    let start_time = chrono::Local::now()
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
+    let end_time = (chrono::Local::now() + chrono::Duration::days(7))
+        .naive_local()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
 
     let proposal_response = client
-        .post(&format!("{}/proposals", server.base_url))
+        .post(format!("{}/proposals", server.base_url))
         .bearer_auth(admin.token.as_ref().unwrap())
         .json(&serde_json::json!({
             "title": "Tally Permission Test",
@@ -451,12 +611,18 @@ async fn test_homeowner_cannot_tally() {
         .await
         .expect("Failed to create proposal");
 
-    let proposal: Value = proposal_response.json().await.expect("Failed to parse response");
+    let proposal: Value = proposal_response
+        .json()
+        .await
+        .expect("Failed to parse response");
     let proposal_id = proposal["id"].as_u64().expect("No proposal ID");
 
     // Try to tally as homeowner
     let response = client
-        .post(&format!("{}/proposals/{}/tally", server.base_url, proposal_id))
+        .post(format!(
+            "{}/proposals/{}/tally",
+            server.base_url, proposal_id
+        ))
         .bearer_auth(homeowner.token.as_ref().unwrap())
         .send()
         .await

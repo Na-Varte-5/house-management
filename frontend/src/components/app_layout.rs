@@ -1,7 +1,7 @@
-use yew::prelude::*;
-use crate::routes::Route;
-use crate::components::main_sidebar::MainSidebar;
 use crate::components::breadcrumb::{Breadcrumb, BreadcrumbItem};
+use crate::components::main_sidebar::MainSidebar;
+use crate::routes::Route;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct AppLayoutProps {

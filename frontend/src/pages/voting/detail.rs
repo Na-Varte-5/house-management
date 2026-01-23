@@ -1,10 +1,10 @@
-use yew::prelude::*;
-use yew_router::prelude::*;
-use serde::{Deserialize, Serialize};
 use crate::components::{ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
 use crate::routes::Route;
-use crate::services::{api_client, ApiError};
+use crate::services::{ApiError, api_client};
+use serde::{Deserialize, Serialize};
+use yew::prelude::*;
+use yew_router::prelude::*;
 
 #[derive(Deserialize, Clone, PartialEq)]
 struct ProposalWithVotes {
@@ -77,7 +77,10 @@ pub fn voting_detail_page(props: &Props) -> Html {
             let id = *id;
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                match client.get::<ProposalWithVotes>(&format!("/proposals/{}", id)).await {
+                match client
+                    .get::<ProposalWithVotes>(&format!("/proposals/{}", id))
+                    .await
+                {
                     Ok(p) => {
                         proposal.set(Some(p));
                         loading.set(false);
@@ -113,18 +116,31 @@ pub fn voting_detail_page(props: &Props) -> Html {
 
                 wasm_bindgen_futures::spawn_local(async move {
                     let client = api_client(token.as_deref());
-                    let payload = CastVotePayload { choice: choice.clone() };
+                    let payload = CastVotePayload {
+                        choice: choice.clone(),
+                    };
 
-                    match client.post::<_, serde_json::Value>(&format!("/proposals/{}/vote", p.id), &payload).await {
+                    match client
+                        .post::<_, serde_json::Value>(
+                            &format!("/proposals/{}/vote", p.id),
+                            &payload,
+                        )
+                        .await
+                    {
                         Ok(_) => {
                             success.set(Some(format!("Vote cast: {}", choice)));
                             // Reload proposal to get updated counts
-                            if let Ok(updated) = client.get::<ProposalWithVotes>(&format!("/proposals/{}", p.id)).await {
+                            if let Ok(updated) = client
+                                .get::<ProposalWithVotes>(&format!("/proposals/{}", p.id))
+                                .await
+                            {
                                 proposal.set(Some(updated));
                             }
                         }
                         Err(ApiError::Forbidden) => {
-                            error.set(Some("You are not eligible to vote on this proposal".to_string()));
+                            error.set(Some(
+                                "You are not eligible to vote on this proposal".to_string(),
+                            ));
                         }
                         Err(ApiError::BadRequest(msg)) => {
                             error.set(Some(msg));
@@ -161,16 +177,24 @@ pub fn voting_detail_page(props: &Props) -> Html {
                 wasm_bindgen_futures::spawn_local(async move {
                     let client = api_client(token.as_deref());
 
-                    match client.post_empty::<serde_json::Value>(&format!("/proposals/{}/tally", p.id)).await {
+                    match client
+                        .post_empty::<serde_json::Value>(&format!("/proposals/{}/tally", p.id))
+                        .await
+                    {
                         Ok(_) => {
                             success.set(Some("Results tallied successfully".to_string()));
                             // Reload proposal to get results
-                            if let Ok(updated) = client.get::<ProposalWithVotes>(&format!("/proposals/{}", p.id)).await {
+                            if let Ok(updated) = client
+                                .get::<ProposalWithVotes>(&format!("/proposals/{}", p.id))
+                                .await
+                            {
                                 proposal.set(Some(updated));
                             }
                         }
                         Err(ApiError::Forbidden) => {
-                            error.set(Some("You don't have permission to tally results".to_string()));
+                            error.set(Some(
+                                "You don't have permission to tally results".to_string(),
+                            ));
                         }
                         Err(e) => {
                             error.set(Some(format!("Failed to tally results: {}", e)));

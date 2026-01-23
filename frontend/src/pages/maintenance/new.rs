@@ -1,10 +1,12 @@
-use yew::prelude::*;
-use yew_router::prelude::*;
-use serde::{Deserialize, Serialize};
-use crate::components::{ErrorAlert, SuccessAlert, TextInput, Textarea, Select, SelectOption, FormGroup};
+use crate::components::{
+    ErrorAlert, FormGroup, Select, SelectOption, SuccessAlert, TextInput, Textarea,
+};
 use crate::contexts::AuthContext;
 use crate::routes::Route;
-use crate::services::{api_client, ApiError};
+use crate::services::{ApiError, api_client};
+use serde::{Deserialize, Serialize};
+use yew::prelude::*;
+use yew_router::prelude::*;
 
 #[derive(Deserialize)]
 struct CreatedResponse {
@@ -56,7 +58,10 @@ pub fn maintenance_new_page() -> Html {
         use_effect_with((), move |_| {
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                match client.get::<Vec<ApartmentWithBuilding>>("/apartments/my").await {
+                match client
+                    .get::<Vec<ApartmentWithBuilding>>("/apartments/my")
+                    .await
+                {
                     Ok(list) => {
                         apartments.set(list);
                         loading.set(false);
@@ -136,17 +141,25 @@ pub fn maintenance_new_page() -> Html {
                     description: (*description).clone(),
                 };
 
-                match client.post::<_, CreatedResponse>("/requests", &new_request).await {
+                match client
+                    .post::<_, CreatedResponse>("/requests", &new_request)
+                    .await
+                {
                     Ok(response) => {
-                        success.set(Some("Request created successfully! Redirecting...".to_string()));
+                        success.set(Some(
+                            "Request created successfully! Redirecting...".to_string(),
+                        ));
                         // Redirect to the created request's detail page
                         let request_id = response.id;
                         gloo_timers::callback::Timeout::new(1000, move || {
                             navigator.push(&Route::MaintenanceDetail { id: request_id });
-                        }).forget();
+                        })
+                        .forget();
                     }
                     Err(ApiError::Forbidden) => {
-                        error.set(Some("You don't have permission to create requests".to_string()));
+                        error.set(Some(
+                            "You don't have permission to create requests".to_string(),
+                        ));
                         submitting.set(false);
                     }
                     Err(e) => {

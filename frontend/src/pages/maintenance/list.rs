@@ -1,11 +1,11 @@
-use yew::prelude::*;
-use yew_router::prelude::*;
-use serde::Deserialize;
-use std::collections::HashMap;
 use crate::components::ErrorAlert;
 use crate::contexts::AuthContext;
 use crate::routes::Route;
 use crate::services::api_client;
+use serde::Deserialize;
+use std::collections::HashMap;
+use yew::prelude::*;
+use yew_router::prelude::*;
 
 #[derive(Deserialize, Clone, PartialEq)]
 struct MaintenanceRequest {
@@ -75,7 +75,8 @@ pub fn maintenance_list_page() -> Html {
     let filtered_requests: Vec<MaintenanceRequest> = if *filter_status == "All" {
         (*requests).clone()
     } else {
-        requests.iter()
+        requests
+            .iter()
             .filter(|r| r.status == *filter_status)
             .cloned()
             .collect()

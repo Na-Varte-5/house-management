@@ -1,9 +1,9 @@
-use yew::prelude::*;
+use crate::components::meters::{MeterBuilding, MeterList, MeterRegisterForm};
 use crate::components::{AdminLayout, ErrorAlert, SuccessAlert};
-use crate::components::meters::{MeterRegisterForm, MeterList, MeterBuilding};
 use crate::contexts::AuthContext;
 use crate::routes::Route;
 use crate::services::api_client;
+use yew::prelude::*;
 
 #[derive(PartialEq, Clone)]
 enum Tab {
@@ -84,7 +84,8 @@ pub fn meter_management_page() -> Html {
                 move || {
                     on_tab(Tab::List);
                 }
-            }).forget();
+            })
+            .forget();
         })
     };
 

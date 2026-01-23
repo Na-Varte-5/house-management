@@ -1,10 +1,10 @@
-use yew::prelude::*;
-use yew_router::prelude::*;
-use serde::Deserialize;
 use crate::components::{ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
 use crate::routes::Route;
 use crate::services::api_client;
+use serde::Deserialize;
+use yew::prelude::*;
+use yew_router::prelude::*;
 
 #[derive(Deserialize, Clone, PartialEq)]
 struct Meter {
@@ -54,7 +54,10 @@ pub fn meter_calibration_page() -> Html {
             let d = *d;
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                match client.get::<Vec<Meter>>(&format!("/meters/calibration-due?days_before={}", d)).await {
+                match client
+                    .get::<Vec<Meter>>(&format!("/meters/calibration-due?days_before={}", d))
+                    .await
+                {
                     Ok(list) => {
                         meters.set(list);
                         loading.set(false);
@@ -83,9 +86,7 @@ pub fn meter_calibration_page() -> Html {
 
     let on_meter_click = {
         let navigator = navigator.clone();
-        Callback::from(move |meter_id: u64| {
-            navigator.push(&Route::MeterDetail { id: meter_id })
-        })
+        Callback::from(move |meter_id: u64| navigator.push(&Route::MeterDetail { id: meter_id }))
     };
 
     let clear_error = {

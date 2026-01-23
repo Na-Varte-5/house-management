@@ -1,6 +1,6 @@
+use crate::routes::Route;
 use yew::prelude::*;
 use yew_router::prelude::*;
-use crate::routes::Route;
 
 #[derive(Clone, PartialEq)]
 pub struct BreadcrumbItem {

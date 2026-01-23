@@ -1,6 +1,6 @@
 use crate::components::{AdminLayout, ErrorAlert};
 use crate::contexts::AuthContext;
-use crate::services::{api_client, ApiError};
+use crate::services::{ApiError, api_client};
 use serde::{Deserialize, Serialize};
 use yew::prelude::*;
 
@@ -127,7 +127,9 @@ pub fn admin_page() -> Html {
                             reload_users.emit(());
                         }
                         Err(ApiError::Forbidden) => {
-                            error.set(Some("You don't have permission to update roles".to_string()));
+                            error.set(Some(
+                                "You don't have permission to update roles".to_string(),
+                            ));
                         }
                         Err(e) => {
                             error.set(Some(format!("Failed to add role: {}", e)));
@@ -178,7 +180,9 @@ pub fn admin_page() -> Html {
                             reload_users.emit(());
                         }
                         Err(ApiError::Forbidden) => {
-                            error.set(Some("You don't have permission to update roles".to_string()));
+                            error.set(Some(
+                                "You don't have permission to update roles".to_string(),
+                            ));
                         }
                         Err(e) => {
                             error.set(Some(format!("Failed to remove role: {}", e)));

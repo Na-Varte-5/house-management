@@ -10,7 +10,7 @@ async fn test_register_new_user() {
     let client = reqwest::Client::new();
 
     let response = client
-        .post(&format!("{}/register", server.base_url))
+        .post(format!("{}/register", server.base_url))
         .json(&serde_json::json!({
             "email": "newuser@test.com",
             "name": "New User",
@@ -35,7 +35,7 @@ async fn test_register_duplicate_email() {
 
     // Try to register with same email
     let response = client
-        .post(&format!("{}/register", server.base_url))
+        .post(format!("{}/register", server.base_url))
         .json(&serde_json::json!({
             "email": "homeowner@test.com",
             "name": "Duplicate User",
@@ -57,7 +57,7 @@ async fn test_login_success() {
     create_test_user(&server.pool, user.clone()).await;
 
     let response = client
-        .post(&format!("{}/login", server.base_url))
+        .post(format!("{}/login", server.base_url))
         .json(&serde_json::json!({
             "email": user.email,
             "password": user.password,
@@ -80,7 +80,7 @@ async fn test_login_wrong_password() {
     create_test_user(&server.pool, user.clone()).await;
 
     let response = client
-        .post(&format!("{}/login", server.base_url))
+        .post(format!("{}/login", server.base_url))
         .json(&serde_json::json!({
             "email": user.email,
             "password": "wrongpassword",
@@ -98,7 +98,7 @@ async fn test_login_nonexistent_user() {
     let client = reqwest::Client::new();
 
     let response = client
-        .post(&format!("{}/login", server.base_url))
+        .post(format!("{}/login", server.base_url))
         .json(&serde_json::json!({
             "email": "nobody@test.com",
             "password": "password",
@@ -121,7 +121,7 @@ async fn test_jwt_token_validation() {
 
     // Try to access a protected endpoint
     let response = client
-        .get(&format!("{}/users", server.base_url))
+        .get(format!("{}/users", server.base_url))
         .bearer_auth(&token)
         .send()
         .await
@@ -136,7 +136,7 @@ async fn test_invalid_token_rejected() {
     let client = reqwest::Client::new();
 
     let response = client
-        .get(&format!("{}/users", server.base_url))
+        .get(format!("{}/users", server.base_url))
         .bearer_auth("invalid.token.here")
         .send()
         .await
@@ -151,7 +151,7 @@ async fn test_no_token_rejected() {
     let client = reqwest::Client::new();
 
     let response = client
-        .get(&format!("{}/users", server.base_url))
+        .get(format!("{}/users", server.base_url))
         .send()
         .await
         .expect("Failed to send request");
@@ -169,7 +169,7 @@ async fn test_rbac_admin_can_list_users() {
     let token = login_test_user(&client, &server.base_url, &admin).await;
 
     let response = client
-        .get(&format!("{}/users", server.base_url))
+        .get(format!("{}/users", server.base_url))
         .bearer_auth(&token)
         .send()
         .await
@@ -188,7 +188,7 @@ async fn test_rbac_homeowner_cannot_list_users() {
     let token = login_test_user(&client, &server.base_url, &homeowner).await;
 
     let response = client
-        .get(&format!("{}/users", server.base_url))
+        .get(format!("{}/users", server.base_url))
         .bearer_auth(&token)
         .send()
         .await
@@ -207,7 +207,7 @@ async fn test_rbac_renter_cannot_list_users() {
     let token = login_test_user(&client, &server.base_url, &renter).await;
 
     let response = client
-        .get(&format!("{}/users", server.base_url))
+        .get(format!("{}/users", server.base_url))
         .bearer_auth(&token)
         .send()
         .await
