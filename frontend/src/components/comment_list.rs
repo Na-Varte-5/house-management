@@ -1,10 +1,8 @@
 use crate::components::spinner::Spinner;
+use crate::contexts::AuthContext;
 use crate::i18n::t;
-use crate::utils::{
-    api::api_url,
-    auth::{current_user, get_token},
-    datetime::format_dt_local,
-};
+use crate::services::api_client;
+use crate::utils::datetime::format_dt_local;
 use serde::Deserialize;
 use yew::prelude::*;
 
@@ -32,18 +30,16 @@ pub fn comment_list(props: &CommentListProps) -> Html {
         return html! {<div class="text-muted small">{ t("comments-disabled") }</div>};
     }
 
+    let auth = use_context::<AuthContext>().expect("AuthContext not found");
     let loading = use_state(|| false);
     let comments = use_state(|| Vec::<CommentDto>::new());
     let error = use_state(|| None::<String>);
     let posting = use_state(|| false);
     let new_md = use_state(String::default);
     let show_deleted = use_state(|| false);
-    let current = current_user();
-    let can_post = current.is_some();
-    let is_manager = current
-        .as_ref()
-        .map(|c| c.roles.iter().any(|r| r == "Admin" || r == "Manager"))
-        .unwrap_or(false);
+    let can_post = auth.is_authenticated();
+    let is_manager = auth.is_admin_or_manager();
+    let token = auth.token().map(|t| t.to_string());
 
     // Load comments when announcement_id changes
     {

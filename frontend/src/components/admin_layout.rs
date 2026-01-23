@@ -1,8 +1,8 @@
 use yew::prelude::*;
 
 use crate::components::admin_sidebar::AdminSidebar;
+use crate::contexts::AuthContext;
 use crate::routes::Route;
-use crate::utils::auth::current_user;
 
 /// Layout for admin/manager pages: renders a sidebar with privileged actions and a main content area.
 #[derive(Properties, PartialEq)]
@@ -18,13 +18,9 @@ pub struct AdminLayoutProps {
 
 #[function_component(AdminLayout)]
 pub fn admin_layout(props: &AdminLayoutProps) -> Html {
-    let user = current_user();
-    let is_privileged = user
-        .as_ref()
-        .map(|u| u.roles.iter().any(|r| r == "Admin" || r == "Manager"))
-        .unwrap_or(false);
+    let auth = use_context::<AuthContext>().expect("AuthContext not found");
 
-    if !is_privileged {
+    if !auth.is_admin_or_manager() {
         return html! {
             <div class="container mt-4">
                 <div class="alert alert-danger">{"Access denied"}</div>

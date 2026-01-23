@@ -1,9 +1,9 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
 
+use crate::contexts::AuthContext;
 use crate::i18n::t;
 use crate::routes::Route;
-use crate::utils::auth::current_user;
 
 #[derive(Properties, PartialEq)]
 pub struct AdminSidebarProps {
@@ -13,15 +13,10 @@ pub struct AdminSidebarProps {
 /// Vertical sidebar navigation for privileged users (Admin / Manager).
 #[function_component(AdminSidebar)]
 pub fn admin_sidebar(props: &AdminSidebarProps) -> Html {
-    let user = current_user();
-    let is_admin = user
-        .as_ref()
-        .map(|u| u.roles.iter().any(|r| r == "Admin"))
-        .unwrap_or(false);
-    let is_manager_or_admin = user
-        .as_ref()
-        .map(|u| u.roles.iter().any(|r| r == "Admin" || r == "Manager"))
-        .unwrap_or(false);
+    let auth = use_context::<AuthContext>().expect("AuthContext not found");
+
+    let is_admin = auth.has_role("Admin");
+    let is_manager_or_admin = auth.is_admin_or_manager();
 
     if !is_manager_or_admin {
         return html! {};
