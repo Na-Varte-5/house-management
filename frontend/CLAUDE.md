@@ -608,7 +608,8 @@ html! {
 ### Announcement Components
 
 #### `<AnnouncementList>`
-**Purpose:** Display list of announcements
+**Purpose:** Display list of public announcements with expand/collapse for comments
+**Props:** None (loads data internally)
 **Usage:**
 ```rust
 use crate::components::announcement_list::AnnouncementList;
@@ -616,11 +617,78 @@ use crate::components::announcement_list::AnnouncementList;
 html! { <AnnouncementList /> }
 ```
 
-#### `<AnnouncementEditor>`
-**Purpose:** Rich editor for creating/editing announcements
+#### `<AnnouncementEditor>` (Orchestrator)
+**Purpose:** Orchestrator component that manages state and API calls for announcement editing
+**Architecture:** Follows orchestrator pattern - manages state, loads data, handles API calls, creates callbacks
+**Props:**
+- `on_created: Callback<AnnouncementFull>` - Called when new announcement created
+- `on_updated: Callback<AnnouncementFull>` - Called when existing announcement updated
+- `on_published: Callback<AnnouncementFull>` - Called when announcement published
+- `existing: Option<AnnouncementFull>` - Existing announcement to edit (None for create mode)
+- `on_cancel: Callback<()>` - Called when user cancels editing
+
+**Features:**
+- Loads buildings and apartments for targeting
+- Computes memoized markdown preview
+- Handles form validation
+- Supports scheduled publishing and expiration dates
+- Role-based visibility controls
+
+**Usage:**
+```rust
+use crate::components::announcement_editor::{AnnouncementEditor, AnnouncementFull};
+
+// Create new announcement
+html! {
+    <AnnouncementEditor
+        on_created={on_created}
+        on_cancel={on_cancel}
+    />
+}
+
+// Edit existing announcement
+html! {
+    <AnnouncementEditor
+        existing={Some(announcement.clone())}
+        on_updated={on_updated}
+        on_cancel={on_cancel}
+    />
+}
+```
+
+#### `<AnnouncementEditorForm>` (Presentation)
+**Purpose:** Pure presentation component for announcement editing form
+**Architecture:** Receives all data via props, emits all events via callbacks - no state management or API calls
+**Props:**
+- Data props: `title`, `body_md`, `public_flag`, `pinned_flag`, `comments_enabled`, `publish_at`, `expire_at`, `selected_roles`, `selected_building`, `selected_apartment`, `buildings`, `apartments`, `preview_html`
+- UI state props: `saving`, `error`, `is_editing`, `publish_now_id`
+- Callback props: `on_title_change`, `on_body_md_change`, `on_public_change`, `on_pinned_change`, `on_comments_change`, `on_publish_at_change`, `on_expire_at_change`, `on_roles_change`, `on_building_change`, `on_apartment_change`, `on_submit`, `on_publish_now`, `on_cancel`
+
+**Note:** This component is typically used internally by `<AnnouncementEditor>`. Only use directly if you need custom orchestration logic.
 
 #### `<CommentList>`
 **Purpose:** Display and manage comments on announcements
+**Props:**
+- `announcement_id: u64` - ID of announcement to show comments for
+- `comments_enabled: bool` - Whether comments are enabled for this announcement
+
+**Features:**
+- Load and display comments
+- Post new comments (authenticated users)
+- Delete/restore/purge comments (Admin/Manager only)
+- Toggle show deleted comments (Admin/Manager only)
+
+**Usage:**
+```rust
+use crate::components::comment_list::CommentList;
+
+html! {
+    <CommentList
+        announcement_id={announcement.id}
+        comments_enabled={announcement.comments_enabled}
+    />
+}
+```
 
 ---
 

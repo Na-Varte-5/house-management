@@ -1,4 +1,4 @@
-use crate::components::spinner::Spinner;
+use crate::components::announcement_editor_form::AnnouncementEditorForm;
 use crate::contexts::AuthContext;
 use crate::i18n::t;
 use crate::services::api_client;
@@ -62,29 +62,34 @@ pub struct EditorProps {
     pub on_cancel: Callback<()>,
 }
 
+/// Orchestrator component that manages state and API calls for announcement editing
 #[function_component(AnnouncementEditor)]
 pub fn announcement_editor(props: &EditorProps) -> Html {
     let auth = use_context::<AuthContext>().expect("AuthContext not found");
     let token = auth.token().map(|t| t.to_string());
 
+    // Form state
     let title = use_state(String::default);
     let body_md = use_state(String::default);
     let public_flag = use_state(|| true);
     let pinned_flag = use_state(|| false);
     let comments_enabled = use_state(|| false);
-    let publish_at = use_state(String::default); // datetime-local value
+    let publish_at = use_state(String::default);
     let expire_at = use_state(String::default);
-    let saving = use_state(|| false);
-    let error = use_state(|| None::<String>);
-    let active_tab = use_state(|| "edit".to_string());
     let selected_roles = use_state(|| Vec::<String>::new());
-    let buildings = use_state(|| Vec::<(u64, String)>::new());
-    let apartments = use_state(|| Vec::<(u64, u64, String)>::new()); // (id, building_id, number)
     let selected_building = use_state(|| None::<u64>);
     let selected_apartment = use_state(|| None::<u64>);
 
-    // Memoized preview HTML (updates whenever body_md changes)
-    let preview_html_computed = {
+    // Data state
+    let buildings = use_state(|| Vec::<(u64, String)>::new());
+    let apartments = use_state(|| Vec::<(u64, u64, String)>::new());
+
+    // UI state
+    let saving = use_state(|| false);
+    let error = use_state(|| None::<String>);
+
+    // Memoized preview HTML
+    let preview_html = {
         let md = (*body_md).clone();
         use_memo(md.clone(), move |current_md| {
             if current_md.is_empty() {
@@ -103,9 +108,8 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
         })
     };
 
-    // Initialize state from existing announcement when switching to edit mode
+    // Initialize state from existing announcement
     {
-        let _existing = props.existing.clone();
         let title_state = title.clone();
         let body_state = body_md.clone();
         let public_state = public_flag.clone();
@@ -116,6 +120,7 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
         let selected_roles_state = selected_roles.clone();
         let selected_building_state = selected_building.clone();
         let selected_apartment_state = selected_apartment.clone();
+
         use_effect_with(props.existing.clone(), move |ex| {
             if let Some(a) = ex {
                 title_state.set(a.title.clone());
@@ -139,7 +144,7 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
                 selected_building_state.set(a.building_id);
                 selected_apartment_state.set(a.apartment_id);
             } else {
-                // reset if leaving edit mode
+                // Reset for new announcement
                 title_state.set(String::new());
                 body_state.set(String::new());
                 public_state.set(true);
@@ -154,12 +159,12 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
         });
     }
 
-    // Load buildings and apartments for selectors
+    // Load buildings
     {
         let buildings_state = buildings.clone();
         use_effect_with((), move |_| {
             wasm_bindgen_futures::spawn_local(async move {
-                let client = api_client(None); // Public endpoint
+                let client = api_client(None);
                 if let Ok(list) = client.get::<Vec<BuildingDto>>("/buildings").await {
                     let mapped = list.into_iter().map(|b| (b.id, b.address)).collect();
                     buildings_state.set(mapped);
@@ -168,6 +173,8 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
             || ()
         });
     }
+
+    // Load apartments when building changes
     {
         let apartments_state = apartments.clone();
         let selected_building_state = selected_building.clone();
@@ -191,6 +198,58 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
         });
     }
 
+    // Form callbacks
+    let on_title_change = {
+        let title = title.clone();
+        Callback::from(move |value: String| title.set(value))
+    };
+
+    let on_body_md_change = {
+        let body_md = body_md.clone();
+        Callback::from(move |value: String| body_md.set(value))
+    };
+
+    let on_public_change = {
+        let public_flag = public_flag.clone();
+        Callback::from(move |value: bool| public_flag.set(value))
+    };
+
+    let on_pinned_change = {
+        let pinned_flag = pinned_flag.clone();
+        Callback::from(move |value: bool| pinned_flag.set(value))
+    };
+
+    let on_comments_change = {
+        let comments_enabled = comments_enabled.clone();
+        Callback::from(move |value: bool| comments_enabled.set(value))
+    };
+
+    let on_publish_at_change = {
+        let publish_at = publish_at.clone();
+        Callback::from(move |value: String| publish_at.set(value))
+    };
+
+    let on_expire_at_change = {
+        let expire_at = expire_at.clone();
+        Callback::from(move |value: String| expire_at.set(value))
+    };
+
+    let on_roles_change = {
+        let selected_roles = selected_roles.clone();
+        Callback::from(move |value: Vec<String>| selected_roles.set(value))
+    };
+
+    let on_building_change = {
+        let selected_building = selected_building.clone();
+        Callback::from(move |value: Option<u64>| selected_building.set(value))
+    };
+
+    let on_apartment_change = {
+        let selected_apartment = selected_apartment.clone();
+        Callback::from(move |value: Option<u64>| selected_apartment.set(value))
+    };
+
+    // Submit handler
     let on_submit = {
         let title = title.clone();
         let body_md = body_md.clone();
@@ -235,7 +294,7 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
             let apartment_val = *selected_apartment;
 
             if let Some(ex) = &existing {
-                // Update existing announcement
+                // Update existing
                 let id = ex.id;
                 let roles_string = if roles_val.is_empty() {
                     None
@@ -251,8 +310,8 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
                     "comments_enabled": comments_val,
                     "publish_at": if publish_at_val.trim().is_empty() { serde_json::Value::Null } else { serde_json::Value::String(datetime_local_to_naive(&publish_at_val)) },
                     "expire_at": if expire_at_val.trim().is_empty() { serde_json::Value::Null } else { serde_json::Value::String(datetime_local_to_naive(&expire_at_val)) },
-                    "building_id": building_val.map(|v| serde_json::Value::from(v)).unwrap_or(serde_json::Value::Null),
-                    "apartment_id": apartment_val.map(|v| serde_json::Value::from(v)).unwrap_or(serde_json::Value::Null),
+                    "building_id": building_val.map(serde_json::Value::from).unwrap_or(serde_json::Value::Null),
+                    "apartment_id": apartment_val.map(serde_json::Value::from).unwrap_or(serde_json::Value::Null),
                 });
                 let saving2 = saving.clone();
                 let error2 = error.clone();
@@ -314,7 +373,8 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
         })
     };
 
-    let publish_now_btn = if let Some(ex) = &props.existing {
+    // Publish now handler
+    let publish_now_id = if let Some(ex) = &props.existing {
         if ex.publish_at.is_none() {
             Some(ex.id)
         } else {
@@ -349,296 +409,38 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
     };
 
     html! {
-        <div class="card mb-4">
-            <div class="card-header">
-                <strong>
-                    { if props.existing.is_some() {
-                        t("button-update")
-                    } else {
-                        t("button-publish")
-                    } }
-                </strong>
-            </div>
-            <div class="card-body">
-                { if let Some(err) = &*error {
-                    html!{<div class="alert alert-danger py-1">{err}</div>}
-                } else {
-                    html!{<></>}
-                } }
-                <form onsubmit={on_submit}>
-                    <div class="mb-2">
-                        <label class="form-label small">{ t("announcement-title-label") }</label>
-                        <input
-                            class="form-control form-control-sm"
-                            value={(*title).clone()}
-                            oninput={{ let s=title.clone(); Callback::from(move |e: InputEvent| {
-                                let i: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                s.set(i.value());
-                            }) }}
-                            placeholder={t("announcement-title-label")}
-                        />
-                    </div>
-                    <div class="mb-3">
-                        <ul class="nav nav-tabs nav-sm">
-                            <li class="nav-item">
-                                <button
-                                    type="button"
-                                    class={classes!("nav-link", if *active_tab=="edit" {"active"} else {""})}
-                                    onclick={{ let ttab=active_tab.clone(); Callback::from(move |_| ttab.set("edit".into())) }}
-                                >
-                                    { t("announcement-edit-tab") }
-                                </button>
-                            </li>
-                            <li class="nav-item">
-                                <button
-                                    type="button"
-                                    class={classes!("nav-link", if *active_tab=="preview" {"active"} else {""})}
-                                    onclick={{ let ttab=active_tab.clone(); Callback::from(move |_| ttab.set("preview".into())) }}
-                                >
-                                    { t("announcement-preview-tab") }
-                                </button>
-                            </li>
-                        </ul>
-                    </div>
-                    <div class="row">
-                        { if *active_tab == "edit" { html!{
-                            <div class="col-12">
-                                <label class="form-label small">{ t("announcement-body-label") }</label>
-                                <textarea
-                                    class="form-control"
-                                    rows=12
-                                    value={(*body_md).clone()}
-                                    oninput={{ let s=body_md.clone(); Callback::from(move |e: InputEvent| {
-                                        let i: web_sys::HtmlTextAreaElement = e.target_unchecked_into();
-                                        s.set(i.value());
-                                    }) }}
-                                />
-                                <div class="form-text small text-muted">
-                                    { t("announcement-edit-tab") }{" -> "}{ t("announcement-preview-tab") }
-                                </div>
-                            </div>
-                        }} else { html!{
-                            <div class="col-12">
-                                <label class="form-label small d-flex justify-content-between align-items-center">
-                                    { t("announcement-preview-tab") }
-                                    <span class="badge bg-secondary">{ t("preview-rendered") }</span>
-                                </label>
-                                <div class="alert alert-secondary mb-0 p-0 border">
-                                    <div class="preview-body p-3" style="min-height:240px">
-                                        { Html::from_html_unchecked((*preview_html_computed).clone().into()) }
-                                    </div>
-                                </div>
-                            </div>
-                        }} }
-                    </div>
-                    <div class="row mt-2 g-2">
-                        <div class="col-md-4">
-                            <label class="form-label small">{ t("announcement-roles-label") }{" (visibility)"}</label>
-                            { for ["Admin", "Manager", "Homeowner", "Renter", "HOA Member"].into_iter().map(|role| {
-                                let sel = selected_roles.clone();
-                                let r = role.to_string();
-                                let checked = selected_roles.iter().any(|x| x == role);
-                                let label_key = match role {
-                                    "Admin" => "role-admin",
-                                    "Manager" => "role-manager",
-                                    "Homeowner" => "role-homeowner",
-                                    "Renter" => "role-renter",
-                                    "HOA Member" => "role-hoa-member",
-                                    _ => "role-unknown",
-                                };
-                                html!{
-                                    <div class="form-check form-check-sm">
-                                        <input
-                                            class="form-check-input"
-                                            type="checkbox"
-                                            id={format!("role_{}", role.replace(' ', "_"))}
-                                            checked={checked}
-                                            onchange={Callback::from(move |e: Event| {
-                                                let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                                let mut list = (*sel).clone();
-                                                if input.checked() {
-                                                    if !list.iter().any(|v| v==&r) {
-                                                        list.push(r.clone());
-                                                    }
-                                                } else {
-                                                    list.retain(|v| v!=&r);
-                                                }
-                                                sel.set(list);
-                                            })}
-                                        />
-                                        <label class="form-check-label small" for={format!("role_{}", role.replace(' ', "_"))}>
-                                            { t(label_key) }
-                                        </label>
-                                    </div>
-                                }
-                            }) }
-                            <div class="form-text small text-muted">{ t("announcement-roles-help") }</div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small">{ t("announcement-publish-at-label") }</label>
-                            <input
-                                type="datetime-local"
-                                class="form-control form-control-sm"
-                                value={(*publish_at).clone()}
-                                oninput={{ let s=publish_at.clone(); Callback::from(move |e: InputEvent| {
-                                    let i: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                    s.set(i.value());
-                                }) }}
-                            />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small">{ t("announcement-expire-at-label") }</label>
-                            <input
-                                type="datetime-local"
-                                class="form-control form-control-sm"
-                                value={(*expire_at).clone()}
-                                oninput={{ let s=expire_at.clone(); Callback::from(move |e: InputEvent| {
-                                    let i: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                    s.set(i.value());
-                                }) }}
-                            />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small">{ t("announcement-building-label") }{" (optional)"}</label>
-                            <select
-                                class="form-select form-select-sm"
-                                onchange={{ let sb=selected_building.clone(); let sa=selected_apartment.clone(); Callback::from(move |e: Event| {
-                                    let sel: web_sys::HtmlSelectElement = e.target_unchecked_into();
-                                    let val = sel.value();
-                                    if val.is_empty() {
-                                        sb.set(None);
-                                        sa.set(None);
-                                    } else {
-                                        if let Ok(parsed)=val.parse::<u64>() {
-                                            sb.set(Some(parsed));
-                                            sa.set(None);
-                                        }
-                                    }
-                                }) }}
-                            >
-                                <option value="" selected={selected_building.is_none()}>{ t("none-option") }</option>
-                                { for buildings.iter().map(|(id,addr)| html!{
-                                    <option value={id.to_string()} selected={selected_building.map(|v| v==*id).unwrap_or(false)}>
-                                        {addr}
-                                    </option>
-                                }) }
-                            </select>
-                            <label class="form-label small mt-2">{ t("announcement-apartment-label") }</label>
-                            <select
-                                class="form-select form-select-sm"
-                                disabled={selected_building.is_none() || apartments.is_empty()}
-                                onchange={{ let sa=selected_apartment.clone(); Callback::from(move |e: Event| {
-                                    let sel: web_sys::HtmlSelectElement = e.target_unchecked_into();
-                                    let val = sel.value();
-                                    if val.is_empty() {
-                                        sa.set(None);
-                                    } else {
-                                        if let Ok(parsed)=val.parse::<u64>() {
-                                            sa.set(Some(parsed));
-                                        }
-                                    }
-                                }) }}
-                            >
-                                <option value="" selected={selected_apartment.is_none()}>{ t("none-option") }</option>
-                                { for apartments.iter().filter(|(_,bid,_)| Some(*bid)==*selected_building).map(|(id,_bid,num)| html!{
-                                    <option value={id.to_string()} selected={selected_apartment.map(|v| v==*id).unwrap_or(false)}>
-                                        {num}
-                                    </option>
-                                }) }
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label small">{ t("announcement-options-heading") }</label>
-                            <div class="form-check">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    checked={*public_flag}
-                                    onchange={{ let s=public_flag.clone(); Callback::from(move |e: Event| {
-                                        let i: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                        s.set(i.checked());
-                                    }) }}
-                                    id="annPublic"
-                                />
-                                <label class="form-check-label small" for="annPublic">
-                                    { t("announcement-public-label") }
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    checked={*pinned_flag}
-                                    onchange={{ let s=pinned_flag.clone(); Callback::from(move |e: Event| {
-                                        let i: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                        s.set(i.checked());
-                                    }) }}
-                                    id="annPinned"
-                                />
-                                <label class="form-check-label small" for="annPinned">
-                                    { t("announcement-pin-label") }
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input
-                                    class="form-check-input"
-                                    type="checkbox"
-                                    checked={*comments_enabled}
-                                    onchange={{ let s=comments_enabled.clone(); Callback::from(move |e: Event| {
-                                        let i: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                        s.set(i.checked());
-                                    }) }}
-                                    id="annComments"
-                                />
-                                <label class="form-check-label small" for="annComments">
-                                    { t("announcement-comments-enabled-label") }
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mt-3 d-flex gap-2">
-                        <button class="btn btn-sm btn-primary" type="submit" disabled={*saving}>
-                            { if *saving {
-                                html!{<Spinner small={true} color={"light"} />}
-                            } else {
-                                if props.existing.is_some() {
-                                    html!{ t("button-save") }
-                                } else {
-                                    html!{ t("button-publish") }
-                                }
-                            } }
-                        </button>
-                        { if let Some(id) = publish_now_btn {
-                            html!{
-                                <button
-                                    type="button"
-                                    class="btn btn-sm btn-success"
-                                    disabled={*saving}
-                                    onclick={Callback::from(move |_| on_publish_now.emit(id))}
-                                >
-                                    { t("announcement-publish-now") }
-                                </button>
-                            }
-                        } else {
-                            html!{}
-                        } }
-                        { if props.existing.is_some() {
-                            html!{
-                                <button
-                                    type="button"
-                                    class="btn btn-sm btn-outline-secondary"
-                                    onclick={props.on_cancel.reform(|_|())}
-                                >
-                                    { t("button-cancel") }
-                                </button>
-                            }
-                        } else {
-                            html!{}
-                        } }
-                    </div>
-                </form>
-            </div>
-        </div>
+        <AnnouncementEditorForm
+            title={(*title).clone()}
+            body_md={(*body_md).clone()}
+            public_flag={*public_flag}
+            pinned_flag={*pinned_flag}
+            comments_enabled={*comments_enabled}
+            publish_at={(*publish_at).clone()}
+            expire_at={(*expire_at).clone()}
+            selected_roles={(*selected_roles).clone()}
+            selected_building={*selected_building}
+            selected_apartment={*selected_apartment}
+            buildings={(*buildings).clone()}
+            apartments={(*apartments).clone()}
+            preview_html={(*preview_html).clone()}
+            saving={*saving}
+            error={(*error).clone()}
+            is_editing={props.existing.is_some()}
+            publish_now_id={publish_now_id}
+            on_title_change={on_title_change}
+            on_body_md_change={on_body_md_change}
+            on_public_change={on_public_change}
+            on_pinned_change={on_pinned_change}
+            on_comments_change={on_comments_change}
+            on_publish_at_change={on_publish_at_change}
+            on_expire_at_change={on_expire_at_change}
+            on_roles_change={on_roles_change}
+            on_building_change={on_building_change}
+            on_apartment_change={on_apartment_change}
+            on_submit={on_submit}
+            on_publish_now={on_publish_now}
+            on_cancel={props.on_cancel.clone()}
+        />
     }
 }
 

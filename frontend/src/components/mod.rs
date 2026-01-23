@@ -1,6 +1,7 @@
 pub mod admin_layout;
 pub mod admin_sidebar;
-pub mod announcement_editor; // editor component
+pub mod announcement_editor; // editor component (orchestrator)
+pub mod announcement_editor_form; // editor form component (presentation layer)
 pub mod announcement_list; // new announcements list component
 pub mod announcements; // management composite component
 pub mod app_layout;
