@@ -43,6 +43,8 @@ cd frontend && trunk serve
 
 ### Testing and Quality Checks
 
+**IMPORTANT:** When testing if code compiles (without running the app), use `trunk build` for frontend or `cargo build` for backend. Do NOT use `./scripts/dev.sh` for build testing - it runs servers in background and is meant for development/manual testing only.
+
 ```bash
 # Run all checks: format, clippy, tests, and build
 ./scripts/test.sh
@@ -53,10 +55,10 @@ cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 
-# Frontend build check
+# Frontend build check (preferred for testing compilation)
 cd frontend
 rustup target add wasm32-unknown-unknown  # first time only
-trunk build
+trunk build  # Use this to test if frontend compiles, NOT dev.sh
 ```
 
 ## Architecture and Patterns
