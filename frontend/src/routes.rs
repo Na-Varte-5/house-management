@@ -42,4 +42,6 @@ pub enum Route {
     MeterNew,
     #[at("/admin/meters/calibration")]
     MeterCalibration,
+    #[at("/my-properties")]
+    MyProperties,
 }

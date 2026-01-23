@@ -211,7 +211,8 @@ pub async fn create_proposal(
 
         // If user has restricted access, verify they can access this building
         if let Some(buildings) = accessible_buildings
-            && !buildings.contains(&building_id) {
+            && !buildings.contains(&building_id)
+        {
             return Err(AppError::Forbidden);
         }
     }

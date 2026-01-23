@@ -7,4 +7,5 @@ pub mod login;
 pub mod maintenance;
 pub mod manage;
 pub mod meters;
+pub mod my_properties;
 pub mod voting;

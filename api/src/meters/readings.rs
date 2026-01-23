@@ -69,12 +69,14 @@ pub async fn list_readings(
 
     // Date filtering
     if let Some(start_date_str) = query.get("start_date")
-        && let Ok(start_date) = chrono::NaiveDate::parse_from_str(start_date_str, "%Y-%m-%d") {
+        && let Ok(start_date) = chrono::NaiveDate::parse_from_str(start_date_str, "%Y-%m-%d")
+    {
         let start_datetime = start_date.and_hms_opt(0, 0, 0).unwrap();
         query_builder = query_builder.filter(mr::reading_timestamp.ge(start_datetime));
     }
     if let Some(end_date_str) = query.get("end_date")
-        && let Ok(end_date) = chrono::NaiveDate::parse_from_str(end_date_str, "%Y-%m-%d") {
+        && let Ok(end_date) = chrono::NaiveDate::parse_from_str(end_date_str, "%Y-%m-%d")
+    {
         let end_datetime = end_date.and_hms_opt(23, 59, 59).unwrap();
         query_builder = query_builder.filter(mr::reading_timestamp.le(end_datetime));
     }
@@ -212,12 +214,14 @@ pub async fn export_readings_csv(
 
     // Date filtering
     if let Some(start_date_str) = query.get("start_date")
-        && let Ok(start_date) = chrono::NaiveDate::parse_from_str(start_date_str, "%Y-%m-%d") {
+        && let Ok(start_date) = chrono::NaiveDate::parse_from_str(start_date_str, "%Y-%m-%d")
+    {
         let start_datetime = start_date.and_hms_opt(0, 0, 0).unwrap();
         query_builder = query_builder.filter(mr::reading_timestamp.ge(start_datetime));
     }
     if let Some(end_date_str) = query.get("end_date")
-        && let Ok(end_date) = chrono::NaiveDate::parse_from_str(end_date_str, "%Y-%m-%d") {
+        && let Ok(end_date) = chrono::NaiveDate::parse_from_str(end_date_str, "%Y-%m-%d")
+    {
         let end_datetime = end_date.and_hms_opt(23, 59, 59).unwrap();
         query_builder = query_builder.filter(mr::reading_timestamp.le(end_datetime));
     }

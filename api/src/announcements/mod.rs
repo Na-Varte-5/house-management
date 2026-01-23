@@ -862,7 +862,10 @@ pub async fn create_comment(
     if ann.is_deleted {
         return Err(AppError::NotFound);
     }
-    if !ann.public && !auth.has_any_role(&["Admin", "Manager"]) && let Some(csv) = &ann.roles_csv {
+    if !ann.public
+        && !auth.has_any_role(&["Admin", "Manager"])
+        && let Some(csv) = &ann.roles_csv
+    {
         let needed: Vec<&str> = csv
             .split(',')
             .map(|s| s.trim())

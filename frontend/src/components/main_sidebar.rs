@@ -62,6 +62,12 @@ pub fn main_sidebar(props: &MainSidebarProps) -> Html {
                             {"Voting"}
                         </Link<Route>>
                     </li>
+                    <li class="nav-item">
+                        <Link<Route> to={Route::MyProperties} classes={classes!("nav-link", is_active(&Route::MyProperties))}>
+                            <i class="bi bi-house me-2"></i>
+                            {"My Properties"}
+                        </Link<Route>>
+                    </li>
                 </ul>
 
                 // Admin/Manager section
