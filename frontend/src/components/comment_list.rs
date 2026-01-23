@@ -1,10 +1,9 @@
 use crate::components::spinner::Spinner;
 use crate::contexts::AuthContext;
 use crate::i18n::t;
-use crate::utils::api::api_url;
-use crate::utils::auth::get_token; // DEPRECATED: will be replaced with api_client in future migration
+use crate::services::api_client;
 use crate::utils::datetime::format_dt_local;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use yew::prelude::*;
 
 #[derive(Deserialize, Clone, PartialEq, Debug)]
@@ -17,6 +16,11 @@ pub struct CommentDto {
     pub body_md: String,
     pub created_at: Option<String>,
     pub is_deleted: bool,
+}
+
+#[derive(Serialize)]
+struct PostCommentRequest {
+    body_md: String,
 }
 
 #[derive(Properties, PartialEq)]
@@ -40,63 +44,37 @@ pub fn comment_list(props: &CommentListProps) -> Html {
     let show_deleted = use_state(|| false);
     let can_post = auth.is_authenticated();
     let is_manager = auth.is_admin_or_manager();
+    let token = auth.token().map(|t| t.to_string());
 
-    // Load comments when announcement_id changes
+    // Load comments when announcement_id or show_deleted changes
     {
         let loading = loading.clone();
         let comments_state = comments.clone();
         let error_state = error.clone();
         let ann_id_state = props.announcement_id;
-        let show_deleted_val = *show_deleted; // capture bool for effect
+        let show_deleted_val = *show_deleted;
+        let token = token.clone();
+
         use_effect_with((props.announcement_id, *show_deleted), move |_| {
             loading.set(true);
+            error_state.set(None);
+
             wasm_bindgen_futures::spawn_local(async move {
-                let mut url = api_url(&format!("/api/v1/announcements/{}/comments", ann_id_state));
-                if show_deleted_val {
-                    url.push_str("?include_deleted=true");
+                let client = api_client(token.as_deref());
+                let endpoint = if show_deleted_val {
+                    format!(
+                        "/announcements/{}/comments?include_deleted=true",
+                        ann_id_state
+                    )
+                } else {
+                    format!("/announcements/{}/comments", ann_id_state)
+                };
+
+                match client.get::<Vec<CommentDto>>(&endpoint).await {
+                    Ok(list) => comments_state.set(list),
+                    Err(e) => error_state.set(Some(format!("{}: {}", t("error-load-failed"), e))),
                 }
-                let mut req = reqwasm::http::Request::get(&url);
-                if let Some(tok) = get_token() {
-                    req = req.header("Authorization", &format!("Bearer {}", tok));
-                }
-                match req.send().await {
-                    Ok(resp) => {
-                        if resp.ok() {
-                            if let Ok(list) = resp.json::<Vec<serde_json::Value>>().await {
-                                let mapped = list
-                                    .into_iter()
-                                    .filter_map(|v| {
-                                        Some(CommentDto {
-                                            id: v.get("id")?.as_u64()?,
-                                            announcement_id: v.get("announcement_id")?.as_u64()?,
-                                            user_id: v.get("user_id")?.as_u64()?,
-                                            user_name: v.get("user_name")?.as_str()?.to_string(),
-                                            body_html: v.get("body_html")?.as_str()?.to_string(),
-                                            body_md: v.get("body_md")?.as_str()?.to_string(),
-                                            created_at: v
-                                                .get("created_at")
-                                                .and_then(|x| x.as_str())
-                                                .map(|s| s.to_string()),
-                                            is_deleted: v.get("is_deleted")?.as_bool()?,
-                                        })
-                                    })
-                                    .collect();
-                                comments_state.set(mapped);
-                            }
-                        } else {
-                            error_state.set(Some(format!(
-                                "{}: {}",
-                                t("error-load-failed"),
-                                resp.status()
-                            )));
-                        }
-                        loading.set(false);
-                    }
-                    Err(_) => {
-                        error_state.set(Some(t("error-network")));
-                        loading.set(false);
-                    }
-                }
+                loading.set(false);
             });
             || ()
         });
@@ -109,244 +87,169 @@ pub fn comment_list(props: &CommentListProps) -> Html {
         let posting_state = posting.clone();
         let error_state = error.clone();
         let ann_id = props.announcement_id;
+        let token = token.clone();
+        let show_deleted_val = *show_deleted;
+
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
+
             if new_md.trim().is_empty() {
                 return;
             }
+
             posting_state.set(true);
+            error_state.set(None);
+
             let body_val = (*new_md).clone();
             let new_md2 = new_md.clone();
             let comments_state2 = comments_state.clone();
             let posting_state2 = posting_state.clone();
             let error_state2 = error_state.clone();
+            let token2 = token.clone();
+
             wasm_bindgen_futures::spawn_local(async move {
-                let payload = serde_json::json!({"body_md": body_val});
-                let mut req = reqwasm::http::Request::post(&api_url(&format!(
-                    "/api/v1/announcements/{}/comments",
-                    ann_id
-                )))
-                .header("Content-Type", "application/json");
-                if let Some(tok) = get_token() {
-                    req = req.header("Authorization", &format!("Bearer {}", tok));
-                }
-                let send_res = req.body(payload.to_string()).send().await;
-                if let Ok(resp) = send_res {
-                    if resp.ok() {
-                        let mut req2 = reqwasm::http::Request::get(&api_url(&format!(
-                            "/api/v1/announcements/{}/comments",
-                            ann_id
-                        )));
-                        if let Some(tok) = get_token() {
-                            req2 = req2.header("Authorization", &format!("Bearer {}", tok));
-                        }
-                        if let Ok(r2) = req2.send().await {
-                            if r2.ok() {
-                                if let Ok(list) = r2.json::<Vec<serde_json::Value>>().await {
-                                    let mapped = list
-                                        .into_iter()
-                                        .filter_map(|v| {
-                                            Some(CommentDto {
-                                                id: v.get("id")?.as_u64()?,
-                                                announcement_id: v
-                                                    .get("announcement_id")?
-                                                    .as_u64()?,
-                                                user_id: v.get("user_id")?.as_u64()?,
-                                                user_name: v
-                                                    .get("user_name")?
-                                                    .as_str()?
-                                                    .to_string(),
-                                                body_html: v
-                                                    .get("body_html")?
-                                                    .as_str()?
-                                                    .to_string(),
-                                                body_md: v.get("body_md")?.as_str()?.to_string(),
-                                                created_at: v
-                                                    .get("created_at")
-                                                    .and_then(|x| x.as_str())
-                                                    .map(|s| s.to_string()),
-                                                is_deleted: v.get("is_deleted")?.as_bool()?,
-                                            })
-                                        })
-                                        .collect();
-                                    comments_state2.set(mapped);
-                                }
-                            }
+                let client = api_client(token2.as_deref());
+                let payload = PostCommentRequest { body_md: body_val };
+                let endpoint = format!("/announcements/{}/comments", ann_id);
+
+                match client
+                    .post::<_, serde_json::Value>(&endpoint, &payload)
+                    .await
+                {
+                    Ok(_) => {
+                        // Reload comments after successful post
+                        let reload_endpoint = if show_deleted_val {
+                            format!("/announcements/{}/comments?include_deleted=true", ann_id)
+                        } else {
+                            format!("/announcements/{}/comments", ann_id)
+                        };
+
+                        if let Ok(list) = client.get::<Vec<CommentDto>>(&reload_endpoint).await {
+                            comments_state2.set(list);
                         }
                         new_md2.set(String::new());
-                    } else {
-                        error_state2.set(Some(t("comment-post-failed")));
                     }
-                } else {
-                    error_state2.set(Some(t("error-network")));
+                    Err(_) => error_state2.set(Some(t("comment-post-failed"))),
                 }
                 posting_state2.set(false);
             });
         })
     };
 
+    // Delete comment
     let delete_comment = {
         let comments_state = comments.clone();
         let error_state = error.clone();
         let ann_id_for_delete = props.announcement_id;
+        let token = token.clone();
+        let show_deleted_val = *show_deleted;
+
         Callback::from(move |comment_id: u64| {
             let comments_state2 = comments_state.clone();
             let error_state2 = error_state.clone();
+            let token2 = token.clone();
+
             wasm_bindgen_futures::spawn_local(async move {
-                let mut req = reqwasm::http::Request::delete(&api_url(&format!(
-                    "/api/v1/announcements/comments/{}",
-                    comment_id
-                )));
-                if let Some(tok) = get_token() {
-                    req = req.header("Authorization", &format!("Bearer {}", tok));
-                }
-                if let Ok(resp) = req.send().await {
-                    if !resp.ok() {
+                let client = api_client(token2.as_deref());
+                let delete_endpoint = format!("/announcements/comments/{}", comment_id);
+
+                match client.delete_no_response(&delete_endpoint).await {
+                    Ok(_) => {}
+                    Err(_) => {
                         error_state2.set(Some(t("comment-delete-failed")));
+                        return;
                     }
                 }
-                // refresh
-                let mut req2 = reqwasm::http::Request::get(&api_url(&format!(
-                    "/api/v1/announcements/{}/comments",
-                    ann_id_for_delete
-                )));
-                if let Some(tok) = get_token() {
-                    req2 = req2.header("Authorization", &format!("Bearer {}", tok));
-                }
-                if let Ok(r2) = req2.send().await {
-                    if r2.ok() {
-                        if let Ok(list) = r2.json::<Vec<serde_json::Value>>().await {
-                            let mapped = list
-                                .into_iter()
-                                .filter_map(|v| {
-                                    Some(CommentDto {
-                                        id: v.get("id")?.as_u64()?,
-                                        announcement_id: v.get("announcement_id")?.as_u64()?,
-                                        user_id: v.get("user_id")?.as_u64()?,
-                                        user_name: v.get("user_name")?.as_str()?.to_string(),
-                                        body_html: v.get("body_html")?.as_str()?.to_string(),
-                                        body_md: v.get("body_md")?.as_str()?.to_string(),
-                                        created_at: v
-                                            .get("created_at")
-                                            .and_then(|x| x.as_str())
-                                            .map(|s| s.to_string()),
-                                        is_deleted: v.get("is_deleted")?.as_bool()?,
-                                    })
-                                })
-                                .collect();
-                            comments_state2.set(mapped);
-                        }
-                    }
+
+                // Reload comments
+                let reload_endpoint = if show_deleted_val {
+                    format!(
+                        "/announcements/{}/comments?include_deleted=true",
+                        ann_id_for_delete
+                    )
+                } else {
+                    format!("/announcements/{}/comments", ann_id_for_delete)
+                };
+
+                if let Ok(list) = client.get::<Vec<CommentDto>>(&reload_endpoint).await {
+                    comments_state2.set(list);
                 }
             });
         })
     };
+
+    // Restore comment
     let restore_comment = {
         let comments_state = comments.clone();
         let error_state = error.clone();
         let ann_id_for_restore = props.announcement_id;
+        let token = token.clone();
+
         Callback::from(move |comment_id: u64| {
             let comments_state2 = comments_state.clone();
             let error_state2 = error_state.clone();
+            let token2 = token.clone();
+
             wasm_bindgen_futures::spawn_local(async move {
-                let mut req = reqwasm::http::Request::post(&api_url(&format!(
-                    "/api/v1/announcements/comments/{}/restore",
-                    comment_id
-                )));
-                if let Some(tok) = get_token() {
-                    req = req.header("Authorization", &format!("Bearer {}", tok));
-                }
-                if let Ok(resp) = req.send().await {
-                    if !resp.ok() {
+                let client = api_client(token2.as_deref());
+                let restore_endpoint = format!("/announcements/comments/{}/restore", comment_id);
+
+                match client
+                    .post_empty::<serde_json::Value>(&restore_endpoint)
+                    .await
+                {
+                    Ok(_) => {}
+                    Err(_) => {
                         error_state2.set(Some(t("comment-restore-failed")));
+                        return;
                     }
                 }
-                let mut req2 = reqwasm::http::Request::get(&api_url(&format!(
-                    "/api/v1/announcements/{}/comments?include_deleted=true",
+
+                // Reload comments with deleted items visible
+                let reload_endpoint = format!(
+                    "/announcements/{}/comments?include_deleted=true",
                     ann_id_for_restore
-                )));
-                if let Some(tok) = get_token() {
-                    req2 = req2.header("Authorization", &format!("Bearer {}", tok));
-                }
-                if let Ok(r2) = req2.send().await {
-                    if r2.ok() {
-                        if let Ok(list) = r2.json::<Vec<serde_json::Value>>().await {
-                            let mapped = list
-                                .into_iter()
-                                .filter_map(|v| {
-                                    Some(CommentDto {
-                                        id: v.get("id")?.as_u64()?,
-                                        announcement_id: v.get("announcement_id")?.as_u64()?,
-                                        user_id: v.get("user_id")?.as_u64()?,
-                                        user_name: v.get("user_name")?.as_str()?.to_string(),
-                                        body_html: v.get("body_html")?.as_str()?.to_string(),
-                                        body_md: v.get("body_md")?.as_str()?.to_string(),
-                                        created_at: v
-                                            .get("created_at")
-                                            .and_then(|x| x.as_str())
-                                            .map(|s| s.to_string()),
-                                        is_deleted: v.get("is_deleted")?.as_bool()?,
-                                    })
-                                })
-                                .collect();
-                            comments_state2.set(mapped);
-                        }
-                    }
+                );
+
+                if let Ok(list) = client.get::<Vec<CommentDto>>(&reload_endpoint).await {
+                    comments_state2.set(list);
                 }
             });
         })
     };
+
+    // Purge comment
     let purge_comment = {
         let comments_state = comments.clone();
         let error_state = error.clone();
-        let ann_id_for_restore = props.announcement_id;
+        let ann_id_for_purge = props.announcement_id;
+        let token = token.clone();
+
         Callback::from(move |comment_id: u64| {
             let comments_state2 = comments_state.clone();
             let error_state2 = error_state.clone();
+            let token2 = token.clone();
+
             wasm_bindgen_futures::spawn_local(async move {
-                let mut req = reqwasm::http::Request::delete(&api_url(&format!(
-                    "/api/v1/announcements/comments/{}/purge",
-                    comment_id
-                )));
-                if let Some(tok) = get_token() {
-                    req = req.header("Authorization", &format!("Bearer {}", tok));
-                }
-                if let Ok(resp) = req.send().await {
-                    if !resp.ok() {
+                let client = api_client(token2.as_deref());
+                let purge_endpoint = format!("/announcements/comments/{}/purge", comment_id);
+
+                match client.delete_no_response(&purge_endpoint).await {
+                    Ok(_) => {}
+                    Err(_) => {
                         error_state2.set(Some(t("comment-purge-failed")));
+                        return;
                     }
                 }
-                let mut req2 = reqwasm::http::Request::get(&api_url(&format!(
-                    "/api/v1/announcements/{}/comments?include_deleted=true",
-                    ann_id_for_restore
-                )));
-                if let Some(tok) = get_token() {
-                    req2 = req2.header("Authorization", &format!("Bearer {}", tok));
-                }
-                if let Ok(r2) = req2.send().await {
-                    if r2.ok() {
-                        if let Ok(list) = r2.json::<Vec<serde_json::Value>>().await {
-                            let mapped = list
-                                .into_iter()
-                                .filter_map(|v| {
-                                    Some(CommentDto {
-                                        id: v.get("id")?.as_u64()?,
-                                        announcement_id: v.get("announcement_id")?.as_u64()?,
-                                        user_id: v.get("user_id")?.as_u64()?,
-                                        user_name: v.get("user_name")?.as_str()?.to_string(),
-                                        body_html: v.get("body_html")?.as_str()?.to_string(),
-                                        body_md: v.get("body_md")?.as_str()?.to_string(),
-                                        created_at: v
-                                            .get("created_at")
-                                            .and_then(|x| x.as_str())
-                                            .map(|s| s.to_string()),
-                                        is_deleted: v.get("is_deleted")?.as_bool()?,
-                                    })
-                                })
-                                .collect();
-                            comments_state2.set(mapped);
-                        }
-                    }
+
+                // Reload comments with deleted items visible
+                let reload_endpoint = format!(
+                    "/announcements/{}/comments?include_deleted=true",
+                    ann_id_for_purge
+                );
+
+                if let Ok(list) = client.get::<Vec<CommentDto>>(&reload_endpoint).await {
+                    comments_state2.set(list);
                 }
             });
         })
@@ -362,14 +265,51 @@ pub fn comment_list(props: &CommentListProps) -> Html {
             let res_cb = restore_comment.clone();
             let pur_cb = purge_comment.clone();
             html! {<div class="mb-2">
-                <div class={classes!("p-2","border","rounded", if c.is_deleted {"bg-light"} else {"bg-white"})}>{ Html::from_html_unchecked(c.body_html.clone().into()) }
+                <div class={classes!("p-2","border","rounded", if c.is_deleted {"bg-light"} else {"bg-white"})}>
+                    { Html::from_html_unchecked(c.body_html.clone().into()) }
                     { if c.is_deleted { html!{<span class="badge bg-danger ms-2">{ t("comment-deleted-badge") }</span>} } else { html!{} } }
                 </div>
                 <div class="d-flex justify-content-between small text-muted">
-                    <span>{c.created_at.clone().map(|s| format_dt_local(&s)).unwrap_or_default()} {" • "}{c.user_name.clone()}</span>
-                    { if is_manager { html!{<div class="btn-group btn-group-sm">
-                        { if !c.is_deleted { html!{<button class="btn btn-outline-danger" onclick={Callback::from(move |_| del_cb.emit(c.id))}>{ t("comment-delete-button") }</button>} } else { html!{<><button class="btn btn-outline-success" onclick={Callback::from(move |_| res_cb.emit(c.id))}>{ t("comment-restore-button") }</button><button class="btn btn-outline-danger" onclick={Callback::from(move |_| pur_cb.emit(c.id))}>{ t("comment-purge-button") }</button></>} }
-                    } </div>} } else { html!{<></>} } }
+                    <span>
+                        {c.created_at.clone().map(|s| format_dt_local(&s)).unwrap_or_default()}
+                        {" • "}
+                        {c.user_name.clone()}
+                    </span>
+                    { if is_manager {
+                        html!{
+                            <div class="btn-group btn-group-sm">
+                                { if !c.is_deleted {
+                                    html!{
+                                        <button
+                                            class="btn btn-outline-danger"
+                                            onclick={Callback::from(move |_| del_cb.emit(c.id))}
+                                        >
+                                            { t("comment-delete-button") }
+                                        </button>
+                                    }
+                                } else {
+                                    html!{
+                                        <>
+                                            <button
+                                                class="btn btn-outline-success"
+                                                onclick={Callback::from(move |_| res_cb.emit(c.id))}
+                                            >
+                                                { t("comment-restore-button") }
+                                            </button>
+                                            <button
+                                                class="btn btn-outline-danger"
+                                                onclick={Callback::from(move |_| pur_cb.emit(c.id))}
+                                            >
+                                                { t("comment-purge-button") }
+                                            </button>
+                                        </>
+                                    }
+                                } }
+                            </div>
+                        }
+                    } else {
+                        html!{<></>}
+                    } }
                 </div>
             </div>}
         }).collect();
@@ -377,15 +317,68 @@ pub fn comment_list(props: &CommentListProps) -> Html {
     };
 
     html! {
-    <div class="comment-section mt-3">
-        <h6 class="border-bottom pb-1">{ t("comments-heading") }</h6>
-        { if let Some(err) = &*error { html!{<div class="alert alert-danger py-1">{err}</div>} } else { html!{<></>} } }
-        { if is_manager { html!{<div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="showDeletedComments" checked={*show_deleted} onchange={{ let sd=show_deleted.clone(); Callback::from(move |e: Event| { let i: web_sys::HtmlInputElement = e.target_unchecked_into(); sd.set(i.checked()); }) }} /><label class="form-check-label small" for="showDeletedComments">{ t("comment-show-deleted-toggle") }</label></div>} } else { html!{} } }
-        { comments_view }
-        { if can_post { html!{
-            <form class="mt-2" onsubmit={on_post}>
-                <textarea class="form-control form-control-sm" rows=3 placeholder={ t("comment-add-placeholder") } value={(*new_md).clone()} oninput={{ let s=new_md.clone(); Callback::from(move |e: InputEvent| { let i: web_sys::HtmlTextAreaElement = e.target_unchecked_into(); s.set(i.value()); }) }}></textarea>
-                <div class="mt-1"><button class="btn btn-sm btn-secondary" disabled={*posting} type="submit">{ if *posting { html!{<Spinner small={true} color={"light"} /> } } else { html!{ t("comment-post-button") } } }</button></div>
-            </form>
-        } } else { html!{<div class="text-muted small mt-2">{ t("comments-login-to-comment") }</div>} }  } </div> }
+        <div class="comment-section mt-3">
+            <h6 class="border-bottom pb-1">{ t("comments-heading") }</h6>
+
+            { if let Some(err) = &*error {
+                html!{<div class="alert alert-danger py-1">{err}</div>}
+            } else {
+                html!{<></>}
+            } }
+
+            { if is_manager {
+                let sd=show_deleted.clone();
+                html!{
+                    <div class="form-check form-switch mb-2">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            id="showDeletedComments"
+                            checked={*show_deleted}
+                            onchange={Callback::from(move |e: Event| {
+                                let i: web_sys::HtmlInputElement = e.target_unchecked_into();
+                                sd.set(i.checked());
+                            })}
+                        />
+                        <label class="form-check-label small" for="showDeletedComments">
+                            { t("comment-show-deleted-toggle") }
+                        </label>
+                    </div>
+                }
+            } else {
+                html!{}
+            } }
+
+            { comments_view }
+
+            { if can_post {
+                let s=new_md.clone();
+                html!{
+                    <form class="mt-2" onsubmit={on_post}>
+                        <textarea
+                            class="form-control form-control-sm"
+                            rows=3
+                            placeholder={ t("comment-add-placeholder") }
+                            value={(*new_md).clone()}
+                            oninput={Callback::from(move |e: InputEvent| {
+                                let i: web_sys::HtmlTextAreaElement = e.target_unchecked_into();
+                                s.set(i.value());
+                            })}
+                        />
+                        <div class="mt-1">
+                            <button class="btn btn-sm btn-secondary" disabled={*posting} type="submit">
+                                { if *posting {
+                                    html!{<Spinner small={true} color={"light"} />}
+                                } else {
+                                    html!{ t("comment-post-button") }
+                                } }
+                            </button>
+                        </div>
+                    </form>
+                }
+            } else {
+                html!{<div class="text-muted small mt-2">{ t("comments-login-to-comment") }</div>}
+            } }
+        </div>
+    }
 }

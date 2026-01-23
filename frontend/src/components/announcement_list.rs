@@ -1,6 +1,6 @@
 use crate::components::spinner::Spinner;
 use crate::i18n::t;
-use crate::utils::api::api_url;
+use crate::services::api_client;
 use crate::utils::datetime::format_dt_local;
 use serde::Deserialize;
 use yew::prelude::*;
@@ -34,37 +34,36 @@ pub fn announcement_list() -> Html {
     {
         let announcements = announcements.clone();
         let loading = loading.clone();
+
         use_effect_with((), move |_| {
             loading.set(true);
+
             wasm_bindgen_futures::spawn_local(async move {
-                match reqwasm::http::Request::get(&api_url("/api/v1/announcements/public"))
-                    .send()
+                let client = api_client(None); // Public endpoint, no auth needed
+                match client
+                    .get::<Vec<AnnouncementDto>>("/announcements/public")
                     .await
                 {
-                    Ok(resp) => {
-                        if resp.ok() {
-                            if let Ok(list) = resp.json::<Vec<AnnouncementDto>>().await {
-                                let mapped: Vec<AnnouncementDto> = list
-                                    .into_iter()
-                                    .map(|mut a| {
-                                        if a.body_html.trim().is_empty() {
-                                            a.body_html = format!(
-                                                "<pre>{}</pre>",
-                                                html_escape::encode_text(&a.body_md)
-                                            );
-                                        }
-                                        a
-                                    })
-                                    .collect();
-                                announcements.set(Some(mapped));
-                            }
-                        }
-                        loading.set(false);
+                    Ok(list) => {
+                        let mapped: Vec<AnnouncementDto> = list
+                            .into_iter()
+                            .map(|mut a| {
+                                if a.body_html.trim().is_empty() {
+                                    a.body_html = format!(
+                                        "<pre>{}</pre>",
+                                        html_escape::encode_text(&a.body_md)
+                                    );
+                                }
+                                a
+                            })
+                            .collect();
+                        announcements.set(Some(mapped));
                     }
                     Err(_) => {
-                        loading.set(false);
+                        // Silent fail for public announcements
                     }
                 }
+                loading.set(false);
             });
             || ()
         });
@@ -90,26 +89,47 @@ pub fn announcement_list() -> Html {
             let status_badges: Html = {
                 let mut badges: Vec<Html> = Vec::new();
                 if a.pinned {
-                    badges.push(html!{<span class="badge bg-warning text-dark me-2">{ t("announcement-status-pinned") }</span>});
+                    badges.push(html! {
+                        <span class="badge bg-warning text-dark me-2">
+                            { t("announcement-status-pinned") }
+                        </span>
+                    });
                 }
                 if let Some(p) = &a.publish_at {
                     if p > &now_str {
-                        badges.push(html!{<span class="badge bg-info text-dark me-2">{ t("announcement-status-scheduled") }</span>});
+                        badges.push(html! {
+                            <span class="badge bg-info text-dark me-2">
+                                { t("announcement-status-scheduled") }
+                            </span>
+                        });
                     }
                 }
                 if let Some(e) = &a.expire_at {
                     if e < &now_str {
-                        badges.push(html!{<span class="badge bg-dark me-2">{ t("announcement-status-expired") }</span>});
+                        badges.push(html! {
+                            <span class="badge bg-dark me-2">
+                                { t("announcement-status-expired") }
+                            </span>
+                        });
                     }
                 }
                 html! {<>{ for badges }</>}
             };
+
             let audience_badges: Html = {
                 let mut badges: Vec<Html> = Vec::new();
                 if a.public {
-                    badges.push(html!{<span class="badge bg-success me-1">{ t("announcement-public-label") }</span>});
+                    badges.push(html! {
+                        <span class="badge bg-success me-1">
+                            { t("announcement-public-label") }
+                        </span>
+                    });
                 } else {
-                    badges.push(html!{<span class="badge bg-secondary me-1">{ t("announcement-private-label") }</span>});
+                    badges.push(html! {
+                        <span class="badge bg-secondary me-1">
+                            { t("announcement-private-label") }
+                        </span>
+                    });
                 }
                 if let Some(csv) = &a.roles_csv {
                     for role in csv.split(',').map(|r| r.trim()).filter(|r| !r.is_empty()) {
@@ -119,10 +139,18 @@ pub fn announcement_list() -> Html {
                     }
                 }
                 if let Some(addr) = &a.building_address {
-                    badges.push(html!{<span class="badge bg-info text-dark me-1">{format!("{} {}", t("announcement-building-prefix"), addr)}</span>});
+                    badges.push(html! {
+                        <span class="badge bg-info text-dark me-1">
+                            {format!("{} {}", t("announcement-building-prefix"), addr)}
+                        </span>
+                    });
                 }
                 if let Some(num) = &a.apartment_number {
-                    badges.push(html!{<span class="badge bg-warning text-dark me-1">{format!("{} {}", t("announcement-apartment-prefix"), num)}</span>});
+                    badges.push(html! {
+                        <span class="badge bg-warning text-dark me-1">
+                            {format!("{} {}", t("announcement-apartment-prefix"), num)}
+                        </span>
+                    });
                 }
                 html! {<div class="mt-1">{ for badges }</div>}
             };
@@ -149,7 +177,9 @@ pub fn announcement_list() -> Html {
                             {status_badges}
                             <h5 class="mb-0 fw-bold">{ &a.title }</h5>
                         </div>
-                        <div class="small text-muted">{format!("{} {}", t("announcement-by-prefix"), a.author_name)}</div>
+                        <div class="small text-muted">
+                            {format!("{} {}", t("announcement-by-prefix"), a.author_name)}
+                        </div>
                         { audience_badges }
                     </div>
                     <div class="card-body">
@@ -157,11 +187,52 @@ pub fn announcement_list() -> Html {
                             { Html::from_html_unchecked(a.body_html.clone().into()) }
                         </div>
                         <div class="mt-2 small text-muted">
-                            { if let Some(p) = a.publish_at.clone() { html!{<span class="me-2">{format!("{} {}", t("announcement-published-prefix"), format_dt_local(&p))}</span>} } else { html!{<span class="me-2">{ t("announcement-published-now") }</span>} } }
-                            { if let Some(e) = a.expire_at.clone() { html!{<span>{format!("{} {}", t("announcement-expires-prefix"), format_dt_local(&e))}</span>} } else { html!{<span>{ t("announcement-no-expiry") }</span>} } }
+                            { if let Some(p) = a.publish_at.clone() {
+                                html!{
+                                    <span class="me-2">
+                                        {format!("{} {}", t("announcement-published-prefix"), format_dt_local(&p))}
+                                    </span>
+                                }
+                            } else {
+                                html!{<span class="me-2">{ t("announcement-published-now") }</span>}
+                            } }
+                            { if let Some(e) = a.expire_at.clone() {
+                                html!{
+                                    <span>
+                                        {format!("{} {}", t("announcement-expires-prefix"), format_dt_local(&e))}
+                                    </span>
+                                }
+                            } else {
+                                html!{<span>{ t("announcement-no-expiry") }</span>}
+                            } }
                         </div>
-                        { if a.comments_enabled { html!{<div class="mt-2"><button class="btn btn-sm btn-outline-primary" onclick={toggle_expanded.clone()}>{ if is_expanded { t("announcement-hide-comments") } else { t("announcement-show-comments") } }</button></div>} } else { html!{} } }
-                        { if is_expanded && a.comments_enabled { html!{<div class="mt-3"><crate::components::comment_list::CommentList announcement_id={a.id} comments_enabled={true} /></div>} } else { html!{} } }
+                        { if a.comments_enabled {
+                            html!{
+                                <div class="mt-2">
+                                    <button class="btn btn-sm btn-outline-primary" onclick={toggle_expanded.clone()}>
+                                        { if is_expanded {
+                                            t("announcement-hide-comments")
+                                        } else {
+                                            t("announcement-show-comments")
+                                        } }
+                                    </button>
+                                </div>
+                            }
+                        } else {
+                            html!{}
+                        } }
+                        { if is_expanded && a.comments_enabled {
+                            html!{
+                                <div class="mt-3">
+                                    <crate::components::comment_list::CommentList
+                                        announcement_id={a.id}
+                                        comments_enabled={true}
+                                    />
+                                </div>
+                            }
+                        } else {
+                            html!{}
+                        } }
                     </div>
                 </div>
             });
