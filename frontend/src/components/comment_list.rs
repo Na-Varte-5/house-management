@@ -1,7 +1,8 @@
 use crate::components::spinner::Spinner;
 use crate::contexts::AuthContext;
 use crate::i18n::t;
-use crate::services::api_client;
+use crate::utils::api::api_url;
+use crate::utils::auth::get_token; // DEPRECATED: will be replaced with api_client in future migration
 use crate::utils::datetime::format_dt_local;
 use serde::Deserialize;
 use yew::prelude::*;
@@ -39,7 +40,6 @@ pub fn comment_list(props: &CommentListProps) -> Html {
     let show_deleted = use_state(|| false);
     let can_post = auth.is_authenticated();
     let is_manager = auth.is_admin_or_manager();
-    let token = auth.token().map(|t| t.to_string());
 
     // Load comments when announcement_id changes
     {

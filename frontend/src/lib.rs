@@ -1,5 +1,6 @@
 pub mod utils {
     pub mod api; // may be unused by tests
+    pub mod auth; // DEPRECATED: legacy auth adapter for backwards compatibility
     pub mod datetime; // added for localized formatting
 }
 pub mod components;
