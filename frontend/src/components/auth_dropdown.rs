@@ -15,7 +15,8 @@ struct JwtClaims {
     email: String,
     name: String,
     roles: Vec<String>,
-    _exp: usize,
+    #[allow(dead_code)]
+    exp: usize,
 }
 
 #[derive(Serialize)]
@@ -233,12 +234,9 @@ pub fn auth_dropdown() -> Html {
 
 // Helper function to decode JWT and extract user info
 fn decode_jwt_claims(token: &str) -> Option<User> {
-    use web_sys::console;
-
     // JWT format: header.payload.signature
     let parts: Vec<&str> = token.split('.').collect();
     if parts.len() != 3 {
-        console::log_1(&"JWT decode error: token does not have 3 parts".into());
         return None;
     }
 
@@ -250,10 +248,7 @@ fn decode_jwt_claims(token: &str) -> Option<User> {
         0 => "",
         2 => "==",
         3 => "=",
-        _ => {
-            console::log_1(&"JWT decode error: invalid payload length".into());
-            return None;
-        }
+        _ => return None,
     };
     let padded = format!("{}{}", payload, padding);
 
@@ -262,28 +257,17 @@ fn decode_jwt_claims(token: &str) -> Option<User> {
 
     let decoded = match general_purpose::STANDARD.decode(&normalized) {
         Ok(d) => d,
-        Err(e) => {
-            console::log_1(&format!("JWT decode error: base64 decode failed: {}", e).into());
-            return None;
-        }
+        Err(_) => return None,
     };
 
     let json_str = match String::from_utf8(decoded) {
         Ok(s) => s,
-        Err(e) => {
-            console::log_1(&format!("JWT decode error: UTF-8 conversion failed: {}", e).into());
-            return None;
-        }
+        Err(_) => return None,
     };
-
-    console::log_1(&format!("JWT payload: {}", json_str).into());
 
     let claims: JwtClaims = match serde_json::from_str(&json_str) {
         Ok(c) => c,
-        Err(e) => {
-            console::log_1(&format!("JWT decode error: JSON parse failed: {}", e).into());
-            return None;
-        }
+        Err(_) => return None,
     };
 
     Some(User {
