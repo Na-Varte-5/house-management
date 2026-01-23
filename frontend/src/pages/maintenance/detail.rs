@@ -1,11 +1,15 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use crate::components::{ErrorAlert, SuccessAlert};
+use crate::components::maintenance::{
+    ManagementPanel, ManagementRequest, UserInfo,
+    HistoryTimeline, HistoryEntry,
+    AttachmentsList, Attachment
+};
 use crate::contexts::AuthContext;
 use crate::routes::Route;
-use crate::services::{api_client, ApiError};
-use web_sys::HtmlInputElement;
+use crate::services::api_client;
 
 #[derive(Deserialize, Clone, PartialEq)]
 struct MaintenanceRequest {
@@ -26,41 +30,6 @@ struct MaintenanceRequest {
     assigned_to_name: Option<String>,
     created_at: String,
     updated_at: String,
-}
-
-#[derive(Deserialize, Clone, PartialEq)]
-struct HistoryEntry {
-    id: u64,
-    request_id: u64,
-    from_status: Option<String>,
-    to_status: String,
-    note: Option<String>,
-    changed_by: u64,
-    changed_by_name: String,
-    changed_at: Option<String>,
-}
-
-#[derive(Deserialize, Clone, PartialEq)]
-struct Attachment {
-    id: u64,
-    filename: String,
-    uploaded_by: u64,
-    uploaded_at: String,
-    url: String,
-}
-
-#[derive(Deserialize, Clone, PartialEq)]
-struct UserInfo {
-    id: u64,
-    name: String,
-    email: String,
-}
-
-#[derive(Serialize)]
-struct UpdateRequest {
-    status: Option<String>,
-    priority: Option<String>,
-    assigned_to: Option<u64>,
 }
 
 #[derive(Properties, PartialEq)]
@@ -106,14 +75,6 @@ fn format_date(datetime_str: &str) -> String {
     datetime_str.to_string()
 }
 
-// Helper function to get user name by ID from users list
-fn get_user_name(user_id: u64, users: &[UserInfo]) -> String {
-    users.iter()
-        .find(|u| u.id == user_id)
-        .map(|u| u.name.clone())
-        .unwrap_or_else(|| format!("User #{}", user_id))
-}
-
 #[function_component(MaintenanceDetailPage)]
 pub fn maintenance_detail_page(props: &Props) -> Html {
     let auth = use_context::<AuthContext>().expect("AuthContext not found");
@@ -127,11 +88,6 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
     let loading = use_state(|| true);
     let loading_history = use_state(|| false);
     let loading_attachments = use_state(|| false);
-    let updating = use_state(|| false);
-
-    let new_status = use_state(|| None::<String>);
-    let new_priority = use_state(|| None::<String>);
-    let new_assigned = use_state(|| None::<u64>);
 
     let error = use_state(|| None::<String>);
     let success = use_state(|| None::<String>);
@@ -224,166 +180,38 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
         });
     }
 
-    let on_update_status = {
+    let on_update = {
         let request = request.clone();
-        let new_status = new_status.clone();
-        let updating = updating.clone();
-        let error = error.clone();
-        let success = success.clone();
         let history = history.clone();
         let token = token.clone();
 
         Callback::from(move |_| {
-            if let (Some(req), Some(status)) = ((*request).clone(), (*new_status).clone()) {
-                let request = request.clone();
-                let history = history.clone();
-                let updating = updating.clone();
-                let error = error.clone();
-                let success = success.clone();
-                let token = token.clone();
-                let new_status = new_status.clone();
+            let request = request.clone();
+            let history = history.clone();
+            let token = token.clone();
 
-                updating.set(true);
-                error.set(None);
-                success.set(None);
-
-                wasm_bindgen_futures::spawn_local(async move {
-                    let client = api_client(token.as_deref());
-                    let update = UpdateRequest {
-                        status: Some(status.clone()),
-                        priority: None,
-                        assigned_to: None,
-                    };
-
-                    match client.put::<_, MaintenanceRequest>(&format!("/requests/{}", req.id), &update).await {
-                        Ok(updated) => {
-                            request.set(Some(updated));
-                            // Reload history
-                            if let Ok(list) = client.get::<Vec<HistoryEntry>>(&format!("/requests/{}/history", req.id)).await {
-                                history.set(list);
-                            }
-                            success.set(Some("Status updated successfully".to_string()));
-                            new_status.set(None);
-                        }
-                        Err(ApiError::Forbidden) => {
-                            error.set(Some("You don't have permission to update requests".to_string()));
-                        }
-                        Err(e) => {
-                            error.set(Some(format!("Failed to update status: {}", e)));
-                        }
-                    }
-                    updating.set(false);
-                });
-            }
+            wasm_bindgen_futures::spawn_local(async move {
+                let client = api_client(token.as_deref());
+                // Reload request details
+                if let Ok(req) = client.get::<MaintenanceRequest>(&format!("/requests/{}", request_id)).await {
+                    request.set(Some(req));
+                }
+                // Reload history
+                if let Ok(list) = client.get::<Vec<HistoryEntry>>(&format!("/requests/{}/history", request_id)).await {
+                    history.set(list);
+                }
+            });
         })
     };
 
-    let on_update_priority = {
-        let request = request.clone();
-        let new_priority = new_priority.clone();
-        let updating = updating.clone();
+    let on_error = {
         let error = error.clone();
-        let success = success.clone();
-        let history = history.clone();
-        let token = token.clone();
-
-        Callback::from(move |_| {
-            if let (Some(req), Some(priority)) = ((*request).clone(), (*new_priority).clone()) {
-                let request = request.clone();
-                let history = history.clone();
-                let updating = updating.clone();
-                let error = error.clone();
-                let success = success.clone();
-                let token = token.clone();
-                let new_priority = new_priority.clone();
-
-                updating.set(true);
-                error.set(None);
-                success.set(None);
-
-                wasm_bindgen_futures::spawn_local(async move {
-                    let client = api_client(token.as_deref());
-                    let update = UpdateRequest {
-                        status: None,
-                        priority: Some(priority.clone()),
-                        assigned_to: None,
-                    };
-
-                    match client.put::<_, MaintenanceRequest>(&format!("/requests/{}", req.id), &update).await {
-                        Ok(updated) => {
-                            request.set(Some(updated));
-                            // Reload history
-                            if let Ok(list) = client.get::<Vec<HistoryEntry>>(&format!("/requests/{}/history", req.id)).await {
-                                history.set(list);
-                            }
-                            success.set(Some("Priority updated successfully".to_string()));
-                            new_priority.set(None);
-                        }
-                        Err(ApiError::Forbidden) => {
-                            error.set(Some("You don't have permission to update requests".to_string()));
-                        }
-                        Err(e) => {
-                            error.set(Some(format!("Failed to update priority: {}", e)));
-                        }
-                    }
-                    updating.set(false);
-                });
-            }
-        })
+        Callback::from(move |msg: String| error.set(Some(msg)))
     };
 
-    let on_assign = {
-        let request = request.clone();
-        let new_assigned = new_assigned.clone();
-        let updating = updating.clone();
-        let error = error.clone();
+    let on_success = {
         let success = success.clone();
-        let history = history.clone();
-        let token = token.clone();
-
-        Callback::from(move |_| {
-            if let (Some(req), Some(user_id)) = ((*request).clone(), *new_assigned) {
-                let request = request.clone();
-                let history = history.clone();
-                let updating = updating.clone();
-                let error = error.clone();
-                let success = success.clone();
-                let token = token.clone();
-                let new_assigned = new_assigned.clone();
-
-                updating.set(true);
-                error.set(None);
-                success.set(None);
-
-                wasm_bindgen_futures::spawn_local(async move {
-                    let client = api_client(token.as_deref());
-                    let update = UpdateRequest {
-                        status: None,
-                        priority: None,
-                        assigned_to: Some(user_id),
-                    };
-
-                    match client.put::<_, MaintenanceRequest>(&format!("/requests/{}", req.id), &update).await {
-                        Ok(updated) => {
-                            request.set(Some(updated));
-                            // Reload history
-                            if let Ok(list) = client.get::<Vec<HistoryEntry>>(&format!("/requests/{}/history", req.id)).await {
-                                history.set(list);
-                            }
-                            success.set(Some("Request assigned successfully".to_string()));
-                            new_assigned.set(None);
-                        }
-                        Err(ApiError::Forbidden) => {
-                            error.set(Some("You don't have permission to assign requests".to_string()));
-                        }
-                        Err(e) => {
-                            error.set(Some(format!("Failed to assign request: {}", e)));
-                        }
-                    }
-                    updating.set(false);
-                });
-            }
-        })
+        Callback::from(move |msg: String| success.set(Some(msg)))
     };
 
     let on_back = {
@@ -490,237 +318,35 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
                             </div>
                         </div>
 
-                        // History
-                        <div class="card mt-3">
-                            <div class="card-header">
-                                <h5 class="mb-0">{"History"}</h5>
-                            </div>
-                            <div class="card-body">
-                                if *loading_history {
-                                    <div class="text-center">
-                                        <div class="spinner-border spinner-border-sm" role="status"></div>
-                                    </div>
-                                } else if history.is_empty() {
-                                    <p class="text-muted small mb-0">{"No history available"}</p>
-                                } else {
-                                    <div class="timeline">
-                                        {
-                                            for history.iter().map(|entry| {
-                                                let formatted_date = entry.changed_at.as_ref()
-                                                    .map(|dt| format_date(dt))
-                                                    .unwrap_or_else(|| "(unknown)".to_string());
+                        // History component
+                        <HistoryTimeline
+                            history={(*history).clone()}
+                            loading={*loading_history}
+                        />
 
-                                                html! {
-                                                    <div class="mb-3 pb-3 border-bottom">
-                                                        <div class="d-flex justify-content-between">
-                                                            <strong class="small">{&entry.changed_by_name}</strong>
-                                                            <span class="small text-muted">
-                                                                {formatted_date}
-                                                            </span>
-                                                        </div>
-                                                        <p class="mb-0 small">
-                                                            {
-                                                                // Check if this is a status change or other type of change
-                                                                if entry.from_status.is_none() && entry.note.is_some() {
-                                                                    // Priority or assignment change - just show the note
-                                                                    html! { <>{entry.note.as_ref().unwrap()}</> }
-                                                                } else {
-                                                                    // Status change - show from/to format
-                                                                    html! {
-                                                                        <>
-                                                                            {"Changed status from "}
-                                                                            <span class="text-decoration-line-through">
-                                                                                {entry.from_status.as_ref().unwrap_or(&"(none)".to_string())}
-                                                                            </span>
-                                                                            {" to "}
-                                                                            <strong>{&entry.to_status}</strong>
-                                                                            {
-                                                                                if let Some(note) = &entry.note {
-                                                                                    html! { <span class="text-muted">{" - "}{note}</span> }
-                                                                                } else {
-                                                                                    html! {}
-                                                                                }
-                                                                            }
-                                                                        </>
-                                                                    }
-                                                                }
-                                                            }
-                                                        </p>
-                                                    </div>
-                                                }
-                                            })
-                                        }
-                                    </div>
-                                }
-                            </div>
-                        </div>
-
-                        // Attachments
-                        <div class="card mt-3">
-                            <div class="card-header">
-                                <h5 class="mb-0">{"Attachments"}</h5>
-                            </div>
-                            <div class="card-body">
-                                if *loading_attachments {
-                                    <div class="text-center">
-                                        <div class="spinner-border spinner-border-sm" role="status"></div>
-                                    </div>
-                                } else if attachments.is_empty() {
-                                    <p class="text-muted small mb-0">{"No attachments"}</p>
-                                } else {
-                                    <div class="row">
-                                        {
-                                            for attachments.iter().map(|att| {
-                                                html! {
-                                                    <div class="col-md-4 mb-2">
-                                                        <div class="card">
-                                                            <div class="card-body p-2">
-                                                                <p class="mb-1 small"><strong>{&att.filename}</strong></p>
-                                                                <p class="mb-0 text-muted" style="font-size: 0.75rem;">
-                                                                    {"Uploaded "}{&att.uploaded_at}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                }
-                                            })
-                                        }
-                                    </div>
-                                }
-                            </div>
-                        </div>
+                        // Attachments component
+                        <AttachmentsList
+                            attachments={(*attachments).clone()}
+                            loading={*loading_attachments}
+                        />
                     </div>
 
-                    // Admin controls
+                    // Management Panel component (Admin/Manager only)
                     if auth.is_admin_or_manager() {
                         <div class="col-lg-4 mb-3">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5 class="mb-0">{"Management"}</h5>
-                                </div>
-                                <div class="card-body">
-                                    // Update Status
-                                    <div class="mb-3">
-                                        <label class="form-label small fw-semibold">{"Update Status"}</label>
-                                        <select
-                                            class="form-select form-select-sm mb-2"
-                                            disabled={*updating}
-                                            value={(*new_status).clone().unwrap_or_else(|| req.status.clone())}
-                                            onchange={{
-                                                let new_status = new_status.clone();
-                                                Callback::from(move |e: Event| {
-                                                    let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
-                                                    let value = select.value();
-                                                    if !value.is_empty() {
-                                                        new_status.set(Some(value));
-                                                    }
-                                                })
-                                            }}
-                                        >
-                                            <option value="Open" selected={req.status == "Open"}>{"Open"}</option>
-                                            <option value="InProgress" selected={req.status == "InProgress"}>{"In Progress"}</option>
-                                            <option value="Resolved" selected={req.status == "Resolved"}>{"Resolved"}</option>
-                                        </select>
-                                        <button
-                                            class="btn btn-sm btn-primary w-100"
-                                            disabled={new_status.is_none() || *updating}
-                                            onclick={on_update_status}
-                                        >
-                                            if *updating {
-                                                <span class="spinner-border spinner-border-sm me-1"></span>
-                                            }
-                                            {"Update Status"}
-                                        </button>
-                                    </div>
-
-                                    <hr />
-
-                                    // Update Priority
-                                    <div class="mb-3">
-                                        <label class="form-label small fw-semibold">{"Update Priority"}</label>
-                                        <select
-                                            class="form-select form-select-sm mb-2"
-                                            disabled={*updating}
-                                            value={(*new_priority).clone().unwrap_or_else(|| req.priority.clone())}
-                                            onchange={{
-                                                let new_priority = new_priority.clone();
-                                                Callback::from(move |e: Event| {
-                                                    let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
-                                                    let value = select.value();
-                                                    if !value.is_empty() {
-                                                        new_priority.set(Some(value));
-                                                    }
-                                                })
-                                            }}
-                                        >
-                                            <option value="Low" selected={req.priority == "Low"}>{"Low"}</option>
-                                            <option value="Medium" selected={req.priority == "Medium"}>{"Medium"}</option>
-                                            <option value="High" selected={req.priority == "High"}>{"High"}</option>
-                                            <option value="Urgent" selected={req.priority == "Urgent"}>{"Urgent"}</option>
-                                        </select>
-                                        <button
-                                            class="btn btn-sm btn-primary w-100"
-                                            disabled={new_priority.is_none() || *updating}
-                                            onclick={on_update_priority}
-                                        >
-                                            if *updating {
-                                                <span class="spinner-border spinner-border-sm me-1"></span>
-                                            }
-                                            {"Update Priority"}
-                                        </button>
-                                    </div>
-
-                                    <hr />
-
-                                    // Assign User
-                                    <div class="mb-3">
-                                        <label class="form-label small fw-semibold">{"Assign To"}</label>
-                                        <select
-                                            class="form-select form-select-sm mb-2"
-                                            disabled={*updating}
-                                            value={
-                                                new_assigned.map(|id| id.to_string())
-                                                    .or_else(|| req.assigned_to.map(|id| id.to_string()))
-                                                    .unwrap_or_default()
-                                            }
-                                            onchange={{
-                                                let new_assigned = new_assigned.clone();
-                                                Callback::from(move |e: Event| {
-                                                    let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
-                                                    let value = select.value();
-                                                    if !value.is_empty() {
-                                                        if let Ok(id) = value.parse::<u64>() {
-                                                            new_assigned.set(Some(id));
-                                                        }
-                                                    }
-                                                })
-                                            }}
-                                        >
-                                            <option value="">{"-- Unassigned --"}</option>
-                                            {
-                                                for users.iter().map(|user| {
-                                                    let is_selected = req.assigned_to == Some(user.id);
-                                                    html! {
-                                                        <option value={user.id.to_string()} selected={is_selected}>
-                                                            {format!("{} ({})", user.name, user.email)}
-                                                        </option>
-                                                    }
-                                                })
-                                            }
-                                        </select>
-                                        <button
-                                            class="btn btn-sm btn-primary w-100"
-                                            disabled={new_assigned.is_none() || *updating}
-                                            onclick={on_assign}
-                                        >
-                                            if *updating {
-                                                <span class="spinner-border spinner-border-sm me-1"></span>
-                                            }
-                                            {"Assign Request"}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
+                            <ManagementPanel
+                                request={ManagementRequest {
+                                    id: req.id,
+                                    status: req.status.clone(),
+                                    priority: req.priority.clone(),
+                                    assigned_to: req.assigned_to,
+                                }}
+                                users={(*users).clone()}
+                                token={token.clone()}
+                                on_update={on_update}
+                                on_error={on_error}
+                                on_success={on_success}
+                            />
                         </div>
                     }
                 </div>

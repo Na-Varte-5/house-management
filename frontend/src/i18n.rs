@@ -5,7 +5,7 @@ use once_cell::sync::Lazy;
 use std::cell::RefCell;
 use web_sys::window;
 
-static CURRENT_LANG: Lazy<LanguageIdentifier> = Lazy::new(|| "en".parse().unwrap());
+static _CURRENT_LANG: Lazy<LanguageIdentifier> = Lazy::new(|| "en".parse().unwrap());
 thread_local! {
     static BUNDLES: HashMap<String, FluentBundle<FluentResource>> = {
         let mut map = HashMap::new();

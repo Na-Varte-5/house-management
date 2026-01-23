@@ -12,6 +12,9 @@ pub mod main_sidebar;
 pub mod app_layout;
 pub mod breadcrumb;
 pub mod properties; // properties management components
+pub mod forms; // reusable form input components
+pub mod meters; // meters management components
+pub mod maintenance; // maintenance request components
 
 pub use admin_sidebar::AdminSidebar;
 pub use admin_layout::AdminLayout;
@@ -19,3 +22,4 @@ pub use error_alert::{ErrorAlert, SuccessAlert};
 pub use main_sidebar::MainSidebar;
 pub use app_layout::AppLayout;
 pub use breadcrumb::{Breadcrumb, BreadcrumbItem};
+pub use forms::{TextInput, NumberInput, Select, SelectOption, Textarea, DateTimeInput, Checkbox, FormGroup};

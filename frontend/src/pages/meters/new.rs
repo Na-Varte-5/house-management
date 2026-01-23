@@ -19,7 +19,7 @@ struct CreateMeterRequest {
 
 #[derive(Deserialize)]
 struct Meter {
-    id: u64,
+    _id: u64,
     apartment_id: u64,
 }
 
@@ -32,7 +32,7 @@ struct Building {
 #[derive(Deserialize, Clone)]
 struct Apartment {
     id: u64,
-    building_id: u64,
+    _building_id: u64,
     number: String,
 }
 

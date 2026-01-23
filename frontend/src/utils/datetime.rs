@@ -6,9 +6,8 @@ pub fn format_dt_local(raw: &str) -> String {
     if raw.is_empty() { return String::new(); }
     // Normalize separators
     let mut base = raw.trim().to_string();
-    if let Some(tpos) = base.find('T') { // replace T with space
+    if let Some(_tpos) = base.find('T') { // replace T with space
         // take date + time portion up to seconds
-        let slice = &base[..std::cmp::min(base.len(), tpos + 9)]; // may not be right length but we'll adjust below
         base = raw.replace('T', " ");
     }
     // Extract date and time (assume first 19 chars contain YYYY-MM-DD HH:MM:SS)

@@ -4,7 +4,7 @@ use crate::components::{AdminLayout, ErrorAlert, SuccessAlert};
 use crate::components::properties::*;
 use crate::contexts::AuthContext;
 use crate::routes::Route;
-use crate::services::{api_client, ApiError};
+use crate::services::api_client;
 
 #[function_component(AdminPropertiesPage)]
 pub fn admin_properties_page() -> Html {

@@ -2,6 +2,7 @@ use crate::contexts::{AuthContext, User};
 use crate::services::{api_client, ApiError};
 use serde::{Deserialize, Serialize};
 use yew::prelude::*;
+use base64::{Engine as _, engine::general_purpose};
 
 #[derive(Deserialize, Clone, Debug)]
 struct LoginResponse {
@@ -14,7 +15,7 @@ struct JwtClaims {
     email: String,
     name: String,
     roles: Vec<String>,
-    exp: usize,
+    _exp: usize,
 }
 
 #[derive(Serialize)]
@@ -243,7 +244,7 @@ fn decode_jwt_claims(token: &str) -> Option<User> {
     // Decode from base64url (replace - with + and _ with /)
     let normalized = padded.replace('-', "+").replace('_', "/");
 
-    let decoded = match base64::decode(&normalized) {
+    let decoded = match general_purpose::STANDARD.decode(&normalized) {
         Ok(d) => d,
         Err(_) => return None,
     };

@@ -145,6 +145,366 @@ if let Some(msg) = (*error).clone() {
 
 ---
 
+### Form Components
+
+**Location:** `src/components/forms/`
+
+Reusable form input components that handle common patterns like validation, labels, help text, and error display. These components eliminate boilerplate and ensure consistent form styling across the application.
+
+**IMPORTANT:** Always use these form components instead of raw HTML inputs for consistency and maintainability.
+
+#### `<TextInput>`
+**Purpose:** Text input with label, validation, and help text
+**Props:**
+- `value: String` - Input value (required)
+- `on_change: Callback<String>` - Called when value changes (required)
+- `label: Option<String>` - Label text
+- `placeholder: Option<String>` - Placeholder text
+- `help_text: Option<String>` - Help text shown below input
+- `required: bool` - Whether field is required (default: false)
+- `disabled: bool` - Whether field is disabled (default: false)
+- `input_type: String` - Input type: "text", "email", "password", "url" (default: "text")
+- `error: Option<String>` - Validation error message
+- `class: String` - Additional CSS classes
+- `size: String` - Size: "sm", "lg", or "" (default)
+
+**Usage:**
+```rust
+use crate::components::TextInput;
+
+let email = use_state(String::default);
+let email_error = use_state(|| None::<String>);
+
+let on_email_change = {
+    let email = email.clone();
+    let error = email_error.clone();
+    Callback::from(move |value: String| {
+        email.set(value.clone());
+        // Validate on change
+        if !value.contains('@') {
+            error.set(Some("Invalid email".to_string()));
+        } else {
+            error.set(None);
+        }
+    })
+};
+
+html! {
+    <TextInput
+        label="Email Address"
+        value={(*email).clone()}
+        on_change={on_email_change}
+        input_type="email"
+        placeholder="user@example.com"
+        required=true
+        help_text="We'll never share your email"
+        error={(*email_error).clone()}
+    />
+}
+```
+
+#### `<NumberInput>`
+**Purpose:** Number input with constraints
+**Props:**
+- `value: String` - Input value (required)
+- `on_change: Callback<String>` - Called when value changes (required)
+- `label: Option<String>` - Label text
+- `placeholder: Option<String>` - Placeholder text
+- `help_text: Option<String>` - Help text
+- `required: bool` - Whether field is required (default: false)
+- `disabled: bool` - Whether field is disabled (default: false)
+- `min: Option<i64>` - Minimum value
+- `max: Option<i64>` - Maximum value
+- `step: Option<String>` - Step value for increment/decrement
+- `error: Option<String>` - Validation error message
+- `class: String` - Additional CSS classes
+- `size: String` - Size: "sm", "lg", or "" (default)
+
+**Usage:**
+```rust
+use crate::components::NumberInput;
+
+html! {
+    <NumberInput
+        label="Construction Year"
+        value={(*year).clone()}
+        on_change={on_year_change}
+        placeholder="2020"
+        min={1800}
+        max={2100}
+        help_text="Year the building was constructed"
+    />
+}
+```
+
+#### `<Select>`
+**Purpose:** Dropdown select with options
+**Props:**
+- `value: String` - Currently selected value (required)
+- `on_change: Callback<String>` - Called when selection changes (required)
+- `options: Vec<SelectOption>` - Options to display (required)
+- `label: Option<String>` - Label text
+- `help_text: Option<String>` - Help text
+- `required: bool` - Whether field is required (default: false)
+- `disabled: bool` - Whether field is disabled (default: false)
+- `placeholder: Option<String>` - Placeholder option shown when no value selected
+- `error: Option<String>` - Validation error message
+- `class: String` - Additional CSS classes
+- `size: String` - Size: "sm", "lg", or "" (default)
+
+**SelectOption struct:**
+```rust
+pub struct SelectOption {
+    pub value: String,
+    pub label: String,
+    pub disabled: bool,
+}
+
+impl SelectOption {
+    pub fn new(value: impl Into<String>, label: impl Into<String>) -> Self
+    pub fn with_disabled(self, disabled: bool) -> Self
+}
+```
+
+**Usage:**
+```rust
+use crate::components::{Select, SelectOption};
+
+let voting_method = use_state(|| "SimpleMajority".to_string());
+
+let method_options = vec![
+    SelectOption::new("SimpleMajority", "Simple Majority"),
+    SelectOption::new("WeightedArea", "Weighted by Area"),
+    SelectOption::new("PerSeat", "One Vote Per Seat"),
+    SelectOption::new("Consensus", "Consensus Required"),
+];
+
+html! {
+    <Select
+        label="Voting Method"
+        value={(*voting_method).clone()}
+        on_change={on_method_change}
+        options={method_options}
+        placeholder="Select a voting method"
+        required=true
+        help_text="Choose how votes will be counted"
+    />
+}
+```
+
+#### `<DateTimeInput>`
+**Purpose:** Date/time input with smart defaults
+**Props:**
+- `value: String` - Input value in format "YYYY-MM-DDTHH:MM" or "YYYY-MM-DD" (required)
+- `on_change: Callback<String>` - Called when value changes (required)
+- `label: Option<String>` - Label text
+- `help_text: Option<String>` - Help text
+- `required: bool` - Whether field is required (default: false)
+- `disabled: bool` - Whether field is disabled (default: false)
+- `input_type: String` - Type: "date", "datetime-local", "time" (default: "datetime-local")
+- `min: Option<String>` - Minimum datetime value
+- `max: Option<String>` - Maximum datetime value
+- `error: Option<String>` - Validation error message
+- `class: String` - Additional CSS classes
+- `size: String` - Size: "sm", "lg", or "" (default)
+
+**Helper functions for default values:**
+```rust
+// Get current datetime as string
+fn now_datetime() -> String {
+    let now = js_sys::Date::new_0();
+    let year = now.get_full_year() as i32;
+    let month = (now.get_month() as f64 + 1.0) as i32;
+    let day = now.get_date() as i32;
+    let hours = now.get_hours() as i32;
+    let minutes = now.get_minutes() as i32;
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}", year, month, day, hours, minutes)
+}
+
+// Add days to current datetime
+fn datetime_plus_days(days: f64) -> String {
+    let now = js_sys::Date::new_0();
+    now.set_date((now.get_date() as f64 + days) as u32);
+    let year = now.get_full_year() as i32;
+    let month = (now.get_month() as f64 + 1.0) as i32;
+    let day = now.get_date() as i32;
+    let hours = now.get_hours() as i32;
+    let minutes = now.get_minutes() as i32;
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}", year, month, day, hours, minutes)
+}
+```
+
+**Usage:**
+```rust
+use crate::components::DateTimeInput;
+
+let start_time = use_state(now_datetime);
+let end_time = use_state(|| datetime_plus_days(7.0));
+
+html! {
+    <DateTimeInput
+        label="Start Time"
+        value={(*start_time).clone()}
+        on_change={on_start_change}
+        input_type="datetime-local"
+        required=true
+        help_text="When should voting begin?"
+    />
+
+    <DateTimeInput
+        label="End Time"
+        value={(*end_time).clone()}
+        on_change={on_end_change}
+        input_type="datetime-local"
+        min={(*start_time).clone()}
+        required=true
+        help_text="When should voting close?"
+    />
+}
+```
+
+#### `<Textarea>`
+**Purpose:** Multiline text input with character counter
+**Props:**
+- `value: String` - Textarea value (required)
+- `on_change: Callback<String>` - Called when value changes (required)
+- `label: Option<String>` - Label text
+- `placeholder: Option<String>` - Placeholder text
+- `help_text: Option<String>` - Help text
+- `required: bool` - Whether field is required (default: false)
+- `disabled: bool` - Whether field is disabled (default: false)
+- `rows: u32` - Number of visible rows (default: 3)
+- `max_length: Option<u32>` - Maximum character count
+- `error: Option<String>` - Validation error message
+- `class: String` - Additional CSS classes
+- `size: String` - Size: "sm", "lg", or "" (default)
+- `show_counter: bool` - Show character counter (default: false)
+
+**Usage:**
+```rust
+use crate::components::Textarea;
+
+html! {
+    <Textarea
+        label="Description"
+        value={(*description).clone()}
+        on_change={on_description_change}
+        placeholder="Enter a detailed description"
+        rows={5}
+        max_length={500}
+        show_counter=true
+        required=true
+        help_text="Provide context for the proposal"
+    />
+}
+```
+
+#### `<Checkbox>`
+**Purpose:** Checkbox or switch with label
+**Props:**
+- `id: String` - Unique ID for the checkbox (required for label association)
+- `checked: bool` - Whether checkbox is checked (required)
+- `on_change: Callback<bool>` - Called when checked state changes (required)
+- `label: String` - Label text (required)
+- `help_text: Option<String>` - Help text shown below checkbox
+- `disabled: bool` - Whether field is disabled (default: false)
+- `error: Option<String>` - Validation error message
+- `class: String` - Additional CSS classes
+- `switch: bool` - Use switch style instead of checkbox (default: false)
+- `inline: bool` - Display inline for multiple checkboxes in a row (default: false)
+
+**Usage:**
+```rust
+use crate::components::Checkbox;
+
+let role_homeowner = use_state(|| true);
+let role_renter = use_state(|| false);
+
+html! {
+    <Checkbox
+        id="checkbox-homeowner"
+        label="Homeowner"
+        checked={*role_homeowner}
+        on_change={on_homeowner_change}
+        help_text="Allow homeowners to vote"
+    />
+
+    <Checkbox
+        id="checkbox-renter"
+        label="Renter"
+        checked={*role_renter}
+        on_change={on_renter_change}
+        help_text="Allow renters to vote"
+    />
+
+    // Switch variant
+    <Checkbox
+        id="toggle-notifications"
+        label="Enable email notifications"
+        checked={*notifications}
+        on_change={on_notifications_change}
+        switch=true
+    />
+}
+```
+
+#### `<FormGroup>`
+**Purpose:** Wrapper for grouping related form fields
+**Props:**
+- `children: Children` - Form fields to group (required)
+- `title: Option<String>` - Group title/heading
+- `description: Option<String>` - Group description
+- `class: String` - Additional CSS classes
+- `spacing: String` - Spacing: "compact", "spacious", or "" (default)
+
+**Usage:**
+```rust
+use crate::components::FormGroup;
+
+html! {
+    <form onsubmit={on_submit}>
+        <FormGroup
+            title="Basic Information"
+            description="Enter the proposal details"
+        >
+            <TextInput
+                label="Title"
+                value={(*title).clone()}
+                on_change={on_title_change}
+                required=true
+            />
+            <Textarea
+                label="Description"
+                value={(*description).clone()}
+                on_change={on_description_change}
+                required=true
+            />
+        </FormGroup>
+
+        <FormGroup title="Voting Settings">
+            <Select
+                label="Method"
+                value={(*method).clone()}
+                on_change={on_method_change}
+                options={methods}
+                required=true
+            />
+            <DateTimeInput
+                label="Start Time"
+                value={(*start_time).clone()}
+                on_change={on_start_change}
+            />
+        </FormGroup>
+
+        <button type="submit" class="btn btn-primary">
+            {"Create Proposal"}
+        </button>
+    </form>
+}
+```
+
+---
+
 ### Utility Components
 
 #### `<Spinner>`
@@ -921,6 +1281,256 @@ html! {
     <Link<Route> to={Route::Buildings}>{"View Buildings"}</Link<Route>>
 }
 ```
+
+---
+
+## Architecture Principles & Best Practices
+
+### Single Responsibility Principle (CRITICAL)
+
+**Each component should have ONE clear, focused purpose.**
+
+#### ❌ BAD: Monolithic Component
+
+```rust
+// meters/management.rs - 750 lines
+// Handles BOTH registration form AND list view AND filters
+#[function_component(MeterManagementPage)]
+pub fn meter_management_page() -> Html {
+    // State for registration form
+    let buildings = use_state(...);
+    let apartments = use_state(...);
+    let meter_type = use_state(...);
+    let serial_number = use_state(...);
+
+    // State for list view
+    let all_meters = use_state(...);
+    let search_query = use_state(...);
+    let filter_building = use_state(...);
+
+    // 700+ lines of mixed concerns...
+}
+```
+
+**Problems:**
+- Hard to test (must test registration AND listing together)
+- Hard to reuse (registration form tied to this page)
+- Hard to maintain (changes to one concern affect the other)
+- Hard to understand (too many responsibilities)
+
+#### ✅ GOOD: Separated Components
+
+```rust
+// pages/meters/management.rs - 145 lines (orchestrator)
+#[function_component(MeterManagementPage)]
+pub fn meter_management_page() -> Html {
+    let active_tab = use_state(|| Tab::List);
+
+    html! {
+        <AdminLayout>
+            if matches!(*active_tab, Tab::List) {
+                <MeterList buildings={buildings} on_error={on_error} />
+            } else {
+                <MeterRegisterForm on_success={on_success} on_error={on_error} />
+            }
+        </AdminLayout>
+    }
+}
+
+// components/meters/register_form.rs - 323 lines
+// ONLY handles meter registration
+
+// components/meters/list.rs - 363 lines
+// ONLY handles meter listing with filters
+```
+
+**Benefits:**
+- ✅ Each component is testable in isolation
+- ✅ Components are reusable elsewhere
+- ✅ Clear, focused responsibilities
+- ✅ Changes to one don't affect the other
+
+### Component Size Guidelines
+
+**Hard limits to enforce Single Responsibility:**
+
+| Component Type | Max Lines | Action if Exceeded |
+|---------------|-----------|-------------------|
+| Page components (routes) | ~200 lines | Split into sub-components |
+| Reusable components | ~400 lines | Split into smaller components |
+| Form components | ~300 lines | Extract sub-forms or fields |
+
+**If a file exceeds these limits, it likely violates Single Responsibility Principle.**
+
+### When to Split Components
+
+Split a component when ANY of these apply:
+
+1. **Multiple distinct responsibilities**
+   - Example: Registration form + list view + filters
+   - Solution: Create separate components for each
+
+2. **Multiple unrelated concerns**
+   - Example: Create + Edit + Delete all in one component
+   - Solution: Separate components or at least separate functions
+
+3. **File growing beyond 300-400 lines**
+   - This is a red flag - review responsibilities
+
+4. **Logic could be reused elsewhere**
+   - Extract to reusable component
+
+5. **Testing would benefit from isolation**
+   - Hard to test? Split it up.
+
+6. **State management is complex**
+   - Too many `use_state` calls? Split responsibilities.
+
+### Component Organization
+
+```
+src/
+├── pages/              # Route-level orchestrators (max ~200 lines)
+│   ├── meters/
+│   │   └── management.rs   # Orchestrates tab switching
+│   └── voting/
+│       └── new.rs          # Orchestrates form submission
+│
+├── components/         # Reusable, focused components
+│   ├── forms/          # Form input components (<300 lines each)
+│   │   ├── text_input.rs
+│   │   └── select.rs
+│   │
+│   ├── meters/         # Domain-specific meter components
+│   │   ├── register_form.rs  # ONLY registration (~323 lines)
+│   │   └── list.rs           # ONLY listing (~363 lines)
+│   │
+│   └── properties/     # Domain-specific property components
+│       ├── building_list.rs
+│       └── apartment_form.rs
+```
+
+**Rules:**
+- **Pages** = Thin orchestrators that compose components
+- **Components** = Focused, reusable, single-purpose
+- **Domain folders** = Group related components by feature
+
+### Yew/Rust Best Practices
+
+#### 1. Props for Data, Callbacks for Events
+
+```rust
+#[derive(Properties, PartialEq)]
+pub struct MyComponentProps {
+    // Data in
+    pub items: Vec<Item>,
+    pub loading: bool,
+
+    // Events out
+    pub on_select: Callback<u64>,
+    pub on_delete: Callback<u64>,
+}
+```
+
+#### 2. Keep State Close to Usage
+
+**❌ Bad: State in parent when only child needs it**
+```rust
+// Parent
+let search_query = use_state(String::default);  // Only used by child!
+
+html! { <ChildComponent search_query={search_query} /> }
+```
+
+**✅ Good: State in component that uses it**
+```rust
+// Child component manages its own search state
+#[function_component(ChildComponent)]
+pub fn child_component(props: &Props) -> Html {
+    let search_query = use_state(String::default);
+    // Use it here
+}
+```
+
+#### 3. Explicit Effect Dependencies
+
+```rust
+// ✅ Good: Explicit dependency
+use_effect_with(selected_building_id.clone(), move |building_id| {
+    // Load apartments when building changes
+    || ()
+});
+
+// ❌ Bad: Using () when you have dependencies
+use_effect_with((), move |_| {
+    // Uses selected_building_id but doesn't declare it!
+    || ()
+});
+```
+
+#### 4. Always Handle States
+
+Every component should handle:
+- ✅ **Loading state** - Show spinner or skeleton
+- ✅ **Error state** - Show error alert
+- ✅ **Empty state** - Show helpful message
+- ✅ **Success state** - Show data
+
+```rust
+if *loading {
+    return html! { <Spinner /> };
+}
+
+if let Some(err) = (*error).clone() {
+    return html! { <ErrorAlert message={err} on_close={clear_error} /> };
+}
+
+if items.is_empty() {
+    return html! { <div class="alert alert-info">{"No items found"}</div> };
+}
+
+// Render items...
+```
+
+#### 5. Component Composition Over Complexity
+
+**❌ Bad: One complex component**
+```rust
+#[function_component(ComplexPage)]
+pub fn complex_page() -> Html {
+    // 50 state variables
+    // 100 callbacks
+    // 500 lines of HTML
+}
+```
+
+**✅ Good: Composed from simple components**
+```rust
+#[function_component(SimplePage)]
+pub fn simple_page() -> Html {
+    html! {
+        <PageLayout>
+            <FilterPanel filters={filters} on_change={on_filter_change} />
+            <ItemList items={filtered_items} on_select={on_select} />
+            <ItemDetail item={selected_item} />
+        </PageLayout>
+    }
+}
+```
+
+### Code Review Checklist
+
+Before committing a component, verify:
+
+- [ ] Component has ONE clear responsibility
+- [ ] File is under size limits (~200 for pages, ~400 for components)
+- [ ] State is managed at the right level
+- [ ] Props and callbacks are well-typed
+- [ ] Loading/error/empty states are handled
+- [ ] Component could be tested in isolation
+- [ ] Logic could be reused if needed
+- [ ] Bootstrap classes used (no custom CSS)
+- [ ] Form components used (not raw HTML inputs)
 
 ---
 

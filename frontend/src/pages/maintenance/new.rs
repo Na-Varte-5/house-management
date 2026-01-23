@@ -1,7 +1,7 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::components::{ErrorAlert, SuccessAlert};
+use crate::components::{ErrorAlert, SuccessAlert, TextInput, Textarea, Select, SelectOption, FormGroup};
 use crate::contexts::AuthContext;
 use crate::routes::Route;
 use crate::services::{api_client, ApiError};
@@ -36,7 +36,7 @@ pub fn maintenance_new_page() -> Html {
     let apartments = use_state(|| Vec::<ApartmentWithBuilding>::new());
     let loading_apartments = use_state(|| true);
 
-    let apartment_id = use_state(|| None::<u64>);
+    let apartment_id = use_state(|| "".to_string());
     let request_type = use_state(|| "General".to_string());
     let priority = use_state(|| "Medium".to_string());
     let title = use_state(String::default);
@@ -87,7 +87,7 @@ pub fn maintenance_new_page() -> Html {
             e.prevent_default();
 
             // Validation
-            if apartment_id.is_none() {
+            if apartment_id.is_empty() {
                 error.set(Some("Please select an apartment".to_string()));
                 return;
             }
@@ -117,8 +117,19 @@ pub fn maintenance_new_page() -> Html {
 
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
+
+                // Parse apartment_id
+                let apt_id = match apartment_id.parse::<u64>() {
+                    Ok(id) => id,
+                    Err(_) => {
+                        error.set(Some("Invalid apartment selected".to_string()));
+                        submitting.set(false);
+                        return;
+                    }
+                };
+
                 let new_request = NewMaintenanceRequest {
-                    apartment_id: apartment_id.unwrap(),
+                    apartment_id: apt_id,
                     request_type: (*request_type).clone(),
                     priority: (*priority).clone(),
                     title: (*title).clone(),
@@ -164,6 +175,61 @@ pub fn maintenance_new_page() -> Html {
         Callback::from(move |_| success.set(None))
     };
 
+    // Callbacks for form inputs
+    let on_apartment_change = {
+        let apartment_id = apartment_id.clone();
+        Callback::from(move |value: String| apartment_id.set(value))
+    };
+
+    let on_type_change = {
+        let request_type = request_type.clone();
+        Callback::from(move |value: String| request_type.set(value))
+    };
+
+    let on_priority_change = {
+        let priority = priority.clone();
+        Callback::from(move |value: String| priority.set(value))
+    };
+
+    let on_title_change = {
+        let title = title.clone();
+        Callback::from(move |value: String| title.set(value))
+    };
+
+    let on_description_change = {
+        let description = description.clone();
+        Callback::from(move |value: String| description.set(value))
+    };
+
+    // Build apartment options
+    let apartment_options = {
+        let mut options = vec![SelectOption::new("", "-- Select Apartment --")];
+        for apt in apartments.iter() {
+            let label = format!("Apartment {} - {}", apt.number, apt.building_address);
+            options.push(SelectOption::new(apt.id.to_string(), label));
+        }
+        options
+    };
+
+    // Build request type options
+    let type_options = vec![
+        SelectOption::new("General", "General"),
+        SelectOption::new("Plumbing", "Plumbing"),
+        SelectOption::new("Electrical", "Electrical"),
+        SelectOption::new("HVAC", "HVAC"),
+        SelectOption::new("Appliance", "Appliance"),
+        SelectOption::new("Structural", "Structural"),
+        SelectOption::new("Other", "Other"),
+    ];
+
+    // Build priority options
+    let priority_options = vec![
+        SelectOption::new("Low", "Low"),
+        SelectOption::new("Medium", "Medium"),
+        SelectOption::new("High", "High"),
+        SelectOption::new("Urgent", "Urgent"),
+    ];
+
     html! {
         <div class="container mt-4">
             <div class="row justify-content-center">
@@ -182,126 +248,71 @@ pub fn maintenance_new_page() -> Html {
                             }
 
                             <form onsubmit={on_submit}>
-                                // Apartment selector
-                                <div class="mb-3">
-                                    <label class="form-label">{"Apartment"}<span class="text-danger">{"*"}</span></label>
+                                <FormGroup
+                                    title="Request Details"
+                                    description="Provide information about the maintenance issue"
+                                >
                                     if *loading_apartments {
-                                        <div class="text-muted small">{"Loading apartments..."}</div>
+                                        <div class="mb-3">
+                                            <label class="form-label">
+                                                {"Apartment"}
+                                                <span class="text-danger">{" *"}</span>
+                                            </label>
+                                            <div class="text-muted small">{"Loading apartments..."}</div>
+                                        </div>
                                     } else {
-                                        <select
-                                            class="form-select"
+                                        <Select
+                                            label="Apartment"
+                                            value={(*apartment_id).clone()}
+                                            on_change={on_apartment_change}
+                                            options={apartment_options}
                                             disabled={*submitting}
-                                            onchange={{
-                                                let apartment_id = apartment_id.clone();
-                                                Callback::from(move |e: Event| {
-                                                    let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
-                                                    let val = select.value();
-                                                    if let Ok(id) = val.parse::<u64>() {
-                                                        apartment_id.set(Some(id));
-                                                    }
-                                                })
-                                            }}
-                                        >
-                                            <option value="">{"-- Select Apartment --"}</option>
-                                            {
-                                                for apartments.iter().map(|apt| {
-                                                    html! {
-                                                        <option value={apt.id.to_string()}>
-                                                            {format!("Apartment {} - {}", apt.number, apt.building_address)}
-                                                        </option>
-                                                    }
-                                                })
-                                            }
-                                        </select>
+                                            required=true
+                                            help_text="Select the apartment with the maintenance issue"
+                                        />
                                     }
-                                </div>
 
-                                // Request Type
-                                <div class="mb-3">
-                                    <label class="form-label">{"Request Type"}<span class="text-danger">{"*"}</span></label>
-                                    <select
-                                        class="form-select"
-                                        disabled={*submitting}
+                                    <Select
+                                        label="Request Type"
                                         value={(*request_type).clone()}
-                                        onchange={{
-                                            let request_type = request_type.clone();
-                                            Callback::from(move |e: Event| {
-                                                let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
-                                                request_type.set(select.value());
-                                            })
-                                        }}
-                                    >
-                                        <option value="General">{"General"}</option>
-                                        <option value="Plumbing">{"Plumbing"}</option>
-                                        <option value="Electrical">{"Electrical"}</option>
-                                        <option value="HVAC">{"HVAC"}</option>
-                                        <option value="Appliance">{"Appliance"}</option>
-                                        <option value="Structural">{"Structural"}</option>
-                                        <option value="Other">{"Other"}</option>
-                                    </select>
-                                </div>
-
-                                // Priority
-                                <div class="mb-3">
-                                    <label class="form-label">{"Priority"}<span class="text-danger">{"*"}</span></label>
-                                    <select
-                                        class="form-select"
+                                        on_change={on_type_change}
+                                        options={type_options}
                                         disabled={*submitting}
-                                        value={(*priority).clone()}
-                                        onchange={{
-                                            let priority = priority.clone();
-                                            Callback::from(move |e: Event| {
-                                                let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
-                                                priority.set(select.value());
-                                            })
-                                        }}
-                                    >
-                                        <option value="Low" selected={*priority == "Low"}>{"Low"}</option>
-                                        <option value="Medium" selected={*priority == "Medium"}>{"Medium"}</option>
-                                        <option value="High" selected={*priority == "High"}>{"High"}</option>
-                                        <option value="Urgent" selected={*priority == "Urgent"}>{"Urgent"}</option>
-                                    </select>
-                                </div>
+                                        required=true
+                                        help_text="Category of the maintenance issue"
+                                    />
 
-                                // Title
-                                <div class="mb-3">
-                                    <label class="form-label">{"Title"}<span class="text-danger">{"*"}</span></label>
-                                    <input
-                                        type="text"
-                                        class="form-control"
+                                    <Select
+                                        label="Priority"
+                                        value={(*priority).clone()}
+                                        on_change={on_priority_change}
+                                        options={priority_options}
+                                        disabled={*submitting}
+                                        required=true
+                                        help_text="How urgent is this issue?"
+                                    />
+
+                                    <TextInput
+                                        label="Title"
+                                        value={(*title).clone()}
+                                        on_change={on_title_change}
                                         placeholder="Brief description of the issue"
                                         disabled={*submitting}
-                                        value={(*title).clone()}
-                                        oninput={{
-                                            let title = title.clone();
-                                            Callback::from(move |e: InputEvent| {
-                                                let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                                title.set(input.value());
-                                            })
-                                        }}
+                                        required=true
                                     />
-                                </div>
 
-                                // Description
-                                <div class="mb-3">
-                                    <label class="form-label">{"Description"}<span class="text-danger">{"*"}</span></label>
-                                    <textarea
-                                        class="form-control"
-                                        rows="5"
-                                        placeholder="Detailed description of the maintenance issue"
-                                        disabled={*submitting}
+                                    <Textarea
+                                        label="Description"
                                         value={(*description).clone()}
-                                        oninput={{
-                                            let description = description.clone();
-                                            Callback::from(move |e: InputEvent| {
-                                                let textarea: web_sys::HtmlTextAreaElement = e.target_unchecked_into();
-                                                description.set(textarea.value());
-                                            })
-                                        }}
-                                    ></textarea>
-                                </div>
+                                        on_change={on_description_change}
+                                        placeholder="Detailed description of the maintenance issue"
+                                        rows={5}
+                                        disabled={*submitting}
+                                        required=true
+                                        help_text="Include any relevant details that will help us address the issue"
+                                    />
+                                </FormGroup>
 
-                                // Buttons
                                 <div class="d-flex justify-content-end gap-2">
                                     <button
                                         type="button"

@@ -1,5 +1,4 @@
 use yew::prelude::*;
-use yew_router::prelude::*;
 
 use crate::components::admin_sidebar::AdminSidebar;
 use crate::routes::Route;

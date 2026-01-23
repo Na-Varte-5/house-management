@@ -1,7 +1,7 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::components::{ErrorAlert, SuccessAlert};
+use crate::components::{ErrorAlert, SuccessAlert, TextInput, Textarea, Select, SelectOption, DateTimeInput, Checkbox, FormGroup};
 use crate::contexts::AuthContext;
 use crate::routes::Route;
 use crate::services::{api_client, ApiError};
@@ -23,6 +23,29 @@ struct Building {
     address: String,
 }
 
+// Helper function to get current datetime as string
+fn now_datetime() -> String {
+    let now = js_sys::Date::new_0();
+    let year = now.get_full_year() as i32;
+    let month = (now.get_month() as f64 + 1.0) as i32;
+    let day = now.get_date() as i32;
+    let hours = now.get_hours() as i32;
+    let minutes = now.get_minutes() as i32;
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}", year, month, day, hours, minutes)
+}
+
+// Helper function to add days to current datetime
+fn datetime_plus_days(days: f64) -> String {
+    let now = js_sys::Date::new_0();
+    now.set_date((now.get_date() as f64 + days) as u32);
+    let year = now.get_full_year() as i32;
+    let month = (now.get_month() as f64 + 1.0) as i32;
+    let day = now.get_date() as i32;
+    let hours = now.get_hours() as i32;
+    let minutes = now.get_minutes() as i32;
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}", year, month, day, hours, minutes)
+}
+
 #[function_component(VotingNewPage)]
 pub fn voting_new_page() -> Html {
     let auth = use_context::<AuthContext>().expect("AuthContext not found");
@@ -39,35 +62,14 @@ pub fn voting_new_page() -> Html {
     }
 
     let buildings = use_state(|| Vec::<Building>::new());
-    let selected_building = use_state(|| None::<u64>);
+    let selected_building = use_state(|| "".to_string());
 
     let title = use_state(String::default);
     let description = use_state(String::default);
-
-    // Set date defaults: start_time = now, end_time = now + 7 days
-    let start_time = use_state(|| {
-        let now = js_sys::Date::new_0();
-        let year = now.get_full_year() as i32;
-        let month = (now.get_month() as f64 + 1.0) as i32;
-        let day = now.get_date() as i32;
-        let hours = now.get_hours() as i32;
-        let minutes = now.get_minutes() as i32;
-        format!("{:04}-{:02}-{:02}T{:02}:{:02}", year, month, day, hours, minutes)
-    });
-
-    let end_time = use_state(|| {
-        let now = js_sys::Date::new_0();
-        // Add 7 days
-        now.set_date((now.get_date() as f64 + 7.0) as u32);
-        let year = now.get_full_year() as i32;
-        let month = (now.get_month() as f64 + 1.0) as i32;
-        let day = now.get_date() as i32;
-        let hours = now.get_hours() as i32;
-        let minutes = now.get_minutes() as i32;
-        format!("{:04}-{:02}-{:02}T{:02}:{:02}", year, month, day, hours, minutes)
-    });
-
+    let start_time = use_state(now_datetime);
+    let end_time = use_state(|| datetime_plus_days(7.0));
     let voting_method = use_state(|| "SimpleMajority".to_string());
+
     let role_admin = use_state(|| false);
     let role_manager = use_state(|| false);
     let role_homeowner = use_state(|| true);
@@ -175,10 +177,18 @@ pub fn voting_new_page() -> Html {
 
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
+
+                // Parse building_id from string
+                let building_id = if selected_building.is_empty() {
+                    None
+                } else {
+                    selected_building.parse().ok()
+                };
+
                 let payload = CreateProposalPayload {
                     title: (*title).clone(),
                     description: (*description).clone(),
-                    building_id: *selected_building,
+                    building_id,
                     start_time: (*start_time).clone(),
                     end_time: (*end_time).clone(),
                     voting_method: (*voting_method).clone(),
@@ -222,6 +232,79 @@ pub fn voting_new_page() -> Html {
         Callback::from(move |_| success.set(None))
     };
 
+    // Callbacks for form inputs
+    let on_title_change = {
+        let title = title.clone();
+        Callback::from(move |value: String| title.set(value))
+    };
+
+    let on_description_change = {
+        let description = description.clone();
+        Callback::from(move |value: String| description.set(value))
+    };
+
+    let on_building_change = {
+        let selected_building = selected_building.clone();
+        Callback::from(move |value: String| selected_building.set(value))
+    };
+
+    let on_method_change = {
+        let voting_method = voting_method.clone();
+        Callback::from(move |value: String| voting_method.set(value))
+    };
+
+    let on_start_change = {
+        let start_time = start_time.clone();
+        Callback::from(move |value: String| start_time.set(value))
+    };
+
+    let on_end_change = {
+        let end_time = end_time.clone();
+        Callback::from(move |value: String| end_time.set(value))
+    };
+
+    let on_admin_change = {
+        let role_admin = role_admin.clone();
+        Callback::from(move |checked: bool| role_admin.set(checked))
+    };
+
+    let on_manager_change = {
+        let role_manager = role_manager.clone();
+        Callback::from(move |checked: bool| role_manager.set(checked))
+    };
+
+    let on_homeowner_change = {
+        let role_homeowner = role_homeowner.clone();
+        Callback::from(move |checked: bool| role_homeowner.set(checked))
+    };
+
+    let on_renter_change = {
+        let role_renter = role_renter.clone();
+        Callback::from(move |checked: bool| role_renter.set(checked))
+    };
+
+    let on_hoa_change = {
+        let role_hoa = role_hoa.clone();
+        Callback::from(move |checked: bool| role_hoa.set(checked))
+    };
+
+    // Build building options for Select component
+    let building_options = {
+        let mut options = vec![SelectOption::new("", "Global (visible to all buildings)")];
+        for building in buildings.iter() {
+            options.push(SelectOption::new(building.id.to_string(), &building.address));
+        }
+        options
+    };
+
+    // Build voting method options
+    let method_options = vec![
+        SelectOption::new("SimpleMajority", "Simple Majority (1 person = 1 vote)"),
+        SelectOption::new("WeightedArea", "Weighted by Area (vote weight = apartment size)"),
+        SelectOption::new("PerSeat", "Per Seat (1 apartment = 1 vote)"),
+        SelectOption::new("Consensus", "Consensus (no 'No' votes allowed)"),
+    ];
+
     html! {
         <div class="container mt-4">
             <div class="row justify-content-center">
@@ -240,234 +323,114 @@ pub fn voting_new_page() -> Html {
                             }
 
                             <form onsubmit={on_submit}>
-                                // Title
-                                <div class="mb-3">
-                                    <label class="form-label">{"Title"}<span class="text-danger">{"*"}</span></label>
-                                    <input
-                                        type="text"
-                                        class="form-control"
+                                <FormGroup
+                                    title="Basic Information"
+                                    description="Enter the proposal details"
+                                >
+                                    <TextInput
+                                        label="Title"
+                                        value={(*title).clone()}
+                                        on_change={on_title_change}
                                         placeholder="Proposal title"
                                         disabled={*submitting}
-                                        value={(*title).clone()}
-                                        oninput={{
-                                            let title = title.clone();
-                                            Callback::from(move |e: InputEvent| {
-                                                let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                                title.set(input.value());
-                                            })
-                                        }}
+                                        required=true
                                     />
-                                </div>
 
-                                // Description
-                                <div class="mb-3">
-                                    <label class="form-label">{"Description"}<span class="text-danger">{"*"}</span></label>
-                                    <textarea
-                                        class="form-control"
-                                        rows="4"
-                                        placeholder="Describe the proposal"
-                                        disabled={*submitting}
+                                    <Textarea
+                                        label="Description"
                                         value={(*description).clone()}
-                                        oninput={{
-                                            let description = description.clone();
-                                            Callback::from(move |e: InputEvent| {
-                                                let textarea: web_sys::HtmlTextAreaElement = e.target_unchecked_into();
-                                                description.set(textarea.value());
-                                            })
-                                        }}
-                                    ></textarea>
-                                </div>
-
-                                // Building Scope
-                                <div class="mb-3">
-                                    <label class="form-label">
-                                        {"Building Scope"}
-                                        <span class="text-muted small ms-1">{"(optional)"}</span>
-                                    </label>
-                                    <select
-                                        class="form-select"
+                                        on_change={on_description_change}
+                                        placeholder="Describe the proposal"
+                                        rows={4}
                                         disabled={*submitting}
-                                        value={selected_building.as_ref().map(|id| id.to_string()).unwrap_or_default()}
-                                        onchange={{
-                                            let selected_building = selected_building.clone();
-                                            Callback::from(move |e: Event| {
-                                                let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
-                                                let value = select.value();
-                                                if value.is_empty() {
-                                                    selected_building.set(None);
-                                                } else {
-                                                    selected_building.set(value.parse().ok());
-                                                }
-                                            })
-                                        }}
-                                    >
-                                        <option value="">{"Global (visible to all buildings)"}</option>
-                                        {for buildings.iter().map(|b| html! {
-                                            <option value={b.id.to_string()}>{&b.address}</option>
-                                        })}
-                                    </select>
-                                    <div class="form-text">{"Leave as Global to make this proposal visible to all users, or select a building to restrict visibility"}</div>
-                                </div>
+                                        required=true
+                                    />
 
-                                // Voting Method
-                                <div class="mb-3">
-                                    <label class="form-label">{"Voting Method"}<span class="text-danger">{"*"}</span></label>
-                                    <select
-                                        class="form-select"
+                                    <Select
+                                        label="Building Scope"
+                                        value={(*selected_building).clone()}
+                                        on_change={on_building_change}
+                                        options={building_options}
                                         disabled={*submitting}
+                                        help_text="Leave as Global to make this proposal visible to all users, or select a building to restrict visibility"
+                                    />
+                                </FormGroup>
+
+                                <FormGroup title="Voting Settings">
+                                    <Select
+                                        label="Voting Method"
                                         value={(*voting_method).clone()}
-                                        onchange={{
-                                            let voting_method = voting_method.clone();
-                                            Callback::from(move |e: Event| {
-                                                let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
-                                                voting_method.set(select.value());
-                                            })
-                                        }}
-                                    >
-                                        <option value="SimpleMajority">{"Simple Majority (1 person = 1 vote)"}</option>
-                                        <option value="WeightedArea">{"Weighted by Area (vote weight = apartment size)"}</option>
-                                        <option value="PerSeat">{"Per Seat (1 apartment = 1 vote)"}</option>
-                                        <option value="Consensus">{"Consensus (no 'No' votes allowed)"}</option>
-                                    </select>
-                                </div>
-
-                                // Start Time
-                                <div class="mb-3">
-                                    <label class="form-label">{"Voting Start Time"}<span class="text-danger">{"*"}</span></label>
-                                    <input
-                                        type="datetime-local"
-                                        class="form-control"
+                                        on_change={on_method_change}
+                                        options={method_options}
                                         disabled={*submitting}
+                                        required=true
+                                    />
+
+                                    <DateTimeInput
+                                        label="Voting Start Time"
                                         value={(*start_time).clone()}
-                                        oninput={{
-                                            let start_time = start_time.clone();
-                                            Callback::from(move |e: InputEvent| {
-                                                let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                                start_time.set(input.value());
-                                            })
-                                        }}
-                                    />
-                                </div>
-
-                                // End Time
-                                <div class="mb-3">
-                                    <label class="form-label">{"Voting End Time"}<span class="text-danger">{"*"}</span></label>
-                                    <input
-                                        type="datetime-local"
-                                        class="form-control"
+                                        on_change={on_start_change}
+                                        input_type="datetime-local"
                                         disabled={*submitting}
-                                        value={(*end_time).clone()}
-                                        oninput={{
-                                            let end_time = end_time.clone();
-                                            Callback::from(move |e: InputEvent| {
-                                                let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                                end_time.set(input.value());
-                                            })
-                                        }}
+                                        required=true
                                     />
-                                </div>
 
-                                // Eligible Roles
-                                <div class="mb-3">
-                                    <label class="form-label">{"Eligible Voters"}<span class="text-danger">{"*"}</span></label>
-                                    <div class="form-check">
-                                        <input
-                                            class="form-check-input"
-                                            type="checkbox"
-                                            id="admin"
-                                            disabled={*submitting}
-                                            checked={*role_admin}
-                                            onchange={{
-                                                let role_admin = role_admin.clone();
-                                                Callback::from(move |e: Event| {
-                                                    let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                                    role_admin.set(input.checked());
-                                                })
-                                            }}
-                                        />
-                                        <label class="form-check-label" for="admin">
-                                            {"Admins"}
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input
-                                            class="form-check-input"
-                                            type="checkbox"
-                                            id="manager"
-                                            disabled={*submitting}
-                                            checked={*role_manager}
-                                            onchange={{
-                                                let role_manager = role_manager.clone();
-                                                Callback::from(move |e: Event| {
-                                                    let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                                    role_manager.set(input.checked());
-                                                })
-                                            }}
-                                        />
-                                        <label class="form-check-label" for="manager">
-                                            {"Managers"}
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input
-                                            class="form-check-input"
-                                            type="checkbox"
-                                            id="homeowner"
-                                            disabled={*submitting}
-                                            checked={*role_homeowner}
-                                            onchange={{
-                                                let role_homeowner = role_homeowner.clone();
-                                                Callback::from(move |e: Event| {
-                                                    let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                                    role_homeowner.set(input.checked());
-                                                })
-                                            }}
-                                        />
-                                        <label class="form-check-label" for="homeowner">
-                                            {"Homeowners"}
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input
-                                            class="form-check-input"
-                                            type="checkbox"
-                                            id="renter"
-                                            disabled={*submitting}
-                                            checked={*role_renter}
-                                            onchange={{
-                                                let role_renter = role_renter.clone();
-                                                Callback::from(move |e: Event| {
-                                                    let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                                    role_renter.set(input.checked());
-                                                })
-                                            }}
-                                        />
-                                        <label class="form-check-label" for="renter">
-                                            {"Renters"}
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input
-                                            class="form-check-input"
-                                            type="checkbox"
-                                            id="hoa"
-                                            disabled={*submitting}
-                                            checked={*role_hoa}
-                                            onchange={{
-                                                let role_hoa = role_hoa.clone();
-                                                Callback::from(move |e: Event| {
-                                                    let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-                                                    role_hoa.set(input.checked());
-                                                })
-                                            }}
-                                        />
-                                        <label class="form-check-label" for="hoa">
-                                            {"HOA Members"}
-                                        </label>
-                                    </div>
-                                </div>
+                                    <DateTimeInput
+                                        label="Voting End Time"
+                                        value={(*end_time).clone()}
+                                        on_change={on_end_change}
+                                        input_type="datetime-local"
+                                        min={Some((*start_time).clone())}
+                                        disabled={*submitting}
+                                        required=true
+                                    />
+                                </FormGroup>
 
-                                // Buttons
+                                <FormGroup
+                                    title="Eligible Voters"
+                                    description="Select which roles can vote on this proposal"
+                                >
+                                    <Checkbox
+                                        id="role-admin"
+                                        label="Admins"
+                                        checked={*role_admin}
+                                        on_change={on_admin_change}
+                                        disabled={*submitting}
+                                    />
+
+                                    <Checkbox
+                                        id="role-manager"
+                                        label="Managers"
+                                        checked={*role_manager}
+                                        on_change={on_manager_change}
+                                        disabled={*submitting}
+                                    />
+
+                                    <Checkbox
+                                        id="role-homeowner"
+                                        label="Homeowners"
+                                        checked={*role_homeowner}
+                                        on_change={on_homeowner_change}
+                                        disabled={*submitting}
+                                    />
+
+                                    <Checkbox
+                                        id="role-renter"
+                                        label="Renters"
+                                        checked={*role_renter}
+                                        on_change={on_renter_change}
+                                        disabled={*submitting}
+                                    />
+
+                                    <Checkbox
+                                        id="role-hoa"
+                                        label="HOA Members"
+                                        checked={*role_hoa}
+                                        on_change={on_hoa_change}
+                                        disabled={*submitting}
+                                    />
+                                </FormGroup>
+
                                 <div class="d-flex justify-content-end gap-2">
                                     <button
                                         type="button"

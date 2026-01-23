@@ -106,6 +106,12 @@ trunk build
   - Typed errors: `ApiError` enum (NetworkError, Unauthorized, Forbidden, NotFound, BadRequest, ServerError)
   - Auto-detects environment: port 8081 (Trunk dev) → routes to 8080 (backend)
 - **Reusable Components**: ErrorAlert, SuccessAlert for consistent user feedback
+- **Form Components Library** (`src/components/forms/`): Comprehensive reusable form inputs (Jan 2026)
+  - **IMPORTANT**: Always use these components instead of raw HTML inputs for consistency
+  - Available components: TextInput, NumberInput, Select, Textarea, DateTimeInput, Checkbox, FormGroup
+  - Features: built-in validation, labels, help text, error display, size variants (sm/lg)
+  - Full documentation in `frontend/CLAUDE.md` with usage examples
+  - Example: `<TextInput label="Email" value={email} on_change={on_email_change} required=true />`
 
 **Auth flow**:
 - JWT stored in browser localStorage via AuthContext provider
@@ -215,6 +221,37 @@ diesel migration run              # apply pending migrations
 **RBAC enforcement**: Centralized via `AuthContext` checks in handlers; avoid inline role strings, prefer constants or helper functions
 
 **Error responses**: Return JSON with meaningful messages; use appropriate HTTP status codes (400 bad request, 401 unauthorized, 403 forbidden, 404 not found, 500 internal error)
+
+**Frontend form development**:
+- Always use form components from `frontend/src/components/forms/` instead of raw HTML inputs (see `frontend/CLAUDE.md` for full component library documentation)
+- If a form input pattern is missing, create a new reusable component in `frontend/src/components/forms/` for future reuse instead of implementing it inline
+
+**Frontend architecture principles (Yew/Rust)**:
+- **Single Responsibility Principle (CRITICAL)**: Each component should have ONE clear purpose
+  - ❌ BAD: A 750-line page component that handles both registration forms AND list views with filters
+  - ✅ GOOD: Split into separate components: orchestrator page (145 lines) + register form component (323 lines) + list component (363 lines)
+- **Component size limits**:
+  - Page components (routes): Max ~200 lines. If larger, split into sub-components
+  - Reusable components: Max ~400 lines. If larger, split into smaller components
+  - If a file exceeds these limits, it likely violates Single Responsibility Principle
+- **When to split components**:
+  - Component has multiple distinct responsibilities (e.g., form + list + filters)
+  - Component handles multiple unrelated concerns (e.g., registration + editing + deletion)
+  - File is growing beyond 300-400 lines
+  - Logic could be reused elsewhere
+  - Testing would benefit from isolation
+- **Component organization**:
+  - Page components (routes) in `src/pages/` - orchestrate child components, handle routing
+  - Reusable components in `src/components/` - focused, testable, reusable
+  - Domain-specific components in `src/components/domain/` (e.g., `meters/`, `properties/`)
+  - Form inputs in `src/components/forms/` - standardized, validated inputs
+- **Yew best practices**:
+  - Use props for data, callbacks for events
+  - Keep state management close to where it's used
+  - Use `use_effect_with` for side effects with explicit dependencies
+  - Always handle loading and error states
+  - Provide empty state feedback
+  - Use Bootstrap classes for styling (no custom CSS)
 
 **Testing strategy** (planned):
 - Backend integration tests with test database (transaction rollback per test)
