@@ -197,7 +197,20 @@ fn is_token_valid(token: &str) -> bool {
 
     // Decode the payload (second part)
     let payload = parts[1];
-    let decoded = match general_purpose::STANDARD_NO_PAD.decode(payload) {
+
+    // Add padding if needed (base64url requires it)
+    let padding = match payload.len() % 4 {
+        0 => "",
+        2 => "==",
+        3 => "=",
+        _ => return false,
+    };
+    let padded = format!("{}{}", payload, padding);
+
+    // Decode from base64url (replace - with + and _ with /)
+    let normalized = padded.replace('-', "+").replace('_', "/");
+
+    let decoded = match general_purpose::STANDARD.decode(&normalized) {
         Ok(d) => d,
         Err(_) => return false,
     };
