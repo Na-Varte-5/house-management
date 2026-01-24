@@ -1,0 +1,1 @@
+DROP TABLE maintenance_request_comments;

@@ -1,5 +1,6 @@
 use crate::schema::{
-    maintenance_request_attachments, maintenance_request_history, maintenance_requests,
+    maintenance_request_attachments, maintenance_request_comments, maintenance_request_history,
+    maintenance_requests,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -58,4 +59,37 @@ pub struct MaintenanceRequestHistory {
     pub note: Option<String>,
     pub changed_by: u64,
     pub changed_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Queryable, Selectable, Serialize, Debug, ToSchema)]
+#[diesel(table_name = maintenance_request_comments)]
+#[diesel(check_for_backend(diesel::mysql::Mysql))]
+pub struct MaintenanceRequestComment {
+    pub id: u64,
+    pub request_id: u64,
+    pub user_id: u64,
+    pub comment_text: String,
+    pub is_deleted: bool,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub updated_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Insertable, Deserialize, ToSchema)]
+#[diesel(table_name = maintenance_request_comments)]
+pub struct NewMaintenanceRequestComment {
+    pub request_id: u64,
+    pub user_id: u64,
+    pub comment_text: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct MaintenanceRequestCommentWithUser {
+    pub id: u64,
+    pub request_id: u64,
+    pub user_id: u64,
+    pub user_name: String,
+    pub comment_text: String,
+    pub is_deleted: bool,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub updated_at: Option<chrono::NaiveDateTime>,
 }

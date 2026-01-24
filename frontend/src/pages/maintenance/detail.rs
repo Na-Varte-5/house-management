@@ -1,6 +1,6 @@
 use crate::components::maintenance::{
-    Attachment, AttachmentsList, HistoryEntry, HistoryTimeline, ManagementPanel, ManagementRequest,
-    UserInfo,
+    Attachment, AttachmentsList, Comment, CommentSection, HistoryEntry, HistoryTimeline,
+    ManagementPanel, ManagementRequest, UserInfo,
 };
 use crate::components::{ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
@@ -91,11 +91,13 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
     let request = use_state(|| None::<MaintenanceRequest>);
     let history = use_state(|| Vec::<HistoryEntry>::new());
     let attachments = use_state(|| Vec::<Attachment>::new());
+    let comments = use_state(|| Vec::<Comment>::new());
     let users = use_state(|| Vec::<UserInfo>::new());
 
     let loading = use_state(|| true);
     let loading_history = use_state(|| false);
     let loading_attachments = use_state(|| false);
+    let loading_comments = use_state(|| false);
 
     let error = use_state(|| None::<String>);
     let success = use_state(|| None::<String>);
@@ -178,6 +180,29 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
         });
     }
 
+    // Load comments
+    {
+        let comments = comments.clone();
+        let loading_comments = loading_comments.clone();
+        let token = token.clone();
+
+        use_effect_with(request_id, move |id| {
+            let id = *id;
+            loading_comments.set(true);
+            wasm_bindgen_futures::spawn_local(async move {
+                let client = api_client(token.as_deref());
+                if let Ok(list) = client
+                    .get::<Vec<Comment>>(&format!("/requests/{}/comments", id))
+                    .await
+                {
+                    comments.set(list);
+                }
+                loading_comments.set(false);
+            });
+            || ()
+        });
+    }
+
     // Load users for assignment (Admin/Manager only)
     {
         let users = users.clone();
@@ -235,6 +260,96 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
     let on_success = {
         let success = success.clone();
         Callback::from(move |msg: String| success.set(Some(msg)))
+    };
+
+    let on_add_comment = {
+        let comments = comments.clone();
+        let loading_comments = loading_comments.clone();
+        let success = success.clone();
+        let error = error.clone();
+        let token = token.clone();
+
+        Callback::from(move |comment_text: String| {
+            let comments = comments.clone();
+            let loading_comments = loading_comments.clone();
+            let success = success.clone();
+            let error = error.clone();
+            let token = token.clone();
+
+            loading_comments.set(true);
+            wasm_bindgen_futures::spawn_local(async move {
+                let client = api_client(token.as_deref());
+                #[derive(serde::Serialize)]
+                struct NewComment {
+                    comment_text: String,
+                }
+                match client
+                    .post::<NewComment, Comment>(
+                        &format!("/requests/{}/comments", request_id),
+                        &NewComment { comment_text },
+                    )
+                    .await
+                {
+                    Ok(_) => {
+                        success.set(Some("Comment posted successfully".to_string()));
+                        // Reload comments
+                        if let Ok(list) = client
+                            .get::<Vec<Comment>>(&format!("/requests/{}/comments", request_id))
+                            .await
+                        {
+                            comments.set(list);
+                        }
+                    }
+                    Err(e) => {
+                        error.set(Some(format!("Failed to post comment: {}", e)));
+                    }
+                }
+                loading_comments.set(false);
+            });
+        })
+    };
+
+    let on_delete_comment = {
+        let comments = comments.clone();
+        let loading_comments = loading_comments.clone();
+        let success = success.clone();
+        let error = error.clone();
+        let token = token.clone();
+
+        Callback::from(move |comment_id: u64| {
+            let comments = comments.clone();
+            let loading_comments = loading_comments.clone();
+            let success = success.clone();
+            let error = error.clone();
+            let token = token.clone();
+
+            loading_comments.set(true);
+            wasm_bindgen_futures::spawn_local(async move {
+                let client = api_client(token.as_deref());
+                match client
+                    .delete_no_response(&format!(
+                        "/requests/{}/comments/{}",
+                        request_id, comment_id
+                    ))
+                    .await
+                {
+                    Ok(_) => {
+                        success.set(Some("Comment deleted successfully".to_string()));
+                        // Reload comments
+                        if let Ok(list) = client
+                            .get::<Vec<Comment>>(&format!("/requests/{}/comments", request_id))
+                            .await
+                        {
+                            comments.set(list);
+                        }
+                    }
+                    Err(e) => {
+                        error.set(Some(format!("Failed to delete comment: {}", e)));
+                    }
+                }
+                loading_comments.set(false);
+            });
+        })
     };
 
     let on_back = {
@@ -351,6 +466,17 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
                         <AttachmentsList
                             attachments={(*attachments).clone()}
                             loading={*loading_attachments}
+                        />
+
+                        // Comments component
+                        <CommentSection
+                            comments={(*comments).clone()}
+                            loading={*loading_comments}
+                            request_id={request_id}
+                            current_user_id={auth.user().map(|u| u.id).unwrap_or(0)}
+                            is_admin_or_manager={auth.is_admin_or_manager()}
+                            on_add_comment={on_add_comment}
+                            on_delete_comment={on_delete_comment}
                         />
                     </div>
 

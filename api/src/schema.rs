@@ -103,6 +103,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    maintenance_request_comments (id) {
+        id -> Unsigned<Bigint>,
+        request_id -> Unsigned<Bigint>,
+        user_id -> Unsigned<Bigint>,
+        comment_text -> Text,
+        is_deleted -> Bool,
+        created_at -> Nullable<Timestamp>,
+        updated_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
     maintenance_request_history (id) {
         id -> Unsigned<Bigint>,
         request_id -> Unsigned<Bigint>,
@@ -280,6 +292,8 @@ diesel::joinable!(apartment_owners -> apartments (apartment_id));
 diesel::joinable!(apartment_owners -> users (user_id));
 diesel::joinable!(apartments -> buildings (building_id));
 diesel::joinable!(maintenance_request_attachments -> maintenance_requests (request_id));
+diesel::joinable!(maintenance_request_comments -> maintenance_requests (request_id));
+diesel::joinable!(maintenance_request_comments -> users (user_id));
 diesel::joinable!(maintenance_request_history -> maintenance_requests (request_id));
 diesel::joinable!(maintenance_request_history -> users (changed_by));
 diesel::joinable!(maintenance_requests -> apartments (apartment_id));
@@ -302,6 +316,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     building_managers,
     buildings,
     maintenance_request_attachments,
+    maintenance_request_comments,
     maintenance_request_history,
     maintenance_requests,
     meter_readings,
