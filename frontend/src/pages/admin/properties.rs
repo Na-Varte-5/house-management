@@ -441,10 +441,7 @@ pub fn admin_properties_page() -> Html {
                     let payload = AssignOwnerRequest { user_id };
 
                     match client
-                        .post::<_, serde_json::Value>(
-                            &format!("/apartments/{}/owners", aid),
-                            &payload,
-                        )
+                        .post_no_response(&format!("/apartments/{}/owners", aid), &payload)
                         .await
                     {
                         Ok(_) => {

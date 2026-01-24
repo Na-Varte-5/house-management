@@ -156,6 +156,29 @@ impl ApiClient {
         Self::handle_response(response).await
     }
 
+    pub async fn post_no_response<B>(&self, endpoint: &str, body: &B) -> ApiResult<()>
+    where
+        B: Serialize,
+    {
+        let url = format!("{}{}", self.base_url, endpoint);
+        let body_json =
+            serde_json::to_string(body).map_err(|e| ApiError::ParseError(e.to_string()))?;
+
+        let mut request = Request::post(&url).header("Content-Type", "application/json");
+
+        if let Some(token) = &self.token {
+            request = request.header("Authorization", &format!("Bearer {}", token));
+        }
+
+        let response = request
+            .body(body_json)
+            .send()
+            .await
+            .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+
+        Self::handle_empty_response(response).await
+    }
+
     pub async fn delete_no_response(&self, endpoint: &str) -> ApiResult<()> {
         let url = format!("{}{}", self.base_url, endpoint);
 
