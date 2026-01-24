@@ -332,6 +332,40 @@ Frontend:
 - Soft-delete preserves audit trail
 - Clean, reusable component architecture
 
+**Bug Fixes & Improvements (Jan 24-25, 2026):**
+
+Following user testing of the maintenance comments system, several bugs were identified and fixed:
+
+1. ✅ **Comment Creation API Fix** - Fixed request body schema
+   - Issue: Backend expected request_id and user_id in JSON, frontend only sent comment_text
+   - Solution: Created CreateCommentRequest struct with only comment_text field
+   - Impact: Comment posting now works correctly
+
+2. ✅ **Navigation Back Button Fix** - Use browser history instead of hardcoded route
+   - Issue: Back button on meter pages always went to Buildings, breaking "My Properties" flow
+   - Solution: Changed from navigator.push(&Route::Buildings) to navigator.back()
+   - Impact: Proper navigation flow throughout the app
+
+3. ✅ **Property History URL Fix** - Remove duplicate /api/v1/ prefix
+   - Issue: Property history API call had duplicate prefix: /api/v1/api/v1/apartments/.../history
+   - Solution: Changed to /apartments/.../history (api_client adds prefix automatically)
+   - Impact: Property history timeline now loads correctly
+
+4. ✅ **Meter Management Endpoint** - Added missing GET /meters endpoint
+   - Issue: Admin meter management page returned 404 for GET /api/v1/meters
+   - Solution: Implemented list_all_meters handler with MeterWithApartment response type
+   - Features: Lists all meters with apartment/building info, last readings, Admin/Manager only
+   - Impact: Meter management page now works
+
+5. ✅ **Owner Assignment Parse Error Fix** - Added post_no_response() method
+   - Issue: Backend returned empty body (201/204), frontend tried to parse as JSON
+   - Solution: Added post_no_response() to API client for endpoints with empty responses
+   - Pattern: Consistent with delete_no_response() for DELETE requests
+   - Impact: Owner assignment succeeds without parse errors
+
+**Total bug fix effort:** ~3 hours
+**All issues resolved:** Maintenance comments system fully functional after user testing
+
 **2. Attachment Permissions**
 - Allow owners/renters to upload attachments (not just admin)
 - **Effort:** 2-3 hours

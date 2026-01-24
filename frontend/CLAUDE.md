@@ -823,6 +823,20 @@ let client = api_client(token.as_deref());
 let data = client.get::<MyType>("/endpoint").await?;
 ```
 
+**⚠️ IMPORTANT: URL Prefixing**
+
+The `api_client` automatically adds the `/api/v1/` prefix to all endpoints. **Do NOT include it in your endpoint paths.**
+
+```rust
+// ❌ WRONG - duplicate prefix
+client.get::<Data>("/api/v1/users").await?;  // Results in /api/v1/api/v1/users
+
+// ✅ CORRECT - api_client adds /api/v1/ automatically
+client.get::<Data>("/users").await?;  // Results in /api/v1/users
+```
+
+**Exception:** When using direct browser navigation (e.g., `window.open_with_url()` for CSV exports), you MUST include the full `/api/v1/` prefix since it bypasses the api_client.
+
 ### API Client Methods
 
 **Location:** `src/services/api.rs`
@@ -848,6 +862,9 @@ let deleted: MyType = client.delete::<MyType>("/endpoint/123").await?;
 
 // DELETE without response (204 No Content)
 client.delete_no_response("/endpoint/123").await?;
+
+// POST with body but no response (201 Created, 204 No Content)
+client.post_no_response("/endpoint", &request_data).await?;
 
 // POST without request body
 let result: MyType = client.post_empty::<MyType>("/endpoint").await?;
