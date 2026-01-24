@@ -83,7 +83,7 @@ pub fn meter_list_page(props: &Props) -> Html {
 
     let on_back = {
         let navigator = navigator.clone();
-        Callback::from(move |_| navigator.push(&Route::Buildings))
+        Callback::from(move |_| navigator.back())
     };
 
     let clear_error = {
