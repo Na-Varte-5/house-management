@@ -85,6 +85,162 @@ trunk build  # Use this to test if frontend compiles, NOT dev.sh
 - Error handling via `AppError` enum (maps to HTTP status codes)
 - Async handlers with `actix_web::web::Data` for shared state (DbPool, JwtKeys, AppConfig)
 
+**RBAC (Role-Based Access Control) - CRITICAL SECURITY REQUIREMENT**:
+
+**MANDATORY: ALL API endpoints MUST implement proper authentication and authorization checks!**
+
+This is a security-critical requirement. Past security audits found critical vulnerabilities where endpoints exposed sensitive data (including password hashes) to unauthenticated users.
+
+**Checklist for EVERY new API endpoint:**
+
+1. ✅ **Add `AuthContext` parameter** - Unless endpoint is explicitly public (login/register)
+2. ✅ **Add role check** - Use `auth.has_any_role(&["Admin", "Manager"])` or equivalent
+3. ✅ **Add to OpenAPI docs** - Include `security(("bearer_auth" = []))` in `#[utoipa::path]`
+4. ✅ **Document requirements** - State which roles can access in doc comment
+5. ✅ **Return proper errors** - Use `AppError::Forbidden` for authorization failures
+
+**Common RBAC Patterns:**
+
+```rust
+// Pattern 1: Admin-only endpoint
+pub async fn admin_only_endpoint(
+    auth: AuthContext,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    if !auth.has_any_role(&["Admin"]) {
+        return Err(AppError::Forbidden);
+    }
+    // ... endpoint logic
+}
+
+// Pattern 2: Admin or Manager endpoint
+pub async fn privileged_endpoint(
+    auth: AuthContext,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    if !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
+    // ... endpoint logic
+}
+
+// Pattern 3: Resource ownership check (user can only access their own data)
+pub async fn get_my_resource(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    let resource_id = path.into_inner();
+    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+
+    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+
+    // Fetch resource
+    let resource = /* load from database */;
+
+    // Check ownership or admin/manager privilege
+    if resource.user_id != user_id && !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
+
+    // ... endpoint logic
+}
+
+// Pattern 4: Building/apartment access control (scoped by ownership)
+pub async fn building_scoped_endpoint(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    let building_id = path.into_inner();
+    let mut conn = pool.get().map_err(|_| AppError::Internal("db_pool".into()))?;
+
+    // Check if user has access to this building
+    let is_admin = auth.has_any_role(&["Admin", "Manager"]);
+    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+
+    use crate::auth::building_access::get_user_building_ids;
+    let maybe_building_ids = get_user_building_ids(user_id, is_admin, &mut conn)?;
+
+    if let Some(accessible_buildings) = maybe_building_ids {
+        if !accessible_buildings.contains(&building_id) {
+            return Err(AppError::Forbidden);
+        }
+    }
+
+    // ... endpoint logic
+}
+
+// Pattern 5: Authenticated but no specific role required
+pub async fn any_authenticated_user(
+    auth: AuthContext,  // Just having AuthContext means auth is required
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+    // All authenticated users can access this
+    // ... endpoint logic
+}
+```
+
+**OpenAPI Documentation Pattern:**
+
+```rust
+/// Endpoint description
+///
+/// Detailed description of what this endpoint does.
+/// IMPORTANT: Document which roles can access this endpoint!
+#[utoipa::path(
+    get,
+    path = "/api/v1/resource",
+    responses(
+        (status = 200, description = "Success", body = Resource),
+        (status = 401, description = "Unauthorized - authentication required"),
+        (status = 403, description = "Forbidden - requires Admin role"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "ResourceTag",
+    security(("bearer_auth" = []))  // <-- CRITICAL: Always add this!
+)]
+pub async fn endpoint_handler(
+    auth: AuthContext,  // <-- CRITICAL: Always add this (unless public endpoint)!
+    // ... other parameters
+) -> Result<impl Responder, AppError> {
+    // ... implementation
+}
+```
+
+**Exceptions (Public Endpoints):**
+
+Only these endpoint types should NOT require authentication:
+- `POST /api/v1/auth/register` - User registration
+- `POST /api/v1/auth/login` - User login
+- `GET /api/v1/health` - Health check
+- Webhook endpoints that use API key authentication instead of JWT
+
+**Common Mistakes to Avoid:**
+
+❌ **DON'T** create endpoints without `AuthContext` parameter
+❌ **DON'T** expose user lists without Admin role check (exposes password hashes!)
+❌ **DON'T** allow unrestricted access to building/apartment data
+❌ **DON'T** forget to add `security(("bearer_auth" = []))` to OpenAPI docs
+❌ **DON'T** return sensitive data to unauthorized users
+
+✅ **DO** always add `AuthContext` parameter
+✅ **DO** implement role checks appropriate for the endpoint's sensitivity
+✅ **DO** use building access scoping for building/apartment endpoints
+✅ **DO** return `AppError::Forbidden` for authorization failures
+✅ **DO** document role requirements in endpoint doc comments
+
+**Security Audit History:**
+
+- **2026-01-24**: Fixed 6 critical vulnerabilities where endpoints lacked authentication
+  - `GET /api/v1/users` - Exposed ALL users including password hashes (CRITICAL)
+  - `GET /api/v1/buildings` - Unauthenticated access to all buildings
+  - `GET /api/v1/buildings/{id}` - Unauthenticated building details
+  - `GET /api/v1/apartments` - Unauthenticated apartment list
+  - `GET /api/v1/buildings/{id}/apartments` - Unauthenticated apartment access
+  - `GET /api/v1/apartments/{id}/owners` - Privacy violation (ownership exposure)
+
 **Key RBAC roles**: Admin, Manager, Homeowner, Renter, HOA Member
 - Admin/Manager: create/delete/restore buildings, apartments; assign owners; update maintenance status
 - Homeowner/Renter: submit maintenance requests, view own apartments
