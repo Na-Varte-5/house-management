@@ -154,16 +154,26 @@ async fn log_property_event(
 /// List all active apartments
 ///
 /// Returns a list of all apartments across all buildings that have not been soft-deleted.
+/// Requires Admin or Manager role.
 #[utoipa::path(
     get,
     path = "/api/v1/apartments",
     responses(
         (status = 200, description = "List of apartments", body = Vec<Apartment>),
+        (status = 401, description = "Unauthorized - authentication required"),
+        (status = 403, description = "Forbidden - requires Admin or Manager role"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Apartments"
+    tag = "Apartments",
+    security(("bearer_auth" = []))
 )]
-pub async fn list_apartments(pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
+pub async fn list_apartments(
+    auth: AuthContext,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    if !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
     use crate::schema::apartments::dsl::*;
     let mut conn = pool
         .get()
@@ -178,6 +188,7 @@ pub async fn list_apartments(pool: web::Data<DbPool>) -> Result<impl Responder, 
 /// List apartments for a specific building
 ///
 /// Returns all apartments in a specific building that haven't been soft-deleted.
+/// Requires authentication. Users can only see apartments in buildings they have access to.
 #[utoipa::path(
     get,
     path = "/api/v1/buildings/{id}/apartments",
@@ -186,11 +197,15 @@ pub async fn list_apartments(pool: web::Data<DbPool>) -> Result<impl Responder, 
     ),
     responses(
         (status = 200, description = "List of apartments in the building", body = Vec<Apartment>),
+        (status = 401, description = "Unauthorized - authentication required"),
+        (status = 403, description = "Forbidden - no access to this building"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Apartments"
+    tag = "Apartments",
+    security(("bearer_auth" = []))
 )]
 pub async fn list_building_apartments(
+    auth: AuthContext,
     path: web::Path<u64>,
     pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
@@ -199,6 +214,22 @@ pub async fn list_building_apartments(
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;
+
+    // Check if user has access to this building
+    let is_admin = auth.has_any_role(&["Admin", "Manager"]);
+    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+
+    use crate::auth::building_access::get_user_building_ids;
+    let maybe_building_ids = get_user_building_ids(user_id, is_admin, &mut conn)?;
+
+    // If Some(vec), user can only see those buildings
+    if let Some(accessible_buildings) = maybe_building_ids {
+        if !accessible_buildings.contains(&building) {
+            return Err(AppError::Forbidden);
+        }
+    }
+    // If None, user is admin and can see all buildings
+
     let list = apartments
         .filter(building_id.eq(building).and(is_deleted.eq(false)))
         .select(Apartment::as_select())
@@ -347,6 +378,7 @@ pub struct RenterWithUser {
 /// List owners of an apartment
 ///
 /// Returns all users who are registered as owners of the specified apartment.
+/// Requires Admin or Manager role for privacy protection.
 #[utoipa::path(
     get,
     path = "/api/v1/apartments/{id}/owners",
@@ -355,14 +387,21 @@ pub struct RenterWithUser {
     ),
     responses(
         (status = 200, description = "List of apartment owners", body = Vec<PublicUser>),
+        (status = 401, description = "Unauthorized - authentication required"),
+        (status = 403, description = "Forbidden - requires Admin or Manager role"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Apartments"
+    tag = "Apartments",
+    security(("bearer_auth" = []))
 )]
 pub async fn list_apartment_owners(
+    auth: AuthContext,
     path: web::Path<u64>,
     pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
+    if !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
     use crate::schema::apartment_owners::dsl as ao;
     use crate::schema::users::dsl as u;
     let apartment = path.into_inner();

@@ -10,17 +10,25 @@ use utoipa;
 /// List all users
 ///
 /// Returns all users with complete information including password hashes.
-/// This endpoint is available to all authenticated users for internal use.
+/// Requires Admin role. For public user info, use /users/public endpoint.
 #[utoipa::path(
     get,
     path = "/api/v1/users",
     responses(
         (status = 200, description = "List of users", body = Vec<User>),
+        (status = 403, description = "Forbidden - requires Admin role"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Users"
+    tag = "Users",
+    security(("bearer_auth" = []))
 )]
-pub async fn list_users(pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
+pub async fn list_users(
+    auth: AuthContext,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    if !auth.has_any_role(&["Admin"]) {
+        return Err(AppError::Forbidden);
+    }
     use crate::schema::users::dsl::*;
     let mut conn = pool
         .get()

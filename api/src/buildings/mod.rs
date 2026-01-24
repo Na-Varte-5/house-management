@@ -8,30 +8,58 @@ use utoipa;
 /// List all active buildings
 ///
 /// Returns a list of all buildings that have not been soft-deleted.
+/// Requires authentication. Users see buildings they have access to.
 #[utoipa::path(
     get,
     path = "/api/v1/buildings",
     responses(
         (status = 200, description = "List of buildings", body = Vec<Building>),
+        (status = 401, description = "Unauthorized - authentication required"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Buildings"
+    tag = "Buildings",
+    security(("bearer_auth" = []))
 )]
-pub async fn list_buildings(pool: web::Data<DbPool>) -> Result<impl Responder, AppError> {
+pub async fn list_buildings(
+    auth: AuthContext,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
     use crate::schema::buildings::dsl::*;
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;
-    let list = buildings
-        .filter(is_deleted.eq(false))
-        .select(Building::as_select())
-        .load(&mut conn)?;
+
+    // Admin/Manager see all buildings, others see only their buildings
+    let is_admin = auth.has_any_role(&["Admin", "Manager"]);
+    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+
+    use crate::auth::building_access::get_user_building_ids;
+    let maybe_building_ids = get_user_building_ids(user_id, is_admin, &mut conn)?;
+
+    let list = match maybe_building_ids {
+        None => {
+            // Admin/Manager - see all buildings
+            buildings
+                .filter(is_deleted.eq(false))
+                .select(Building::as_select())
+                .load(&mut conn)?
+        }
+        Some(building_ids) => {
+            // Regular user - see only accessible buildings
+            buildings
+                .filter(id.eq_any(building_ids).and(is_deleted.eq(false)))
+                .select(Building::as_select())
+                .load(&mut conn)?
+        }
+    };
+
     Ok(HttpResponse::Ok().json(list))
 }
 
 /// Get a single building by ID
 ///
 /// Returns a single building by its ID if it exists and hasn't been soft-deleted.
+/// Requires authentication. Users can only view buildings they have access to.
 #[utoipa::path(
     get,
     path = "/api/v1/buildings/{id}",
@@ -40,12 +68,16 @@ pub async fn list_buildings(pool: web::Data<DbPool>) -> Result<impl Responder, A
     ),
     responses(
         (status = 200, description = "Building details", body = Building),
+        (status = 401, description = "Unauthorized - authentication required"),
+        (status = 403, description = "Forbidden - no access to this building"),
         (status = 404, description = "Building not found"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Buildings"
+    tag = "Buildings",
+    security(("bearer_auth" = []))
 )]
 pub async fn get_building(
+    auth: AuthContext,
     path: web::Path<u64>,
     pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
@@ -54,6 +86,22 @@ pub async fn get_building(
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;
+
+    // Check if user has access to this building
+    let is_admin = auth.has_any_role(&["Admin", "Manager"]);
+    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+
+    use crate::auth::building_access::get_user_building_ids;
+    let maybe_building_ids = get_user_building_ids(user_id, is_admin, &mut conn)?;
+
+    // If Some(vec), user can only see those buildings
+    if let Some(accessible_buildings) = maybe_building_ids {
+        if !accessible_buildings.contains(&building_id) {
+            return Err(AppError::Forbidden);
+        }
+    }
+    // If None, user is admin and can see all buildings
+
     let building = buildings
         .filter(id.eq(building_id).and(is_deleted.eq(false)))
         .select(Building::as_select())
