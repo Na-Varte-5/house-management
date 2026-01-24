@@ -238,12 +238,38 @@ Frontend:
 - Clean tabbed interface alongside owner management
 - Role-based access control properly enforced
 
-**5. Property History Timeline**
-- Show all events for a property (maintenance, tenant changes, etc.)
-- **Effort:** 4-6 hours
-- **Status:** Not started; would need audit log table
+**5. ✅ Property History Timeline** ⭐ COMPLETED (Jan 24, 2026)
+**Actual Effort:** ~6 hours | **Impact:** Complete audit trail for all property events
 
-**Total Phase 2 effort:** ~2-3 days (80% complete - 4 of 5 features done)**
+Backend:
+- ✅ Migration: `property_history` table with event tracking (api/migrations/)
+- ✅ Helper functions: `log_property_event()` (api/src/apartments/mod.rs:117-140)
+- ✅ Endpoint: `GET /api/v1/apartments/{id}/history` with enriched user data
+- ✅ Event types: owner_added, owner_removed, renter_added, renter_updated, renter_removed
+- ✅ Metadata tracking: Rental periods, active status changes as JSON
+- ✅ Integrated logging into all owner/renter operations
+  - Logs who made the change (changed_by)
+  - Logs affected user (user_id)
+  - Human-readable descriptions with user names
+  - Metadata for additional context (dates, status)
+
+Frontend:
+- ✅ Component: `PropertyHistoryTimeline` (frontend/src/components/properties/property_history_timeline.rs)
+  - Timeline view with color-coded icons per event type
+  - Formatted dates ("Jan 24, 2026 at 14:30")
+  - Expandable metadata display
+  - Loading/error/empty states
+- ✅ Integration: Added "History" tab in properties page alongside Owners/Renters
+- ✅ Auto-refreshes when switching to history tab
+
+**Benefits:**
+- Complete audit trail of all property-related events
+- Attribution of all changes to specific users
+- Searchable history for compliance and debugging
+- Visual timeline makes it easy to see property lifecycle
+- Metadata provides rich context for each event
+
+**Total Phase 2 effort:** ~2-3 days (100% COMPLETE! ⭐ All 5 features done)**
 
 ---
 
