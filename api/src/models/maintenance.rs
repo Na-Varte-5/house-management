@@ -93,3 +93,8 @@ pub struct MaintenanceRequestCommentWithUser {
     pub created_at: Option<chrono::NaiveDateTime>,
     pub updated_at: Option<chrono::NaiveDateTime>,
 }
+
+#[derive(Deserialize, ToSchema)]
+pub struct CreateCommentRequest {
+    pub comment_text: String,
+}

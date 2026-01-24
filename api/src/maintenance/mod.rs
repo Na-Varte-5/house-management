@@ -1,8 +1,9 @@
 use crate::auth::{AppError, AuthContext};
 use crate::db::DbPool;
 use crate::models::{
-    MaintenanceRequest, MaintenanceRequestComment, MaintenanceRequestCommentWithUser,
-    MaintenanceRequestHistory, NewMaintenanceRequest, NewMaintenanceRequestComment,
+    CreateCommentRequest, MaintenanceRequest, MaintenanceRequestComment,
+    MaintenanceRequestCommentWithUser, MaintenanceRequestHistory, NewMaintenanceRequest,
+    NewMaintenanceRequestComment,
 };
 use actix_web::{HttpResponse, Responder, web};
 use diesel::prelude::*;
@@ -1009,7 +1010,7 @@ pub async fn list_comments(
     params(
         ("id" = u64, Path, description = "Maintenance request ID")
     ),
-    request_body = NewMaintenanceRequestComment,
+    request_body = CreateCommentRequest,
     responses(
         (status = 201, description = "Comment created successfully", body = MaintenanceRequestCommentWithUser),
         (status = 403, description = "Forbidden - not authorized to comment"),
@@ -1022,7 +1023,7 @@ pub async fn list_comments(
 pub async fn create_comment(
     auth: AuthContext,
     path: web::Path<u64>,
-    body: web::Json<NewMaintenanceRequestComment>,
+    body: web::Json<CreateCommentRequest>,
     pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
     use crate::schema::maintenance_request_comments::dsl as mrc;
