@@ -117,25 +117,27 @@ frontend/src/components/forms/
 
 ---
 
-#### 2. Refactor models.rs (Backend)
-**Effort:** 2 hours | **Impact:** High - affects all modules
+#### 2. ✅ Refactor models.rs (Backend) ⭐ COMPLETED (Jan 24, 2026)
+**Actual Effort:** 1.5 hours | **Impact:** High - faster incremental compilation
 
-Split `api/src/models.rs` (475 lines) into:
+Split `api/src/models.rs` (607 lines) into domain modules:
 ```
 api/src/models/
-├── users.rs          - User, NewUser, Role, UserRole, PublicUser
-├── properties.rs     - Building, Apartment, Owners, Managers, Renters
-├── maintenance.rs    - MaintenanceRequest, Attachments, History
-├── voting.rs         - Proposal, Vote, Results, Enums
-├── announcements.rs  - Announcement, Comment
-├── meters.rs         - Meter, MeterReading, WebhookApiKey
-└── mod.rs           - Re-exports everything
+├── users.rs (56 lines)        - User, NewUser, Role, UserRole, PublicUser
+├── properties.rs (138 lines)  - Building, Apartment, Owners, Renters, PropertyHistory
+├── maintenance.rs (61 lines)  - MaintenanceRequest, Attachments, History
+├── voting.rs (170 lines)      - Proposal, Vote, Results, VotingMethod enums
+├── announcements.rs (66 lines)- Announcement, Comment
+├── meters.rs (147 lines)      - Meter, MeterReading, WebhookApiKey, MeterType enum
+└── mod.rs (15 lines)          - Module declarations and re-exports
 ```
 
-**Why important:**
-- Currently one change requires recompiling entire models.rs
-- Affects every module import
-- Will speed up compilation
+**Benefits achieved:**
+- Changes to one domain (e.g., users) don't force recompiling other domains
+- Better code organization by feature area
+- Easier to navigate and maintain
+- All existing imports still work (types re-exported from mod.rs)
+- Compilation still successful after refactoring
 
 ---
 
