@@ -221,6 +221,6 @@ async fn fetch_property_history(
     token: Option<&str>,
 ) -> Result<Vec<PropertyHistoryEvent>, ApiError> {
     let client = api_client(token);
-    let url = format!("/api/v1/apartments/{}/history", apartment_id);
+    let url = format!("/apartments/{}/history", apartment_id);
     client.get(&url).await
 }
