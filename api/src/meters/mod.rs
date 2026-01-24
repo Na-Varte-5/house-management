@@ -22,7 +22,7 @@ pub use types::*;
 use actix_web::web;
 
 pub use handlers::{
-    create_meter, deactivate_meter, get_meter, list_apartment_meters, update_meter,
+    create_meter, deactivate_meter, get_meter, list_all_meters, list_apartment_meters, update_meter,
 };
 
 pub use readings::{create_reading, export_readings_csv, list_readings};
@@ -41,6 +41,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             "/apartments/{apartment_id}/meters",
             web::get().to(list_apartment_meters),
         )
+        .route("/meters", web::get().to(list_all_meters))
         .route("/meters", web::post().to(create_meter))
         // Specific routes must come before generic {id} routes
         .route(

@@ -1,5 +1,7 @@
 use super::helpers::user_owns_apartment;
-use super::types::{CreateMeterRequest, MeterWithLastReading, UpdateMeterRequest};
+use super::types::{
+    CreateMeterRequest, MeterWithApartment, MeterWithLastReading, UpdateMeterRequest,
+};
 use crate::auth::{AppError, AuthContext};
 use crate::db::DbPool;
 use crate::models::{Meter, MeterReading, MeterType};
@@ -114,6 +116,100 @@ pub async fn get_meter(
     }
 
     Ok(HttpResponse::Ok().json(meter))
+}
+
+/// List all meters with apartment and building information (Admin/Manager only)
+#[utoipa::path(
+    get,
+    path = "/api/v1/meters",
+    responses(
+        (status = 200, description = "List of all meters", body = Vec<MeterWithApartment>),
+        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Meters",
+    security(("bearer_auth" = []))
+)]
+pub async fn list_all_meters(
+    auth: AuthContext,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    if !auth.has_any_role(&["Admin", "Manager"]) {
+        return Err(AppError::Forbidden);
+    }
+
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
+
+    use crate::schema::apartments::dsl as apt;
+    use crate::schema::buildings::dsl as bld;
+    use crate::schema::meter_readings::dsl as mr;
+    use crate::schema::meters::dsl as m;
+
+    // Get all active meters
+    let meters: Vec<Meter> = m::meters
+        .filter(m::is_active.eq(true))
+        .select(Meter::as_select())
+        .load(&mut conn)?;
+
+    // Build result with apartment and building info
+    let mut result = Vec::new();
+    for meter in meters {
+        // Get apartment info
+        let apartment: Option<(String, u64)> = apt::apartments
+            .filter(apt::id.eq(meter.apartment_id))
+            .filter(apt::is_deleted.eq(false))
+            .select((apt::number, apt::building_id))
+            .first(&mut conn)
+            .optional()?;
+
+        let (apt_number, bld_id) = apartment.unwrap_or_else(|| ("Unknown".to_string(), 0));
+
+        // Get building info
+        let building_addr: Option<String> = bld::buildings
+            .filter(bld::id.eq(bld_id))
+            .filter(bld::is_deleted.eq(false))
+            .select(bld::address)
+            .first(&mut conn)
+            .optional()?;
+
+        // Get last reading
+        use bigdecimal::BigDecimal;
+        let last_reading: Option<(BigDecimal, chrono::NaiveDateTime, String)> = mr::meter_readings
+            .filter(mr::meter_id.eq(meter.id))
+            .select((mr::reading_value, mr::reading_timestamp, mr::unit))
+            .order_by(mr::reading_timestamp.desc())
+            .first(&mut conn)
+            .optional()?;
+
+        result.push(super::types::MeterWithApartment {
+            id: meter.id,
+            apartment_id: meter.apartment_id,
+            meter_type: meter.meter_type,
+            serial_number: meter.serial_number,
+            installation_date: meter
+                .installation_date
+                .map(|d| d.format("%Y-%m-%d").to_string()),
+            calibration_due_date: meter
+                .calibration_due_date
+                .map(|d| d.format("%Y-%m-%d").to_string()),
+            last_calibration_date: meter
+                .last_calibration_date
+                .map(|d| d.format("%Y-%m-%d").to_string()),
+            is_active: meter.is_active,
+            apartment_number: Some(apt_number),
+            building_id: Some(bld_id),
+            building_address: building_addr,
+            last_reading_value: last_reading.as_ref().map(|r| r.0.to_string()),
+            last_reading_timestamp: last_reading
+                .as_ref()
+                .map(|r| r.1.format("%Y-%m-%d %H:%M:%S").to_string()),
+            last_reading_unit: last_reading.map(|r| r.2),
+        });
+    }
+
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Register new meter (Admin/Manager only)

@@ -55,6 +55,25 @@ pub struct MeterWithLastReading {
     pub last_reading_unit: Option<String>,
 }
 
+/// Response type: meter with apartment and building information
+#[derive(Serialize, ToSchema)]
+pub struct MeterWithApartment {
+    pub id: u64,
+    pub apartment_id: u64,
+    pub meter_type: String,
+    pub serial_number: String,
+    pub installation_date: Option<String>,
+    pub calibration_due_date: Option<String>,
+    pub last_calibration_date: Option<String>,
+    pub is_active: bool,
+    pub apartment_number: Option<String>,
+    pub building_id: Option<u64>,
+    pub building_address: Option<String>,
+    pub last_reading_value: Option<String>,
+    pub last_reading_timestamp: Option<String>,
+    pub last_reading_unit: Option<String>,
+}
+
 /// Webhook payload for single meter reading
 #[derive(Deserialize, ToSchema)]
 pub struct WebhookReadingPayload {
