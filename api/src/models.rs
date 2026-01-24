@@ -1,7 +1,8 @@
 use crate::schema::{
     apartment_owners, apartment_renters, apartments, building_managers, buildings,
     maintenance_request_attachments, maintenance_request_history, maintenance_requests,
-    meter_readings, meters, proposal_results, proposals, users, votes, webhook_api_keys,
+    meter_readings, meters, property_history, proposal_results, proposals, users, votes,
+    webhook_api_keys,
 };
 use bigdecimal::BigDecimal; // for voting weights
 use diesel::prelude::*;
@@ -563,4 +564,44 @@ pub struct NewWebhookApiKey {
     pub name: String,
     pub api_key_hash: String,
     pub created_by: u64,
+}
+
+// Property History models
+#[derive(Queryable, Selectable, Serialize, Debug, ToSchema)]
+#[diesel(table_name = property_history)]
+#[diesel(check_for_backend(diesel::mysql::Mysql))]
+pub struct PropertyHistory {
+    pub id: u64,
+    pub apartment_id: u64,
+    pub event_type: String,
+    pub user_id: Option<u64>,
+    pub changed_by: u64,
+    pub description: String,
+    pub metadata: Option<String>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = property_history)]
+pub struct NewPropertyHistory {
+    pub apartment_id: u64,
+    pub event_type: String,
+    pub user_id: Option<u64>,
+    pub changed_by: u64,
+    pub description: String,
+    pub metadata: Option<String>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct PropertyHistoryEnriched {
+    pub id: u64,
+    pub apartment_id: u64,
+    pub event_type: String,
+    pub user_id: Option<u64>,
+    pub user_name: Option<String>,
+    pub changed_by: u64,
+    pub changed_by_name: String,
+    pub description: String,
+    pub metadata: Option<String>,
+    pub created_at: Option<chrono::NaiveDateTime>,
 }

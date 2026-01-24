@@ -4,7 +4,19 @@ use crate::components::{AdminLayout, ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
 use crate::routes::Route;
 use crate::services::api_client;
+use serde::{Deserialize, Serialize};
 use yew::prelude::*;
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+struct RenterWithUser {
+    pub id: u64,
+    pub apartment_id: u64,
+    pub user_id: u64,
+    pub start_date: Option<String>,
+    pub end_date: Option<String>,
+    pub is_active: bool,
+    pub user: UserInfo,
+}
 
 #[function_component(AdminPropertiesPage)]
 pub fn admin_properties_page() -> Html {
@@ -33,13 +45,18 @@ pub fn admin_properties_page() -> Html {
     let apt_size = use_state(String::default);
 
     let apartment_owners = use_state(|| Vec::<UserInfo>::new());
+    let apartment_renters = use_state(|| Vec::<RenterInfo>::new());
     let all_users = use_state(|| Vec::<UserInfo>::new());
     let user_query = use_state(String::default);
+    let renter_query = use_state(String::default);
 
     let loading_buildings = use_state(|| true);
     let loading_apartments = use_state(|| false);
     let loading_owners = use_state(|| false);
+    let loading_renters = use_state(|| false);
     let submitting = use_state(|| false);
+
+    let management_tab = use_state(|| "owners");
 
     let error = use_state(|| None::<String>);
     let success = use_state(|| None::<String>);
@@ -120,6 +137,51 @@ pub fn admin_properties_page() -> Html {
                 });
             } else {
                 owners.set(Vec::new());
+                loading.set(false);
+            }
+            || ()
+        });
+    }
+
+    // Load renters when apartment selected
+    {
+        let renters = apartment_renters.clone();
+        let selected = selected_apartment.clone();
+        let loading = loading_renters.clone();
+        let error = error.clone();
+        let token = token.clone();
+
+        use_effect_with(selected_apartment.clone(), move |_| {
+            if let Some(aid) = *selected {
+                loading.set(true);
+                wasm_bindgen_futures::spawn_local(async move {
+                    let client = api_client(token.as_deref());
+                    match client
+                        .get::<Vec<RenterWithUser>>(&format!("/apartments/{}/renters", aid))
+                        .await
+                    {
+                        Ok(list) => {
+                            let renter_infos: Vec<RenterInfo> = list
+                                .into_iter()
+                                .map(|r| RenterInfo {
+                                    id: r.id,
+                                    user_id: r.user_id,
+                                    apartment_id: r.apartment_id,
+                                    start_date: r.start_date,
+                                    end_date: r.end_date,
+                                    is_active: r.is_active,
+                                    user_name: r.user.name,
+                                    user_email: r.user.email,
+                                })
+                                .collect();
+                            renters.set(renter_infos);
+                        }
+                        Err(e) => error.set(Some(format!("Failed to load renters: {}", e))),
+                    }
+                    loading.set(false);
+                });
+            } else {
+                renters.set(Vec::new());
                 loading.set(false);
             }
             || ()
@@ -441,6 +503,205 @@ pub fn admin_properties_page() -> Html {
         })
     };
 
+    let on_assign_renter = {
+        let apartment_renters = apartment_renters.clone();
+        let selected_apartment = selected_apartment.clone();
+        let renter_query = renter_query.clone();
+        let error = error.clone();
+        let success = success.clone();
+        let token = token.clone();
+
+        Callback::from(
+            move |(user_id, start_date, end_date, is_active): (
+                u64,
+                Option<String>,
+                Option<String>,
+                bool,
+            )| {
+                if let Some(aid) = *selected_apartment {
+                    let apartment_renters = apartment_renters.clone();
+                    let renter_query = renter_query.clone();
+                    let error = error.clone();
+                    let success = success.clone();
+                    let token = token.clone();
+
+                    error.set(None);
+                    success.set(None);
+
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let client = api_client(token.as_deref());
+                        let payload = serde_json::json!({
+                            "user_id": user_id,
+                            "start_date": start_date,
+                            "end_date": end_date,
+                            "is_active": is_active,
+                        });
+
+                        match client
+                            .post::<_, serde_json::Value>(
+                                &format!("/apartments/{}/renters", aid),
+                                &payload,
+                            )
+                            .await
+                        {
+                            Ok(_) => {
+                                if let Ok(list) = client
+                                    .get::<Vec<RenterWithUser>>(&format!(
+                                        "/apartments/{}/renters",
+                                        aid
+                                    ))
+                                    .await
+                                {
+                                    let renter_infos: Vec<RenterInfo> = list
+                                        .into_iter()
+                                        .map(|r| RenterInfo {
+                                            id: r.id,
+                                            user_id: r.user_id,
+                                            apartment_id: r.apartment_id,
+                                            start_date: r.start_date,
+                                            end_date: r.end_date,
+                                            is_active: r.is_active,
+                                            user_name: r.user.name,
+                                            user_email: r.user.email,
+                                        })
+                                        .collect();
+                                    apartment_renters.set(renter_infos);
+                                    renter_query.set(String::new());
+                                    success.set(Some("Renter assigned successfully".to_string()));
+                                }
+                            }
+                            Err(e) => error.set(Some(format!("Failed to assign renter: {}", e))),
+                        }
+                    });
+                }
+            },
+        )
+    };
+
+    let on_remove_renter = {
+        let apartment_renters = apartment_renters.clone();
+        let selected_apartment = selected_apartment.clone();
+        let error = error.clone();
+        let success = success.clone();
+        let token = token.clone();
+
+        Callback::from(move |user_id: u64| {
+            if let Some(aid) = *selected_apartment {
+                let apartment_renters = apartment_renters.clone();
+                let error = error.clone();
+                let success = success.clone();
+                let token = token.clone();
+
+                error.set(None);
+                success.set(None);
+
+                wasm_bindgen_futures::spawn_local(async move {
+                    let client = api_client(token.as_deref());
+                    match client
+                        .delete_no_response(&format!("/apartments/{}/renters/{}", aid, user_id))
+                        .await
+                    {
+                        Ok(_) => {
+                            if let Ok(list) = client
+                                .get::<Vec<RenterWithUser>>(&format!("/apartments/{}/renters", aid))
+                                .await
+                            {
+                                let renter_infos: Vec<RenterInfo> = list
+                                    .into_iter()
+                                    .map(|r| RenterInfo {
+                                        id: r.id,
+                                        user_id: r.user_id,
+                                        apartment_id: r.apartment_id,
+                                        start_date: r.start_date,
+                                        end_date: r.end_date,
+                                        is_active: r.is_active,
+                                        user_name: r.user.name,
+                                        user_email: r.user.email,
+                                    })
+                                    .collect();
+                                apartment_renters.set(renter_infos);
+                                success.set(Some("Renter removed successfully".to_string()));
+                            }
+                        }
+                        Err(e) => error.set(Some(format!("Failed to remove renter: {}", e))),
+                    }
+                });
+            }
+        })
+    };
+
+    let on_toggle_renter_active = {
+        let apartment_renters = apartment_renters.clone();
+        let selected_apartment = selected_apartment.clone();
+        let error = error.clone();
+        let success = success.clone();
+        let token = token.clone();
+
+        Callback::from(move |user_id: u64| {
+            if let Some(aid) = *selected_apartment {
+                // Find current renter and toggle is_active
+                let current_renter = apartment_renters.iter().find(|r| r.user_id == user_id);
+                if let Some(renter) = current_renter {
+                    let new_active_status = !renter.is_active;
+                    let apartment_renters = apartment_renters.clone();
+                    let error = error.clone();
+                    let success = success.clone();
+                    let token = token.clone();
+
+                    error.set(None);
+                    success.set(None);
+
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let client = api_client(token.as_deref());
+                        let payload = serde_json::json!({
+                            "is_active": new_active_status,
+                        });
+
+                        match client
+                            .put::<_, serde_json::Value>(
+                                &format!("/apartments/{}/renters/{}", aid, user_id),
+                                &payload,
+                            )
+                            .await
+                        {
+                            Ok(_) => {
+                                if let Ok(list) = client
+                                    .get::<Vec<RenterWithUser>>(&format!(
+                                        "/apartments/{}/renters",
+                                        aid
+                                    ))
+                                    .await
+                                {
+                                    let renter_infos: Vec<RenterInfo> = list
+                                        .into_iter()
+                                        .map(|r| RenterInfo {
+                                            id: r.id,
+                                            user_id: r.user_id,
+                                            apartment_id: r.apartment_id,
+                                            start_date: r.start_date,
+                                            end_date: r.end_date,
+                                            is_active: r.is_active,
+                                            user_name: r.user.name,
+                                            user_email: r.user.email,
+                                        })
+                                        .collect();
+                                    apartment_renters.set(renter_infos);
+                                    let status = if new_active_status {
+                                        "active"
+                                    } else {
+                                        "inactive"
+                                    };
+                                    success.set(Some(format!("Renter marked as {}", status)));
+                                }
+                            }
+                            Err(e) => error.set(Some(format!("Failed to update renter: {}", e))),
+                        }
+                    });
+                }
+            }
+        })
+    };
+
     html! {
         <AdminLayout title="Properties Management" active_route={Route::AdminProperties}>
             <div class="container-fluid">
@@ -510,23 +771,84 @@ pub fn admin_properties_page() -> Html {
                         </div>
                     </div>
 
-                    // Owners column
+                    // Owner/Renter Management column
                     <div class="col-md-4">
                         <div class="card">
                             <div class="card-header">
-                                <h5 class="mb-0">{"Owner Management"}</h5>
+                                <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button
+                                            class={if *management_tab == "owners" { "nav-link active" } else { "nav-link" }}
+                                            onclick={{
+                                                let tab = management_tab.clone();
+                                                Callback::from(move |_| tab.set("owners"))
+                                            }}
+                                            type="button"
+                                        >
+                                            {"Owners"}
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button
+                                            class={if *management_tab == "renters" { "nav-link active" } else { "nav-link" }}
+                                            onclick={{
+                                                let tab = management_tab.clone();
+                                                Callback::from(move |_| tab.set("renters"))
+                                            }}
+                                            type="button"
+                                        >
+                                            {"Renters"}
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button
+                                            class={if *management_tab == "history" { "nav-link active" } else { "nav-link" }}
+                                            onclick={{
+                                                let tab = management_tab.clone();
+                                                Callback::from(move |_| tab.set("history"))
+                                            }}
+                                            type="button"
+                                        >
+                                            {"History"}
+                                        </button>
+                                    </li>
+                                </ul>
                             </div>
                             <div class="card-body">
-                                <OwnerManagement
-                                    owners={(*apartment_owners).clone()}
-                                    all_users={(*all_users).clone()}
-                                    user_query={(*user_query).clone()}
-                                    on_query_change={Callback::from(move |v| user_query.set(v))}
-                                    on_assign={on_assign_owner}
-                                    on_remove={on_remove_owner}
-                                    loading={*loading_owners}
-                                    show={selected_apartment.is_some()}
-                                />
+                                if *management_tab == "owners" {
+                                    <OwnerManagement
+                                        owners={(*apartment_owners).clone()}
+                                        all_users={(*all_users).clone()}
+                                        user_query={(*user_query).clone()}
+                                        on_query_change={Callback::from(move |v| user_query.set(v))}
+                                        on_assign={on_assign_owner}
+                                        on_remove={on_remove_owner}
+                                        loading={*loading_owners}
+                                        show={selected_apartment.is_some()}
+                                    />
+                                } else if *management_tab == "renters" {
+                                    <RenterManagement
+                                        renters={(*apartment_renters).clone()}
+                                        all_users={(*all_users).clone()}
+                                        user_query={(*renter_query).clone()}
+                                        on_query_change={Callback::from(move |v| renter_query.set(v))}
+                                        on_assign={on_assign_renter}
+                                        on_remove={on_remove_renter}
+                                        on_toggle_active={on_toggle_renter_active}
+                                        loading={*loading_renters}
+                                        show={selected_apartment.is_some()}
+                                    />
+                                } else {
+                                    // History tab
+                                    if let Some(apartment_id) = *selected_apartment {
+                                        <PropertyHistoryTimeline apartment_id={apartment_id} />
+                                    } else {
+                                        <div class="alert alert-info">
+                                            <i class="bi bi-info-circle me-2"></i>
+                                            {"Select an apartment to view its property history"}
+                                        </div>
+                                    }
+                                }
                             </div>
                         </div>
                     </div>

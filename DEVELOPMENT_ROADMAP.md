@@ -150,32 +150,100 @@ api/src/models/
 - ✅ Apartment renters table exists
 - ✅ Building-scoped access control
 
+**Completed in Phase 2:**
+
+**1. ✅ "My Properties" View** ⭐ COMPLETED (Jan 24, 2026)
+**Actual Effort:** ~6 hours | **Impact:** Owners can now see all their properties
+
+Backend:
+- ✅ Endpoint: `GET /api/v1/users/me/properties` (api/src/users/mod.rs:302-484)
+- ✅ Returns owned + rented apartments with building addresses
+- ✅ Includes statistics: active maintenance requests, pending votes
+- ✅ Filters by `is_deleted = false` for all entities
+
+Frontend:
+- ✅ Page: `/my-properties` (frontend/src/pages/my_properties.rs, 305 lines)
+- ✅ Dashboard with stats cards (properties, maintenance, votes)
+- ✅ Property cards grid with relationship badges (Owner/Active Renter/Past Renter)
+- ✅ Shows apartment details: size, bedrooms, bathrooms, rental dates
+- ✅ Click-through to apartment meters page
+- ✅ Navigation link added to MainSidebar
+
+**2. ✅ Owner Management UI** COMPLETED (Earlier)
+- ✅ Assign/remove owners in admin properties page
+- ✅ Searchable user selection interface
+- ✅ Components in frontend/src/components/properties/
+- ✅ Backend endpoints: GET/POST/DELETE /api/v1/apartments/{id}/owners
+
 **Remaining work:**
 
-**1. "My Properties" View** ⭐
-- Page showing apartments owned/rented by logged-in user
-- Quick stats: # of properties, maintenance requests, pending votes
-- Links to each property's details
-- **Effort:** 4-6 hours
+**3. ✅ Auto-Role Assignment** ⭐ COMPLETED (Jan 24, 2026)
+**Actual Effort:** 1 hour | **Impact:** Roles automatically managed based on property assignments
 
-**2. Auto-Role Assignment**
-- When user assigned as owner → auto-add Homeowner role
-- When user assigned as renter → auto-add Renter role
-- When last assignment removed → auto-remove role
-- **Effort:** 2-3 hours backend
+Backend:
+- ✅ Helper function: `ensure_user_has_role()` (api/src/apartments/mod.rs:10-59)
+  - Creates role if it doesn't exist
+  - Assigns role to user if not already assigned
+  - Idempotent operation
+- ✅ Helper function: `remove_role_if_no_assignments()` (api/src/apartments/mod.rs:64-112)
+  - Checks if user has any property assignments (owner or active renter)
+  - Removes Homeowner role if no ownership assignments
+  - Removes Renter role if no active rental assignments
+  - Preserves other roles (Admin, Manager, HOAMember)
+- ✅ Updated `add_apartment_owner()` endpoint
+  - Auto-assigns Homeowner role when user is added as owner
+  - Works even if assignment already exists (idempotent)
+- ✅ Updated `remove_apartment_owner()` endpoint
+  - Auto-removes Homeowner role if last ownership removed
+  - Checks entire apartment_owners table for remaining assignments
 
-**3. Tenant Management UI**
-- Add renter assignment to Properties page (like owner assignment)
-- Set rental period (start/end dates)
-- View current and past tenants
-- Revoke access (expire relationship)
-- **Effort:** 4-6 hours (reuse owner management components!)
+**Benefits:**
+- Admins no longer need to manually assign Homeowner/Renter roles
+- Roles stay synchronized with property assignments
+- Prevents role/assignment mismatches
 
-**4. Property History Timeline**
+**Note:** Renter auto-role assignment implemented alongside Tenant Management UI
+
+**4. ✅ Tenant Management UI** ⭐ COMPLETED (Jan 24, 2026)
+**Actual Effort:** 4 hours | **Impact:** Complete renter lifecycle management with automatic role assignment
+
+Backend:
+- ✅ `GET /api/v1/apartments/{id}/renters` - List renters with user details
+- ✅ `POST /api/v1/apartments/{id}/renters` - Assign renter with auto-role assignment
+  - Auto-assigns Renter role when added
+  - Supports start/end dates and active status
+  - Idempotent operation
+- ✅ `PUT /api/v1/apartments/{id}/renters/{user_id}` - Update rental period/status
+  - Manages Renter role based on active status
+  - Can update dates independently
+- ✅ `DELETE /api/v1/apartments/{id}/renters/{user_id}` - Remove renter
+  - Auto-removes Renter role if no other active assignments
+
+Frontend:
+- ✅ Component: `RenterManagement` (frontend/src/components/properties/renter_management.rs)
+  - Displays active and past renters separately
+  - Start/end date inputs for rental periods
+  - Active/inactive toggle switch
+  - User search and assignment interface
+  - Toggle active status or remove renters
+- ✅ Integration: Added tabs in properties page (Owners | Renters)
+  - Tab-based UI in third column of properties page
+  - Reuses existing user search infrastructure
+  - Consistent with owner management patterns
+
+**Benefits:**
+- Complete renter lifecycle management (assign, update dates, toggle active, remove)
+- Automatic Renter role synchronization
+- Separate views for active vs past renters
+- Clean tabbed interface alongside owner management
+- Role-based access control properly enforced
+
+**5. Property History Timeline**
 - Show all events for a property (maintenance, tenant changes, etc.)
 - **Effort:** 4-6 hours
+- **Status:** Not started; would need audit log table
 
-**Total Phase 2 effort:** ~2-3 days
+**Total Phase 2 effort:** ~2-3 days (80% complete - 4 of 5 features done)**
 
 ---
 

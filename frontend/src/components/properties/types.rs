@@ -15,7 +15,7 @@ pub struct Apartment {
     pub size_sq_m: Option<f64>,
 }
 
-#[derive(Deserialize, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct UserInfo {
     pub id: u64,
     pub name: String,

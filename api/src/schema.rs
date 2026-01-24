@@ -169,6 +169,20 @@ diesel::table! {
 }
 
 diesel::table! {
+    property_history (id) {
+        id -> Unsigned<Bigint>,
+        apartment_id -> Unsigned<Bigint>,
+        #[max_length = 50]
+        event_type -> Varchar,
+        user_id -> Nullable<Unsigned<Bigint>>,
+        changed_by -> Unsigned<Bigint>,
+        description -> Text,
+        metadata -> Nullable<Longtext>,
+        created_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
     proposal_results (id) {
         id -> Unsigned<Bigint>,
         proposal_id -> Unsigned<Bigint>,
@@ -271,6 +285,7 @@ diesel::joinable!(maintenance_request_history -> users (changed_by));
 diesel::joinable!(maintenance_requests -> apartments (apartment_id));
 diesel::joinable!(meter_readings -> meters (meter_id));
 diesel::joinable!(meters -> apartments (apartment_id));
+diesel::joinable!(property_history -> users (changed_by));
 diesel::joinable!(proposal_results -> proposals (proposal_id));
 diesel::joinable!(proposals -> buildings (building_id));
 diesel::joinable!(proposals -> users (created_by));
@@ -291,6 +306,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     maintenance_requests,
     meter_readings,
     meters,
+    property_history,
     proposal_results,
     proposals,
     roles,
