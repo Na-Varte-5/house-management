@@ -303,11 +303,34 @@ Frontend:
 
 #### Phase 3 (Tier 3): Maintenance Enhancements
 
-**1. Maintenance Comments System** ⭐
-- Add comments to maintenance requests
-- Show in history timeline
-- Enable collaboration between owners/renters/managers
-- **Effort:** 1 day backend + 1 day frontend
+**1. ✅ Maintenance Comments System** ⭐ COMPLETED (Jan 24, 2026)
+**Actual Effort:** ~4 hours | **Impact:** Complete collaboration system for maintenance requests
+
+Backend:
+- ✅ Migration: `maintenance_request_comments` table with soft-delete pattern
+- ✅ Models: MaintenanceRequestComment, NewMaintenanceRequestComment, MaintenanceRequestCommentWithUser
+- ✅ Endpoints: GET/POST/DELETE `/api/v1/requests/{id}/comments` (233 lines in maintenance/mod.rs)
+- ✅ Role-based access: Users can view/comment if they created request, are assigned, or are Admin/Manager
+- ✅ Deletion: Users can delete own comments; Admin/Manager can delete any comment
+- ✅ Diesel joinable declarations added to schema.rs
+
+Frontend:
+- ✅ Component: CommentSection (comment_section.rs, 217 lines)
+  - Comment list with user names and formatted timestamps ("Jan 24, 2026 at 10:30")
+  - Add comment form using Textarea component
+  - Delete button with confirmation dialog for authorized users
+  - Loading states, empty state messaging
+- ✅ Integration: Added to maintenance detail page below attachments
+  - State management for comments and loading
+  - Callbacks for fetching, adding, deleting comments
+  - Auto-reloads after add/delete operations
+  - Success/error messages via existing alert components
+
+**Benefits:**
+- Real-time collaboration between owners, renters, and managers
+- Proper authorization ensures data privacy
+- Soft-delete preserves audit trail
+- Clean, reusable component architecture
 
 **2. Attachment Permissions**
 - Allow owners/renters to upload attachments (not just admin)
@@ -318,7 +341,7 @@ Frontend:
 - Owner can escalate to manager
 - **Effort:** 4-6 hours
 
-**Total Phase 3 effort:** ~2-3 days
+**Total Phase 3 effort:** ~2-3 days (1 of 3 features complete)
 
 ---
 
