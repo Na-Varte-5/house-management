@@ -7,6 +7,31 @@ use diesel::prelude::*;
 use serde::Serialize;
 use utoipa;
 
+/// Type alias for owned apartment query results
+type OwnedApartmentRow = (
+    u64,
+    String,
+    u64,
+    String,
+    Option<f64>,
+    Option<i32>,
+    Option<i32>,
+);
+
+/// Type alias for rented apartment query results
+type RentedApartmentRow = (
+    u64,
+    String,
+    u64,
+    String,
+    Option<f64>,
+    Option<i32>,
+    Option<i32>,
+    Option<bool>,
+    Option<chrono::NaiveDate>,
+    Option<chrono::NaiveDate>,
+);
+
 /// List all users
 ///
 /// Returns all users with complete information including password hashes.
@@ -234,13 +259,13 @@ pub async fn set_user_roles(
 /// List users (public info only)
 ///
 /// Returns all users with only public information (no password hashes).
-/// Requires Admin or Manager role.
+/// Requires Admin, Manager role, or Homeowner role (for renter assignment).
 #[utoipa::path(
     get,
     path = "/api/v1/users/public",
     responses(
         (status = 200, description = "List of users (public info)", body = Vec<PublicUser>),
-        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 403, description = "Forbidden - requires Admin, Manager, or Homeowner role"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Users",
@@ -250,7 +275,7 @@ pub async fn list_public_users(
     auth: AuthContext,
     pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
-    if !auth.has_any_role(&["Admin", "Manager"]) {
+    if !auth.has_any_role(&["Admin", "Manager", "Homeowner"]) {
         return Err(AppError::Forbidden);
     }
     use crate::schema::users::dsl as u;
@@ -327,15 +352,7 @@ pub async fn get_my_properties(
     let mut properties: Vec<UserProperty> = Vec::new();
 
     // Get owned apartments
-    let owned: Vec<(
-        u64,
-        String,
-        u64,
-        String,
-        Option<f64>,
-        Option<i32>,
-        Option<i32>,
-    )> = apt::apartments
+    let owned: Vec<OwnedApartmentRow> = apt::apartments
         .inner_join(ao::apartment_owners.on(ao::apartment_id.eq(apt::id)))
         .inner_join(bld::buildings.on(bld::id.eq(apt::building_id)))
         .filter(ao::user_id.eq(user_id))
@@ -369,18 +386,7 @@ pub async fn get_my_properties(
     }
 
     // Get rented apartments
-    let rented: Vec<(
-        u64,
-        String,
-        u64,
-        String,
-        Option<f64>,
-        Option<i32>,
-        Option<i32>,
-        Option<bool>,
-        Option<chrono::NaiveDate>,
-        Option<chrono::NaiveDate>,
-    )> = apt::apartments
+    let rented: Vec<RentedApartmentRow> = apt::apartments
         .inner_join(ar::apartment_renters.on(ar::apartment_id.eq(apt::id)))
         .inner_join(bld::buildings.on(bld::id.eq(apt::building_id)))
         .filter(ar::user_id.eq(user_id))

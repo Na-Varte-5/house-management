@@ -6,6 +6,7 @@ pub mod config;
 pub mod dashboard;
 pub mod db;
 pub mod i18n;
+pub mod invitations;
 pub mod maintenance;
 pub mod meters;
 pub mod models;

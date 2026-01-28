@@ -1,12 +1,13 @@
 use crate::components::maintenance::{
-    Attachment, AttachmentsList, Comment, CommentSection, HistoryEntry, HistoryTimeline,
-    ManagementPanel, ManagementRequest, UserInfo,
+    Attachment, AttachmentsList, Comment, CommentSection, EscalationPanel, HistoryEntry,
+    HistoryTimeline, ManagementPanel, ManagementRequest, UserInfo,
 };
 use crate::components::{ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
 use crate::routes::Route;
 use crate::services::api_client;
 use serde::Deserialize;
+use web_sys::FormData;
 use yew::prelude::*;
 use yew_router::prelude::*;
 
@@ -98,6 +99,8 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
     let loading_history = use_state(|| false);
     let loading_attachments = use_state(|| false);
     let loading_comments = use_state(|| false);
+    let uploading = use_state(|| false);
+    let is_apartment_owner = use_state(|| false);
 
     let error = use_state(|| None::<String>);
     let success = use_state(|| None::<String>);
@@ -111,6 +114,7 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
         let loading = loading.clone();
         let error = error.clone();
         let token = token.clone();
+        let is_apartment_owner = is_apartment_owner.clone();
 
         use_effect_with(request_id, move |id| {
             let id = *id;
@@ -121,7 +125,34 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
                     .await
                 {
                     Ok(req) => {
+                        let apartment_id = req.apartment_id;
                         request.set(Some(req));
+
+                        #[derive(Deserialize)]
+                        struct OwnerInfo {
+                            id: u64,
+                        }
+                        if let Ok(owners) = client
+                            .get::<Vec<OwnerInfo>>(&format!("/apartments/{}/owners", apartment_id))
+                            .await
+                        {
+                            if let Some(window) = web_sys::window() {
+                                if let Ok(Some(storage)) = window.local_storage() {
+                                    if let Ok(Some(user_json)) = storage.get_item("auth.user") {
+                                        if let Ok(user) =
+                                            serde_json::from_str::<serde_json::Value>(&user_json)
+                                        {
+                                            if let Some(user_id) =
+                                                user.get("id").and_then(|v| v.as_u64())
+                                            {
+                                                let owns = owners.iter().any(|o| o.id == user_id);
+                                                is_apartment_owner.set(owns);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         loading.set(false);
                     }
                     Err(e) => {
@@ -335,7 +366,6 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
                 {
                     Ok(_) => {
                         success.set(Some("Comment deleted successfully".to_string()));
-                        // Reload comments
                         if let Ok(list) = client
                             .get::<Vec<Comment>>(&format!("/requests/{}/comments", request_id))
                             .await
@@ -348,6 +378,48 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
                     }
                 }
                 loading_comments.set(false);
+            });
+        })
+    };
+
+    let on_upload = {
+        let attachments = attachments.clone();
+        let uploading = uploading.clone();
+        let success = success.clone();
+        let error = error.clone();
+        let token = token.clone();
+
+        Callback::from(move |form_data: FormData| {
+            let attachments = attachments.clone();
+            let uploading = uploading.clone();
+            let success = success.clone();
+            let error = error.clone();
+            let token = token.clone();
+
+            uploading.set(true);
+            wasm_bindgen_futures::spawn_local(async move {
+                let client = api_client(token.as_deref());
+                match client
+                    .post_multipart(&format!("/requests/{}/attachments", request_id), &form_data)
+                    .await
+                {
+                    Ok(_) => {
+                        success.set(Some("File uploaded successfully".to_string()));
+                        if let Ok(list) = client
+                            .get::<Vec<Attachment>>(&format!(
+                                "/requests/{}/attachments",
+                                request_id
+                            ))
+                            .await
+                        {
+                            attachments.set(list);
+                        }
+                    }
+                    Err(e) => {
+                        error.set(Some(format!("Failed to upload file: {}", e)));
+                    }
+                }
+                uploading.set(false);
             });
         })
     };
@@ -466,6 +538,15 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
                         <AttachmentsList
                             attachments={(*attachments).clone()}
                             loading={*loading_attachments}
+                            request_id={request_id}
+                            can_upload={
+                                auth.is_admin_or_manager()
+                                || req.created_by == auth.user().map(|u| u.id).unwrap_or(0)
+                                || req.assigned_to == Some(auth.user().map(|u| u.id).unwrap_or(0))
+                                || *is_apartment_owner
+                            }
+                            on_upload={on_upload.clone()}
+                            uploading={*uploading}
                         />
 
                         // Comments component
@@ -492,9 +573,19 @@ pub fn maintenance_detail_page(props: &Props) -> Html {
                                 }}
                                 users={(*users).clone()}
                                 token={token.clone()}
-                                on_update={on_update}
-                                on_error={on_error}
-                                on_success={on_success}
+                                on_update={on_update.clone()}
+                                on_error={on_error.clone()}
+                                on_success={on_success.clone()}
+                            />
+                        </div>
+                    } else if *is_apartment_owner {
+                        <div class="col-lg-4 mb-3">
+                            <EscalationPanel
+                                request_id={request_id}
+                                building_id={req.building_id}
+                                token={token.clone()}
+                                on_escalated={on_update.clone()}
+                                on_error={on_error.clone()}
                             />
                         </div>
                     }

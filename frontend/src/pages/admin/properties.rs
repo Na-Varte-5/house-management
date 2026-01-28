@@ -46,6 +46,7 @@ pub fn admin_properties_page() -> Html {
 
     let apartment_owners = use_state(|| Vec::<UserInfo>::new());
     let apartment_renters = use_state(|| Vec::<RenterInfo>::new());
+    let apartment_invitations = use_state(|| Vec::<InvitationInfo>::new());
     let all_users = use_state(|| Vec::<UserInfo>::new());
     let user_query = use_state(String::default);
     let renter_query = use_state(String::default);
@@ -146,6 +147,7 @@ pub fn admin_properties_page() -> Html {
     // Load renters when apartment selected
     {
         let renters = apartment_renters.clone();
+        let invitations = apartment_invitations.clone();
         let selected = selected_apartment.clone();
         let loading = loading_renters.clone();
         let error = error.clone();
@@ -154,6 +156,11 @@ pub fn admin_properties_page() -> Html {
         use_effect_with(selected_apartment.clone(), move |_| {
             if let Some(aid) = *selected {
                 loading.set(true);
+                let renters = renters.clone();
+                let invitations = invitations.clone();
+                let error = error.clone();
+                let token = token.clone();
+                let loading = loading.clone();
                 wasm_bindgen_futures::spawn_local(async move {
                     let client = api_client(token.as_deref());
                     match client
@@ -178,10 +185,17 @@ pub fn admin_properties_page() -> Html {
                         }
                         Err(e) => error.set(Some(format!("Failed to load renters: {}", e))),
                     }
+                    if let Ok(inv_list) = client
+                        .get::<Vec<InvitationInfo>>(&format!("/apartments/{}/invitations", aid))
+                        .await
+                    {
+                        invitations.set(inv_list);
+                    }
                     loading.set(false);
                 });
             } else {
                 renters.set(Vec::new());
+                invitations.set(Vec::new());
                 loading.set(false);
             }
             || ()
@@ -699,6 +713,115 @@ pub fn admin_properties_page() -> Html {
         })
     };
 
+    let on_invite_renter = {
+        let apartment_invitations = apartment_invitations.clone();
+        let selected_apartment = selected_apartment.clone();
+        let error = error.clone();
+        let success = success.clone();
+        let token = token.clone();
+
+        Callback::from(
+            move |(email, start_date, end_date): (String, Option<String>, Option<String>)| {
+                if let Some(aid) = *selected_apartment {
+                    let apartment_invitations = apartment_invitations.clone();
+                    let error = error.clone();
+                    let success = success.clone();
+                    let token = token.clone();
+
+                    error.set(None);
+                    success.set(None);
+
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let client = api_client(token.as_deref());
+                        let payload = serde_json::json!({
+                            "email": email,
+                            "start_date": start_date,
+                            "end_date": end_date,
+                        });
+
+                        match client
+                            .post::<_, serde_json::Value>(
+                                &format!("/apartments/{}/invite", aid),
+                                &payload,
+                            )
+                            .await
+                        {
+                            Ok(response) => {
+                                let status = response
+                                    .get("status")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("sent");
+                                let message = response
+                                    .get("message")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("Invitation processed");
+                                success.set(Some(message.to_string()));
+
+                                if status == "pending" {
+                                    if let Ok(list) = client
+                                        .get::<Vec<InvitationInfo>>(&format!(
+                                            "/apartments/{}/invitations",
+                                            aid
+                                        ))
+                                        .await
+                                    {
+                                        apartment_invitations.set(list);
+                                    }
+                                }
+                            }
+                            Err(e) => error.set(Some(format!("Failed to send invitation: {}", e))),
+                        }
+                    });
+                }
+            },
+        )
+    };
+
+    let on_cancel_invitation = {
+        let apartment_invitations = apartment_invitations.clone();
+        let selected_apartment = selected_apartment.clone();
+        let error = error.clone();
+        let success = success.clone();
+        let token = token.clone();
+
+        Callback::from(move |invitation_id: u64| {
+            if let Some(aid) = *selected_apartment {
+                let apartment_invitations = apartment_invitations.clone();
+                let error = error.clone();
+                let success = success.clone();
+                let token = token.clone();
+
+                error.set(None);
+                success.set(None);
+
+                wasm_bindgen_futures::spawn_local(async move {
+                    let client = api_client(token.as_deref());
+                    match client
+                        .delete_no_response(&format!(
+                            "/apartments/{}/invitations/{}",
+                            aid, invitation_id
+                        ))
+                        .await
+                    {
+                        Ok(_) => {
+                            if let Ok(list) = client
+                                .get::<Vec<InvitationInfo>>(&format!(
+                                    "/apartments/{}/invitations",
+                                    aid
+                                ))
+                                .await
+                            {
+                                apartment_invitations.set(list);
+                            }
+                            success.set(Some("Invitation cancelled".to_string()));
+                        }
+                        Err(e) => error.set(Some(format!("Failed to cancel invitation: {}", e))),
+                    }
+                });
+            }
+        })
+    };
+
     html! {
         <AdminLayout title="Properties Management" active_route={Route::AdminProperties}>
             <div class="container-fluid">
@@ -834,6 +957,9 @@ pub fn admin_properties_page() -> Html {
                                         on_toggle_active={on_toggle_renter_active}
                                         loading={*loading_renters}
                                         show={selected_apartment.is_some()}
+                                        invitations={(*apartment_invitations).clone()}
+                                        on_invite={Some(on_invite_renter.clone())}
+                                        on_cancel_invitation={Some(on_cancel_invitation.clone())}
                                     />
                                 } else {
                                     // History tab

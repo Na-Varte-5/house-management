@@ -170,7 +170,7 @@ fn render_property_card(property: &UserProperty, navigator: &Navigator) -> Html 
         let navigator = navigator.clone();
         let apt_id = property.id;
         Callback::from(move |_: MouseEvent| {
-            navigator.push(&Route::ApartmentMeters {
+            navigator.push(&Route::MyPropertyDetail {
                 apartment_id: apt_id,
             });
         })

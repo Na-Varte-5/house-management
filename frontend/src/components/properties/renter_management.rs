@@ -1,4 +1,4 @@
-use super::types::UserInfo;
+use super::types::{InvitationInfo, UserInfo};
 use serde::{Deserialize, Serialize};
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
@@ -21,11 +21,17 @@ pub struct RenterManagementProps {
     pub all_users: Vec<UserInfo>,
     pub user_query: String,
     pub on_query_change: Callback<String>,
-    pub on_assign: Callback<(u64, Option<String>, Option<String>, bool)>, // (user_id, start_date, end_date, is_active)
-    pub on_remove: Callback<u64>,                                         // user_id
-    pub on_toggle_active: Callback<u64>,                                  // user_id
+    pub on_assign: Callback<(u64, Option<String>, Option<String>, bool)>,
+    pub on_remove: Callback<u64>,
+    pub on_toggle_active: Callback<u64>,
     pub loading: bool,
     pub show: bool,
+    #[prop_or_default]
+    pub invitations: Vec<InvitationInfo>,
+    #[prop_or_default]
+    pub on_invite: Option<Callback<(String, Option<String>, Option<String>)>>,
+    #[prop_or_default]
+    pub on_cancel_invitation: Option<Callback<u64>>,
 }
 
 #[function_component(RenterManagement)]
@@ -33,6 +39,9 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
     let start_date = use_state(|| Option::<String>::None);
     let end_date = use_state(|| Option::<String>::None);
     let is_active = use_state(|| true);
+    let invite_email = use_state(String::default);
+    let invite_start = use_state(|| Option::<String>::None);
+    let invite_end = use_state(|| Option::<String>::None);
 
     if !props.show {
         return html! {
@@ -43,7 +52,12 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
         };
     }
 
-    // Filter users based on query
+    let pending_invitations: Vec<&InvitationInfo> = props
+        .invitations
+        .iter()
+        .filter(|i| i.status == "pending")
+        .collect();
+
     let filtered_users: Vec<&UserInfo> = if props.user_query.is_empty() {
         props.all_users.iter().collect()
     } else {
@@ -58,7 +72,6 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
             .collect()
     };
 
-    // Exclude already assigned renters
     let renter_user_ids: Vec<u64> = props.renters.iter().map(|r| r.user_id).collect();
     let available_users: Vec<&UserInfo> = filtered_users
         .into_iter()
@@ -66,7 +79,6 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
         .take(5)
         .collect();
 
-    // Separate active and past renters
     let (active_renters, past_renters): (Vec<&RenterInfo>, Vec<&RenterInfo>) =
         props.renters.iter().partition(|r| r.is_active);
 
@@ -116,6 +128,10 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
                                             if let Some(end) = &renter.end_date {
                                                 <span class="text-muted ms-2">
                                                     {"End: "}<strong>{end}</strong>
+                                                </span>
+                                            } else if renter.start_date.is_some() {
+                                                <span class="text-muted ms-2">
+                                                    <span class="badge bg-info text-dark">{"Ongoing"}</span>
                                                 </span>
                                             }
                                         </div>
@@ -177,6 +193,10 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
                                             if let Some(end) = &renter.end_date {
                                                 <span class="text-muted ms-2">
                                                     {"End: "}<strong>{end}</strong>
+                                                </span>
+                                            } else if renter.start_date.is_some() {
+                                                <span class="text-muted ms-2">
+                                                    <span class="badge bg-info text-dark">{"Ongoing"}</span>
                                                 </span>
                                             }
                                         </div>
@@ -308,6 +328,131 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
                 <div class="alert alert-info small mb-0">
                     {"No matching users found"}
                 </div>
+            }
+
+            if props.on_invite.is_some() {
+                <hr class="my-3" />
+                <h6 class="small fw-semibold mb-2">{"Invite by Email"}</h6>
+                <p class="text-muted small mb-2">
+                    {"Send an invitation to someone who doesn't have an account yet."}
+                </p>
+                <div class="row g-2 mb-2">
+                    <div class="col-12">
+                        <input
+                            type="email"
+                            class="form-control form-control-sm"
+                            placeholder="Email address"
+                            value={(*invite_email).clone()}
+                            oninput={{
+                                let invite_email = invite_email.clone();
+                                Callback::from(move |e: InputEvent| {
+                                    let input: HtmlInputElement = e.target_unchecked_into();
+                                    invite_email.set(input.value());
+                                })
+                            }}
+                        />
+                    </div>
+                    <div class="col-6">
+                        <input
+                            type="date"
+                            class="form-control form-control-sm"
+                            placeholder="Start date (optional)"
+                            value={invite_start.as_ref().map(|s| s.clone()).unwrap_or_default()}
+                            oninput={{
+                                let invite_start = invite_start.clone();
+                                Callback::from(move |e: InputEvent| {
+                                    let input: HtmlInputElement = e.target_unchecked_into();
+                                    let value = input.value();
+                                    invite_start.set(if value.is_empty() { None } else { Some(value) });
+                                })
+                            }}
+                        />
+                    </div>
+                    <div class="col-6">
+                        <input
+                            type="date"
+                            class="form-control form-control-sm"
+                            placeholder="End date (optional)"
+                            value={invite_end.as_ref().map(|s| s.clone()).unwrap_or_default()}
+                            oninput={{
+                                let invite_end = invite_end.clone();
+                                Callback::from(move |e: InputEvent| {
+                                    let input: HtmlInputElement = e.target_unchecked_into();
+                                    let value = input.value();
+                                    invite_end.set(if value.is_empty() { None } else { Some(value) });
+                                })
+                            }}
+                        />
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    class="btn btn-sm btn-outline-primary w-100"
+                    disabled={!invite_email.contains('@')}
+                    onclick={{
+                        let on_invite = props.on_invite.clone();
+                        let invite_email = invite_email.clone();
+                        let invite_start = invite_start.clone();
+                        let invite_end = invite_end.clone();
+                        Callback::from(move |_| {
+                            if let Some(cb) = &on_invite {
+                                cb.emit(((*invite_email).clone(), (*invite_start).clone(), (*invite_end).clone()));
+                                invite_email.set(String::new());
+                                invite_start.set(None);
+                                invite_end.set(None);
+                            }
+                        })
+                    }}
+                >
+                    <i class="bi bi-envelope me-1"></i>
+                    {"Send Invitation"}
+                </button>
+            }
+
+            if !pending_invitations.is_empty() {
+                <hr class="my-3" />
+                <h6 class="small fw-semibold mb-2">{"Pending Invitations"}</h6>
+                <ul class="list-group list-group-flush">
+                    { for pending_invitations.iter().map(|inv| {
+                        let inv_id = inv.id;
+                        let on_cancel = {
+                            let on_cancel_cb = props.on_cancel_invitation.clone();
+                            Callback::from(move |_| {
+                                if let Some(cb) = &on_cancel_cb {
+                                    cb.emit(inv_id);
+                                }
+                            })
+                        };
+
+                        html! {
+                            <li class="list-group-item px-0">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center mb-1">
+                                            <strong class="small me-2">{&inv.email}</strong>
+                                            <span class="badge bg-warning text-dark">{"Pending"}</span>
+                                        </div>
+                                        <div style="font-size: 0.75rem;" class="text-muted">
+                                            {"Invited by "}{&inv.invited_by_name}
+                                        </div>
+                                        <div style="font-size: 0.75rem;" class="text-muted">
+                                            {"Expires: "}{&inv.expires_at}
+                                        </div>
+                                    </div>
+                                    if props.on_cancel_invitation.is_some() {
+                                        <button
+                                            class="btn btn-sm btn-outline-danger"
+                                            onclick={on_cancel}
+                                            title="Cancel invitation"
+                                        >
+                                            <i class="bi bi-x-circle"></i>
+                                        </button>
+                                    }
+                                </div>
+                            </li>
+                        }
+                    }) }
+                </ul>
             }
         </div>
     }

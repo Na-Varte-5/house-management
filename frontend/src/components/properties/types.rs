@@ -39,3 +39,19 @@ pub struct NewApartment {
 pub struct AssignOwnerRequest {
     pub user_id: u64,
 }
+
+#[derive(Deserialize, Clone, PartialEq)]
+pub struct InvitationInfo {
+    pub id: u64,
+    pub apartment_id: u64,
+    pub apartment_number: String,
+    pub building_address: String,
+    pub email: String,
+    pub start_date: Option<String>,
+    pub end_date: Option<String>,
+    pub invited_by: u64,
+    pub invited_by_name: String,
+    pub status: String,
+    pub expires_at: String,
+    pub created_at: Option<String>,
+}

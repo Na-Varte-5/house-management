@@ -1,5 +1,11 @@
 // @generated automatically by Diesel CLI.
 
+pub mod sql_types {
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(mysql_type(name = "Enum"))]
+    pub struct RenterInvitationsStatusEnum;
+}
+
 diesel::table! {
     announcements (id) {
         id -> Unsigned<Bigint>,
@@ -230,6 +236,28 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::RenterInvitationsStatusEnum;
+
+    renter_invitations (id) {
+        id -> Unsigned<Bigint>,
+        apartment_id -> Unsigned<Bigint>,
+        #[max_length = 255]
+        email -> Varchar,
+        #[max_length = 128]
+        token -> Varchar,
+        start_date -> Nullable<Date>,
+        end_date -> Nullable<Date>,
+        invited_by -> Unsigned<Bigint>,
+        #[max_length = 9]
+        status -> RenterInvitationsStatusEnum,
+        expires_at -> Datetime,
+        created_at -> Nullable<Timestamp>,
+        accepted_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
     roles (id) {
         id -> Unsigned<Bigint>,
         #[max_length = 64]
@@ -324,6 +352,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     property_history,
     proposal_results,
     proposals,
+    renter_invitations,
     roles,
     user_roles,
     users,

@@ -8,4 +8,5 @@ pub mod maintenance;
 pub mod manage;
 pub mod meters;
 pub mod my_properties;
+pub mod my_property_detail;
 pub mod voting;

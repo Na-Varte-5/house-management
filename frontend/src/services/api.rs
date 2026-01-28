@@ -244,7 +244,6 @@ impl ApiClient {
         match status {
             200..=299 => Ok(()),
             401 => {
-                // Clear auth from localStorage on 401
                 clear_auth_storage();
                 Err(ApiError::Unauthorized)
             }
@@ -263,6 +262,28 @@ impl ApiClient {
                 status
             ))),
         }
+    }
+
+    pub async fn post_multipart(
+        &self,
+        endpoint: &str,
+        form_data: &web_sys::FormData,
+    ) -> ApiResult<()> {
+        let url = format!("{}{}", self.base_url, endpoint);
+
+        let mut request = Request::post(&url);
+
+        if let Some(token) = &self.token {
+            request = request.header("Authorization", &format!("Bearer {}", token));
+        }
+
+        let response = request
+            .body(form_data.clone())
+            .send()
+            .await
+            .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+
+        Self::handle_empty_response(response).await
     }
 }
 

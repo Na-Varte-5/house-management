@@ -1,5 +1,6 @@
 use crate::schema::{
-    apartment_owners, apartment_renters, apartments, building_managers, buildings, property_history,
+    apartment_owners, apartment_renters, apartments, building_managers, buildings,
+    property_history, renter_invitations,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -131,5 +132,132 @@ pub struct PropertyHistoryEnriched {
     pub changed_by_name: String,
     pub description: String,
     pub metadata: Option<String>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, diesel::AsExpression, diesel::FromSqlRow, ToSchema)]
+#[diesel(sql_type = crate::schema::sql_types::RenterInvitationsStatusEnum)]
+pub enum InvitationStatus {
+    Pending,
+    Accepted,
+    Expired,
+    Cancelled,
+}
+
+impl
+    diesel::serialize::ToSql<
+        crate::schema::sql_types::RenterInvitationsStatusEnum,
+        diesel::mysql::Mysql,
+    > for InvitationStatus
+{
+    fn to_sql<'b>(
+        &'b self,
+        out: &mut diesel::serialize::Output<'b, '_, diesel::mysql::Mysql>,
+    ) -> diesel::serialize::Result {
+        use std::io::Write;
+        match *self {
+            InvitationStatus::Pending => out.write_all(b"pending")?,
+            InvitationStatus::Accepted => out.write_all(b"accepted")?,
+            InvitationStatus::Expired => out.write_all(b"expired")?,
+            InvitationStatus::Cancelled => out.write_all(b"cancelled")?,
+        }
+        Ok(diesel::serialize::IsNull::No)
+    }
+}
+
+impl
+    diesel::deserialize::FromSql<
+        crate::schema::sql_types::RenterInvitationsStatusEnum,
+        diesel::mysql::Mysql,
+    > for InvitationStatus
+{
+    fn from_sql(bytes: diesel::mysql::MysqlValue<'_>) -> diesel::deserialize::Result<Self> {
+        let s = <String as diesel::deserialize::FromSql<
+            diesel::sql_types::Text,
+            diesel::mysql::Mysql,
+        >>::from_sql(bytes)?;
+        match s.as_str() {
+            "pending" => Ok(InvitationStatus::Pending),
+            "accepted" => Ok(InvitationStatus::Accepted),
+            "expired" => Ok(InvitationStatus::Expired),
+            "cancelled" => Ok(InvitationStatus::Cancelled),
+            _ => Err(format!("Unknown status: {}", s).into()),
+        }
+    }
+}
+
+impl serde::Serialize for InvitationStatus {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            InvitationStatus::Pending => serializer.serialize_str("pending"),
+            InvitationStatus::Accepted => serializer.serialize_str("accepted"),
+            InvitationStatus::Expired => serializer.serialize_str("expired"),
+            InvitationStatus::Cancelled => serializer.serialize_str("cancelled"),
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for InvitationStatus {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "pending" => Ok(InvitationStatus::Pending),
+            "accepted" => Ok(InvitationStatus::Accepted),
+            "expired" => Ok(InvitationStatus::Expired),
+            "cancelled" => Ok(InvitationStatus::Cancelled),
+            _ => Err(serde::de::Error::custom(format!("Unknown status: {}", s))),
+        }
+    }
+}
+
+#[derive(Queryable, Selectable, Serialize, Debug, ToSchema)]
+#[diesel(table_name = renter_invitations)]
+#[diesel(check_for_backend(diesel::mysql::Mysql))]
+pub struct RenterInvitation {
+    pub id: u64,
+    pub apartment_id: u64,
+    pub email: String,
+    pub token: String,
+    pub start_date: Option<chrono::NaiveDate>,
+    pub end_date: Option<chrono::NaiveDate>,
+    pub invited_by: u64,
+    pub status: InvitationStatus,
+    pub expires_at: chrono::NaiveDateTime,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub accepted_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = renter_invitations)]
+pub struct NewRenterInvitation {
+    pub apartment_id: u64,
+    pub email: String,
+    pub token: String,
+    pub start_date: Option<chrono::NaiveDate>,
+    pub end_date: Option<chrono::NaiveDate>,
+    pub invited_by: u64,
+    pub status: InvitationStatus,
+    pub expires_at: chrono::NaiveDateTime,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct RenterInvitationWithDetails {
+    pub id: u64,
+    pub apartment_id: u64,
+    pub apartment_number: String,
+    pub building_address: String,
+    pub email: String,
+    pub start_date: Option<chrono::NaiveDate>,
+    pub end_date: Option<chrono::NaiveDate>,
+    pub invited_by: u64,
+    pub invited_by_name: String,
+    pub status: InvitationStatus,
+    pub expires_at: chrono::NaiveDateTime,
     pub created_at: Option<chrono::NaiveDateTime>,
 }

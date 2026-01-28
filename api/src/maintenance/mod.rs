@@ -28,6 +28,17 @@ type MaintenanceRequestQueryRow = (
     String,                        // building_address
 );
 
+type CommentRow = (
+    u64,
+    u64,
+    u64,
+    String,
+    bool,
+    Option<chrono::NaiveDateTime>,
+    Option<chrono::NaiveDateTime>,
+    String,
+);
+
 type MaintenanceRequestDetailRow = (
     u64,                           // id
     u64,                           // apartment_id
@@ -823,17 +834,21 @@ pub async fn assign_request(
     pool: web::Data<DbPool>,
     payload: web::Json<AssignPayload>,
 ) -> Result<impl Responder, AppError> {
+    use crate::schema::maintenance_request_history::dsl as hist;
     use crate::schema::maintenance_requests::dsl as mr;
     use crate::schema::users::dsl as u;
+
     if !auth.has_any_role(&["Admin", "Manager"]) {
         return Err(AppError::Forbidden);
     }
     let id = path.into_inner();
     let target_user = payload.user_id;
+    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;
-    // verify user exists
+
     let exists: Result<u64, _> = u::users
         .filter(u::id.eq(target_user))
         .select(u::id)
@@ -841,9 +856,45 @@ pub async fn assign_request(
     if exists.is_err() {
         return Err(AppError::BadRequest("user_not_found".into()));
     }
+
+    let current: MaintenanceRequest = mr::maintenance_requests
+        .filter(mr::id.eq(id))
+        .select(MaintenanceRequest::as_select())
+        .first(&mut conn)?;
+
+    let old_assigned = current.assigned_to;
+
     diesel::update(mr::maintenance_requests.filter(mr::id.eq(id)))
         .set(mr::assigned_to.eq(Some(target_user)))
         .execute(&mut conn)?;
+
+    let new_name: String = u::users
+        .filter(u::id.eq(target_user))
+        .select(u::name)
+        .first(&mut conn)
+        .unwrap_or_else(|_| format!("User {}", target_user));
+
+    let note = if let Some(old_id) = old_assigned {
+        let old_name: String = u::users
+            .filter(u::id.eq(old_id))
+            .select(u::name)
+            .first(&mut conn)
+            .unwrap_or_else(|_| format!("User {}", old_id));
+        format!("Reassigned from {} to {}", old_name, new_name)
+    } else {
+        format!("Assigned to {}", new_name)
+    };
+
+    diesel::insert_into(hist::maintenance_request_history)
+        .values((
+            hist::request_id.eq(id),
+            hist::from_status.eq::<Option<String>>(None),
+            hist::to_status.eq(&current.status),
+            hist::note.eq(Some(note)),
+            hist::changed_by.eq(user_id),
+        ))
+        .execute(&mut conn)?;
+
     let updated: MaintenanceRequest = mr::maintenance_requests
         .filter(mr::id.eq(id))
         .select(MaintenanceRequest::as_select())
@@ -875,17 +926,51 @@ pub async fn unassign_request(
     path: web::Path<u64>,
     pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
+    use crate::schema::maintenance_request_history::dsl as hist;
     use crate::schema::maintenance_requests::dsl as mr;
+    use crate::schema::users::dsl as u;
+
     if !auth.has_any_role(&["Admin", "Manager"]) {
         return Err(AppError::Forbidden);
     }
     let id = path.into_inner();
+    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;
+
+    let current: MaintenanceRequest = mr::maintenance_requests
+        .filter(mr::id.eq(id))
+        .select(MaintenanceRequest::as_select())
+        .first(&mut conn)?;
+
+    let old_assigned = current.assigned_to;
+
     diesel::update(mr::maintenance_requests.filter(mr::id.eq(id)))
         .set(mr::assigned_to.eq::<Option<u64>>(None))
         .execute(&mut conn)?;
+
+    if let Some(old_id) = old_assigned {
+        let old_name: String = u::users
+            .filter(u::id.eq(old_id))
+            .select(u::name)
+            .first(&mut conn)
+            .unwrap_or_else(|_| format!("User {}", old_id));
+
+        let note = format!("Unassigned from {}", old_name);
+
+        diesel::insert_into(hist::maintenance_request_history)
+            .values((
+                hist::request_id.eq(id),
+                hist::from_status.eq::<Option<String>>(None),
+                hist::to_status.eq(&current.status),
+                hist::note.eq(Some(note)),
+                hist::changed_by.eq(user_id),
+            ))
+            .execute(&mut conn)?;
+    }
+
     let updated: MaintenanceRequest = mr::maintenance_requests
         .filter(mr::id.eq(id))
         .select(MaintenanceRequest::as_select())
@@ -944,16 +1029,7 @@ pub async fn list_comments(
     }
 
     // Fetch comments with user names
-    let comments: Vec<(
-        u64,
-        u64,
-        u64,
-        String,
-        bool,
-        Option<chrono::NaiveDateTime>,
-        Option<chrono::NaiveDateTime>,
-        String,
-    )> = mrc::maintenance_request_comments
+    let comments: Vec<CommentRow> = mrc::maintenance_request_comments
         .inner_join(u::users)
         .filter(mrc::request_id.eq(request_id))
         .filter(mrc::is_deleted.eq(false))
@@ -1159,6 +1235,133 @@ pub async fn delete_comment(
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Comment deleted successfully"})))
 }
 
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+pub struct EscalatePayload {
+    pub manager_id: u64,
+}
+
+/// Escalate a maintenance request to a building manager
+///
+/// Allows apartment owners to escalate a maintenance request by reassigning it to a building manager.
+/// The user must own the apartment associated with the request.
+/// The target manager must be a manager of the building where the apartment is located.
+#[utoipa::path(
+    post,
+    path = "/api/v1/requests/{id}/escalate",
+    params(
+        ("id" = u64, Path, description = "Maintenance request ID")
+    ),
+    request_body = EscalatePayload,
+    responses(
+        (status = 200, description = "Request escalated successfully"),
+        (status = 400, description = "Bad request - invalid manager or not a manager of this building"),
+        (status = 403, description = "Forbidden - not an owner of this apartment"),
+        (status = 404, description = "Request not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Maintenance",
+    security(("bearer_auth" = []))
+)]
+pub async fn escalate_request(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+    payload: web::Json<EscalatePayload>,
+) -> Result<impl Responder, AppError> {
+    use crate::schema::apartment_owners::dsl as ao;
+    use crate::schema::apartments::dsl as apt;
+    use crate::schema::building_managers::dsl as bm;
+    use crate::schema::maintenance_request_history::dsl as hist;
+    use crate::schema::maintenance_requests::dsl as mr;
+    use crate::schema::users::dsl as u;
+
+    let request_id = path.into_inner();
+    let target_manager_id = payload.manager_id;
+    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
+
+    let request: MaintenanceRequest = mr::maintenance_requests
+        .filter(mr::id.eq(request_id))
+        .select(MaintenanceRequest::as_select())
+        .first(&mut conn)?;
+
+    let apartment: u64 = apt::apartments
+        .filter(apt::id.eq(request.apartment_id))
+        .select(apt::building_id)
+        .first(&mut conn)?;
+    let building_id = apartment;
+
+    let is_owner: bool = ao::apartment_owners
+        .filter(
+            ao::apartment_id
+                .eq(request.apartment_id)
+                .and(ao::user_id.eq(user_id)),
+        )
+        .select((ao::apartment_id, ao::user_id))
+        .first::<(u64, u64)>(&mut conn)
+        .is_ok();
+
+    let is_admin_mgr = auth.has_any_role(&["Admin", "Manager"]);
+
+    if !is_owner && !is_admin_mgr {
+        return Err(AppError::Forbidden);
+    }
+
+    let is_valid_manager: bool = bm::building_managers
+        .filter(
+            bm::building_id
+                .eq(building_id)
+                .and(bm::user_id.eq(target_manager_id)),
+        )
+        .select((bm::building_id, bm::user_id))
+        .first::<(u64, u64)>(&mut conn)
+        .is_ok();
+
+    if !is_valid_manager {
+        return Err(AppError::BadRequest(
+            "Target user is not a manager of this building".into(),
+        ));
+    }
+
+    let old_assigned = request.assigned_to;
+
+    diesel::update(mr::maintenance_requests.filter(mr::id.eq(request_id)))
+        .set(mr::assigned_to.eq(Some(target_manager_id)))
+        .execute(&mut conn)?;
+
+    let manager_name: String = u::users
+        .filter(u::id.eq(target_manager_id))
+        .select(u::name)
+        .first(&mut conn)
+        .unwrap_or_else(|_| format!("User {}", target_manager_id));
+
+    let note = if let Some(old_id) = old_assigned {
+        let old_name: String = u::users
+            .filter(u::id.eq(old_id))
+            .select(u::name)
+            .first(&mut conn)
+            .unwrap_or_else(|_| format!("User {}", old_id));
+        format!("Escalated from {} to {}", old_name, manager_name)
+    } else {
+        format!("Escalated to {}", manager_name)
+    };
+
+    diesel::insert_into(hist::maintenance_request_history)
+        .values((
+            hist::request_id.eq(request_id),
+            hist::from_status.eq::<Option<String>>(None),
+            hist::to_status.eq(&request.status),
+            hist::note.eq(Some(note)),
+            hist::changed_by.eq(user_id),
+        ))
+        .execute(&mut conn)?;
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Request escalated successfully"})))
+}
+
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.route("/requests", web::get().to(list_requests))
         .route("/requests", web::post().to(create_request))
@@ -1168,6 +1371,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .route("/requests/{id}/history", web::get().to(list_history))
         .route("/requests/{id}/assign", web::put().to(assign_request))
         .route("/requests/{id}/assign", web::delete().to(unassign_request))
+        .route("/requests/{id}/escalate", web::post().to(escalate_request))
         // attachment endpoints
         .route(
             "/requests/{id}/attachments",

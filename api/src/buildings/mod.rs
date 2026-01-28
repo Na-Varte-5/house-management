@@ -94,13 +94,12 @@ pub async fn get_building(
     use crate::auth::building_access::get_user_building_ids;
     let maybe_building_ids = get_user_building_ids(user_id, is_admin, &mut conn)?;
 
-    // If Some(vec), user can only see those buildings
-    if let Some(accessible_buildings) = maybe_building_ids {
-        if !accessible_buildings.contains(&building_id) {
-            return Err(AppError::Forbidden);
-        }
+    // If Some(vec), user can only see those buildings; if None, user is admin and can see all
+    if let Some(accessible_buildings) = maybe_building_ids
+        && !accessible_buildings.contains(&building_id)
+    {
+        return Err(AppError::Forbidden);
     }
-    // If None, user is admin and can see all buildings
 
     let building = buildings
         .filter(id.eq(building_id).and(is_deleted.eq(false)))

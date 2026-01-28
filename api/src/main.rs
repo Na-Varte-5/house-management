@@ -3,7 +3,7 @@ use actix_web::{App, HttpRequest, HttpServer, Responder, web};
 use api::i18n::{get_message, init_translations, negotiate_language};
 use api::{
     AppConfig, DbPool, JwtKeys, MIGRATIONS, announcements, apartments, auth, buildings, dashboard,
-    maintenance, meters, openapi::ApiDoc, users, voting,
+    invitations, maintenance, meters, openapi::ApiDoc, users, voting,
 };
 use diesel::mysql::MysqlConnection;
 use diesel::r2d2::ConnectionManager;
@@ -88,7 +88,8 @@ async fn main() -> std::io::Result<()> {
                     .configure(announcements::configure)
                     .configure(voting::configure)
                     .configure(meters::configure)
-                    .configure(dashboard::configure),
+                    .configure(dashboard::configure)
+                    .configure(invitations::configure),
             )
     })
     .bind(addr)?

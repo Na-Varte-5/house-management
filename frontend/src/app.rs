@@ -20,6 +20,7 @@ use frontend::pages::meters::{
     MeterCalibrationPage, MeterDetailPage, MeterListPage, MeterManagementPage, MeterNewPage,
 };
 use frontend::pages::my_properties::MyProperties;
+use frontend::pages::my_property_detail::MyPropertyDetailPage;
 use frontend::pages::voting::{VotingDetailPage, VotingListPage, VotingNewPage};
 use frontend::routes::Route;
 
@@ -76,6 +77,7 @@ fn app_content() -> Html {
                             Route::MeterNew => html!{<MeterNewPage />},
                             Route::MeterCalibration => html!{<MeterCalibrationPage />},
                             Route::MyProperties => html!{<MyProperties />},
+                            Route::MyPropertyDetail { apartment_id } => html!{<MyPropertyDetailPage apartment_id={apartment_id} />},
                             _ => html!{<div>{"Not found"}</div>},
                         }}
                     </AppLayout>

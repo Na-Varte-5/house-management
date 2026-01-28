@@ -15,6 +15,27 @@ The House Management System provides a centralized solution for managing various
 
 ## Recent Changes (January 2026)
 
+### Renter Invitation System ✅ (January 28, 2026)
+Email-based invitation workflow for apartment owners to invite renters:
+- **Invite by email**: Owners can invite renters by email address
+- **Smart assignment**: If email exists in system, user is immediately assigned as renter; otherwise invitation is created
+- **Token-based acceptance**: Pending invitations can be accepted when user registers or logs in
+- **Invitation management**: List, cancel pending invitations; automatic expiration after 7 days
+- **RBAC enforcement**: Apartment owners, Admin, and Manager can manage renters
+
+### Owner-Based Renter Management ✅ (January 28, 2026)
+Expanded permissions for apartment owners to manage their own renters:
+- **Owner permissions**: Apartment owners can now add, update, and remove renters (previously Admin/Manager only)
+- **New endpoints**: `GET/POST /apartments/{id}/invite`, `GET/DELETE /apartments/{id}/invitations/{id}`
+- **Apartment details**: New `GET /apartments/{id}` and `GET /apartments/{id}/permissions` endpoints
+- **Property history**: Audit trail for all renter-related changes
+
+### Maintenance Request Escalation ✅ (January 28, 2026)
+Apartment owners can escalate maintenance requests to building managers:
+- **Escalation endpoint**: `POST /requests/{id}/escalate` to reassign to building manager
+- **Assignment history**: All assignment changes (assign, unassign, escalate) now logged in history
+- **Attachment permissions**: Apartment owners can now manage attachments on their requests
+
 ### Maintenance Request System - Complete Implementation ✅
 Full-featured maintenance request tracking with enriched data and comprehensive audit history:
 - **Enriched API responses**: All endpoints return apartment numbers, building addresses, and user names (not just IDs)
@@ -22,6 +43,12 @@ Full-featured maintenance request tracking with enriched data and comprehensive 
 - **User-friendly display**: Formatted dates ("Jan 14, 2026 at 10:30"), proper dropdown defaults, names instead of IDs
 - **File attachments**: Upload images/PDFs (max 10MB) with metadata tracking
 - **RBAC enforcement**: Admin/Manager can update all fields; users can only view their own requests
+
+### Code Quality Improvements (January 28, 2026)
+- Fixed all Clippy warnings across the codebase
+- Added type aliases for complex tuple types (RenterRow, PropertyHistoryRow, InvitationRow, etc.)
+- Refactored collapsible if statements for cleaner code
+- Removed unnecessary `.clone()` calls on Copy types
 
 ### Previous Features (November 2025)
 - Manager page (Yew) consolidating building & apartment management plus owner assignment.
@@ -45,11 +72,14 @@ Roles currently recognized: Admin, Manager, Homeowner, Renter, HOA Member.
 | Create/Soft-delete/Restore Building | Admin, Manager |
 | Create/Soft-delete/Restore Apartment | Admin, Manager |
 | Assign/Remove Apartment Owner | Admin, Manager |
+| **Manage Apartment Renters** | Admin, Manager, **Apartment Owner** |
+| **Invite Renter by Email** | Admin, Manager, **Apartment Owner** |
 | Submit Maintenance Request | Homeowner, Renter, Admin, Manager |
-| View Maintenance Request | Request creator, assigned user, Admin, Manager |
+| View Maintenance Request | Request creator, assigned user, **apartment owner**, Admin, Manager |
 | Update Maintenance Status/Priority/Assignment | Admin, Manager |
-| Upload Maintenance Attachment | Request creator, Admin, Manager |
-| View Maintenance History | Request creator, Admin, Manager |
+| **Escalate Maintenance Request** | Admin, Manager, **Apartment Owner** |
+| Upload Maintenance Attachment | Request creator, **apartment owner**, Admin, Manager |
+| View Maintenance History | Request creator, **apartment owner**, Admin, Manager |
 
 RBAC checks are centralized via `AuthContext.has_any_role` and enforced in handlers. Upcoming tests will assert denial for unauthorized roles.
 
@@ -144,6 +174,14 @@ For detailed information about the project design, architecture, and features, p
 | List apartment owners | GET | /api/v1/apartments/{id}/owners |
 | Add apartment owner (Admin/Manager) | POST | /api/v1/apartments/{id}/owners |
 | Remove apartment owner (Admin/Manager) | DELETE | /api/v1/apartments/{id}/owners/{user_id} |
+| **Get apartment details** | GET | /api/v1/apartments/{id} |
+| **Get apartment permissions** | GET | /api/v1/apartments/{id}/permissions |
+| **Invite renter by email** | POST | /api/v1/apartments/{id}/invite |
+| **List pending invitations** | GET | /api/v1/apartments/{id}/invitations |
+| **Cancel invitation** | DELETE | /api/v1/apartments/{id}/invitations/{invitation_id} |
+| **Get invitation by token** | GET | /api/v1/invitations/{token} |
+| **Accept invitation** | POST | /api/v1/invitations/{token}/accept |
+| **List my invitations** | GET | /api/v1/invitations/my |
 
 ## Maintenance Requests (✅ Implemented)
 
@@ -165,6 +203,7 @@ Three tables in production:
 | GET | /api/v1/requests/{id}/attachments | List attachments | Attachment[] |
 | GET | /api/v1/requests/{id}/attachments/{attachment_id} | Download file | Binary stream |
 | DELETE | /api/v1/requests/{id}/attachments/{attachment_id} | Soft-delete attachment | 200 OK |
+| **POST** | **/api/v1/requests/{id}/escalate** | **Escalate to building manager** | **200 OK** |
 
 ### Key Features
 - **Enriched responses**: All endpoints return human-readable data (apartment numbers, building addresses, user names)
@@ -188,9 +227,10 @@ Result calculation will aggregate weights of yes/no votes; majority and consensu
 - Owner assignment (many-to-many)
 - User management with RBAC (5 roles)
 - JWT authentication with secure token handling
-- **Maintenance Requests**: Complete system with enriched data, comprehensive audit history, and file attachments
+- **Maintenance Requests**: Complete system with enriched data, comprehensive audit history, file attachments, and escalation
 - **Voting System**: Proposal creation, weighted voting methods, result tallying
 - **Water Meter System**: Reading tracking, webhook integration, CSV export, calibration monitoring
+- **Renter Management**: Owner-based renter management with email invitations
 - Announcements with pinning and comments
 
 **🚧 In Progress:**

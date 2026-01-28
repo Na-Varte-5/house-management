@@ -44,4 +44,6 @@ pub enum Route {
     MeterCalibration,
     #[at("/my-properties")]
     MyProperties,
+    #[at("/my-properties/:apartment_id")]
+    MyPropertyDetail { apartment_id: u64 },
 }

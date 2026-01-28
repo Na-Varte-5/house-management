@@ -1,12 +1,47 @@
 use crate::auth::{AppError, AuthContext};
 use crate::db::DbPool;
 use crate::models::{
-    Apartment, ApartmentOwner, ApartmentRenter, NewApartment, NewApartmentRenter,
-    NewPropertyHistory, PropertyHistoryEnriched, PublicUser, User,
+    Apartment, ApartmentOwner, ApartmentRenter, InvitationStatus, NewApartment, NewApartmentRenter,
+    NewPropertyHistory, NewRenterInvitation, PropertyHistoryEnriched, PublicUser,
+    RenterInvitationWithDetails, User,
 };
 use actix_web::{HttpResponse, Responder, web};
 use diesel::prelude::*;
+use rand::Rng;
 use utoipa;
+
+type RenterRow = (
+    u64,
+    u64,
+    u64,
+    Option<chrono::NaiveDate>,
+    Option<chrono::NaiveDate>,
+    Option<bool>,
+    Option<chrono::NaiveDateTime>,
+);
+
+type PropertyHistoryRow = (
+    u64,
+    u64,
+    String,
+    Option<u64>,
+    u64,
+    String,
+    Option<String>,
+    Option<chrono::NaiveDateTime>,
+);
+
+type InvitationRow = (
+    u64,
+    u64,
+    String,
+    Option<chrono::NaiveDate>,
+    Option<chrono::NaiveDate>,
+    u64,
+    InvitationStatus,
+    chrono::NaiveDateTime,
+    Option<chrono::NaiveDateTime>,
+);
 
 /// Helper function to ensure a user has a specific role.
 /// Creates the role if it doesn't exist, then assigns it to the user if not already assigned.
@@ -222,13 +257,12 @@ pub async fn list_building_apartments(
     use crate::auth::building_access::get_user_building_ids;
     let maybe_building_ids = get_user_building_ids(user_id, is_admin, &mut conn)?;
 
-    // If Some(vec), user can only see those buildings
-    if let Some(accessible_buildings) = maybe_building_ids {
-        if !accessible_buildings.contains(&building) {
-            return Err(AppError::Forbidden);
-        }
+    // If Some(vec), user can only see those buildings; if None, user is admin and can see all
+    if let Some(accessible_buildings) = maybe_building_ids
+        && !accessible_buildings.contains(&building)
+    {
+        return Err(AppError::Forbidden);
     }
-    // If None, user is admin and can see all buildings
 
     let list = apartments
         .filter(building_id.eq(building).and(is_deleted.eq(false)))
@@ -572,6 +606,7 @@ pub async fn remove_apartment_owner(
 /// List renters of an apartment
 ///
 /// Returns all users who are registered as renters of the specified apartment.
+/// Requires Admin, Manager role, or apartment ownership.
 #[utoipa::path(
     get,
     path = "/api/v1/apartments/{id}/renters",
@@ -580,6 +615,7 @@ pub async fn remove_apartment_owner(
     ),
     responses(
         (status = 200, description = "List of renters", body = Vec<RenterWithUser>),
+        (status = 403, description = "Forbidden - requires Admin, Manager role, or apartment ownership"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Apartments",
@@ -590,28 +626,41 @@ pub async fn list_apartment_renters(
     path: web::Path<u64>,
     pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
+    use crate::schema::apartment_owners::dsl as ao;
     use crate::schema::apartment_renters::dsl as ar;
     use crate::schema::users::dsl as users;
-
-    if !auth.has_any_role(&["Admin", "Manager"]) {
-        return Err(AppError::Forbidden);
-    }
 
     let apartment_id = path.into_inner();
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;
 
+    let is_admin_or_manager = auth.has_any_role(&["Admin", "Manager"]);
+
+    if !is_admin_or_manager {
+        let user_id: u64 = auth
+            .claims
+            .sub
+            .parse()
+            .map_err(|_| AppError::Internal("invalid_user_id".into()))?;
+
+        let is_owner: bool = ao::apartment_owners
+            .filter(
+                ao::apartment_id
+                    .eq(apartment_id)
+                    .and(ao::user_id.eq(user_id)),
+            )
+            .count()
+            .get_result::<i64>(&mut conn)?
+            > 0;
+
+        if !is_owner {
+            return Err(AppError::Forbidden);
+        }
+    }
+
     // Fetch apartment renters with manual field selection
-    let renters_data: Vec<(
-        u64,
-        u64,
-        u64,
-        Option<chrono::NaiveDate>,
-        Option<chrono::NaiveDate>,
-        Option<bool>,
-        Option<chrono::NaiveDateTime>,
-    )> = ar::apartment_renters
+    let renters_data: Vec<RenterRow> = ar::apartment_renters
         .filter(ar::apartment_id.eq(apartment_id))
         .select((
             ar::id,
@@ -655,7 +704,7 @@ pub async fn list_apartment_renters(
 ///
 /// Assigns a user as a renter of the specified apartment with rental period dates.
 /// Automatically assigns the Renter role to the user.
-/// Requires Admin or Manager role.
+/// Requires Admin, Manager role, or apartment ownership.
 #[utoipa::path(
     post,
     path = "/api/v1/apartments/{id}/renters",
@@ -666,7 +715,7 @@ pub async fn list_apartment_renters(
     responses(
         (status = 201, description = "Renter assigned successfully", body = ApartmentRenter),
         (status = 204, description = "Renter already assigned"),
-        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 403, description = "Forbidden - requires Admin, Manager role, or apartment ownership"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Apartments",
@@ -678,18 +727,37 @@ pub async fn add_apartment_renter(
     pool: web::Data<DbPool>,
     payload: web::Json<RenterAssignPayload>,
 ) -> Result<impl Responder, AppError> {
+    use crate::schema::apartment_owners::dsl as ao;
     use crate::schema::apartment_renters::dsl as ar;
 
-    if !auth.has_any_role(&["Admin", "Manager"]) {
-        return Err(AppError::Forbidden);
-    }
+    let apartment_id = path.into_inner();
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     let current_user_id: u64 = auth
         .claims
         .sub
         .parse()
         .map_err(|_| AppError::Internal("invalid_user_id".into()))?;
-    let apartment_id = path.into_inner();
+
+    let is_admin_or_manager = auth.has_any_role(&["Admin", "Manager"]);
+
+    if !is_admin_or_manager {
+        let is_owner: bool = ao::apartment_owners
+            .filter(
+                ao::apartment_id
+                    .eq(apartment_id)
+                    .and(ao::user_id.eq(current_user_id)),
+            )
+            .count()
+            .get_result::<i64>(&mut conn)?
+            > 0;
+
+        if !is_owner {
+            return Err(AppError::Forbidden);
+        }
+    }
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;
@@ -725,15 +793,7 @@ pub async fn add_apartment_renter(
         .execute(&mut conn)?;
 
     // Fetch created renter with manual field selection
-    let renter_data: (
-        u64,
-        u64,
-        u64,
-        Option<chrono::NaiveDate>,
-        Option<chrono::NaiveDate>,
-        Option<bool>,
-        Option<chrono::NaiveDateTime>,
-    ) = ar::apartment_renters
+    let renter_data: RenterRow = ar::apartment_renters
         .filter(
             ar::apartment_id
                 .eq(apartment_id)
@@ -814,7 +874,7 @@ pub async fn add_apartment_renter(
 ///
 /// Updates the rental period dates or active status for a renter assignment.
 /// Manages Renter role based on active status.
-/// Requires Admin or Manager role.
+/// Requires Admin, Manager role, or apartment ownership.
 #[utoipa::path(
     put,
     path = "/api/v1/apartments/{id}/renters/{user_id}",
@@ -825,7 +885,7 @@ pub async fn add_apartment_renter(
     request_body = RenterUpdatePayload,
     responses(
         (status = 200, description = "Renter updated successfully", body = ApartmentRenter),
-        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 403, description = "Forbidden - requires Admin, Manager role, or apartment ownership"),
         (status = 404, description = "Renter not found"),
         (status = 500, description = "Internal server error")
     ),
@@ -838,18 +898,37 @@ pub async fn update_apartment_renter(
     pool: web::Data<DbPool>,
     payload: web::Json<RenterUpdatePayload>,
 ) -> Result<impl Responder, AppError> {
+    use crate::schema::apartment_owners::dsl as ao;
     use crate::schema::apartment_renters::dsl as ar;
 
-    if !auth.has_any_role(&["Admin", "Manager"]) {
-        return Err(AppError::Forbidden);
-    }
+    let (apartment_id, user_id) = path.into_inner();
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     let current_user_id: u64 = auth
         .claims
         .sub
         .parse()
         .map_err(|_| AppError::Internal("invalid_user_id".into()))?;
-    let (apartment_id, user_id) = path.into_inner();
+
+    let is_admin_or_manager = auth.has_any_role(&["Admin", "Manager"]);
+
+    if !is_admin_or_manager {
+        let is_owner: bool = ao::apartment_owners
+            .filter(
+                ao::apartment_id
+                    .eq(apartment_id)
+                    .and(ao::user_id.eq(current_user_id)),
+            )
+            .count()
+            .get_result::<i64>(&mut conn)?
+            > 0;
+
+        if !is_owner {
+            return Err(AppError::Forbidden);
+        }
+    }
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;
@@ -862,19 +941,19 @@ pub async fn update_apartment_renter(
     );
 
     if let Some(start) = payload.start_date {
-        diesel::update(target.clone())
+        diesel::update(target)
             .set(ar::start_date.eq(Some(start)))
             .execute(&mut conn)?;
     }
 
     if let Some(end) = payload.end_date {
-        diesel::update(target.clone())
+        diesel::update(target)
             .set(ar::end_date.eq(Some(end)))
             .execute(&mut conn)?;
     }
 
     if let Some(active) = payload.is_active {
-        diesel::update(target.clone())
+        diesel::update(target)
             .set(ar::is_active.eq(Some(active)))
             .execute(&mut conn)?;
 
@@ -887,15 +966,7 @@ pub async fn update_apartment_renter(
     }
 
     // Fetch and return updated renter with manual field selection
-    let renter_data: (
-        u64,
-        u64,
-        u64,
-        Option<chrono::NaiveDate>,
-        Option<chrono::NaiveDate>,
-        Option<bool>,
-        Option<chrono::NaiveDateTime>,
-    ) = ar::apartment_renters
+    let renter_data: RenterRow = ar::apartment_renters
         .filter(
             ar::apartment_id
                 .eq(apartment_id)
@@ -969,7 +1040,7 @@ pub async fn update_apartment_renter(
 ///
 /// Removes a user's renter assignment from the specified apartment.
 /// Automatically removes Renter role if no other active rental assignments exist.
-/// Requires Admin or Manager role.
+/// Requires Admin, Manager role, or apartment ownership.
 #[utoipa::path(
     delete,
     path = "/api/v1/apartments/{id}/renters/{user_id}",
@@ -979,7 +1050,7 @@ pub async fn update_apartment_renter(
     ),
     responses(
         (status = 204, description = "Renter removed successfully"),
-        (status = 403, description = "Forbidden - requires Admin or Manager role"),
+        (status = 403, description = "Forbidden - requires Admin, Manager role, or apartment ownership"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Apartments",
@@ -990,18 +1061,37 @@ pub async fn remove_apartment_renter(
     path: web::Path<(u64, u64)>,
     pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
+    use crate::schema::apartment_owners::dsl as ao;
     use crate::schema::apartment_renters::dsl as ar;
 
-    if !auth.has_any_role(&["Admin", "Manager"]) {
-        return Err(AppError::Forbidden);
-    }
+    let (apartment_id, user_id) = path.into_inner();
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     let current_user_id: u64 = auth
         .claims
         .sub
         .parse()
         .map_err(|_| AppError::Internal("invalid_user_id".into()))?;
-    let (apartment_id, user_id) = path.into_inner();
+
+    let is_admin_or_manager = auth.has_any_role(&["Admin", "Manager"]);
+
+    if !is_admin_or_manager {
+        let is_owner: bool = ao::apartment_owners
+            .filter(
+                ao::apartment_id
+                    .eq(apartment_id)
+                    .and(ao::user_id.eq(current_user_id)),
+            )
+            .count()
+            .get_result::<i64>(&mut conn)?
+            > 0;
+
+        if !is_owner {
+            return Err(AppError::Forbidden);
+        }
+    }
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;
@@ -1155,6 +1245,205 @@ pub struct ApartmentWithBuilding {
     pub building_address: String,
 }
 
+/// Apartment detail with building info
+#[derive(serde::Serialize, utoipa::ToSchema)]
+pub struct ApartmentDetail {
+    pub id: u64,
+    pub number: String,
+    pub building_id: u64,
+    pub building_address: String,
+    pub size_sq_m: Option<f64>,
+}
+
+/// Apartment permissions for current user
+#[derive(serde::Serialize, utoipa::ToSchema)]
+pub struct ApartmentPermissions {
+    pub can_view: bool,
+    pub can_manage_renters: bool,
+    pub can_view_meters: bool,
+    pub is_owner: bool,
+    pub is_renter: bool,
+}
+
+/// Get apartment details
+///
+/// Returns detailed information about a specific apartment including building info.
+/// Requires authentication and either Admin/Manager role or ownership/renter status.
+#[utoipa::path(
+    get,
+    path = "/api/v1/apartments/{id}",
+    params(
+        ("id" = u64, Path, description = "Apartment ID")
+    ),
+    responses(
+        (status = 200, description = "Apartment details", body = ApartmentDetail),
+        (status = 401, description = "Unauthorized - requires authentication"),
+        (status = 403, description = "Forbidden - no access to this apartment"),
+        (status = 404, description = "Apartment not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Apartments",
+    security(("bearer_auth" = []))
+)]
+pub async fn get_apartment(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    use crate::schema::apartment_owners::dsl as ao;
+    use crate::schema::apartment_renters::dsl as ar;
+    use crate::schema::apartments::dsl as a;
+    use crate::schema::buildings::dsl as b;
+
+    let apartment_id = path.into_inner();
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
+    let user_id: u64 = auth
+        .claims
+        .sub
+        .parse()
+        .map_err(|_| AppError::Internal("invalid_user_id".into()))?;
+
+    // Check if apartment exists and is not deleted
+    let apartment_data: Result<(u64, String, u64, Option<f64>), _> = a::apartments
+        .filter(a::id.eq(apartment_id).and(a::is_deleted.eq(false)))
+        .select((a::id, a::number, a::building_id, a::size_sq_m))
+        .first(&mut conn);
+
+    let (id, number, building_id, size_sq_m) = match apartment_data {
+        Ok(data) => data,
+        Err(_) => return Err(AppError::NotFound),
+    };
+
+    // Get building address
+    let building_address: String = b::buildings
+        .filter(b::id.eq(building_id))
+        .select(b::address)
+        .first(&mut conn)
+        .map_err(|_| AppError::Internal("building_not_found".into()))?;
+
+    // Check access: Admin/Manager always has access, or user must be owner/renter
+    let is_admin_or_manager = auth.has_any_role(&["Admin", "Manager"]);
+
+    let is_owner: bool = ao::apartment_owners
+        .filter(
+            ao::apartment_id
+                .eq(apartment_id)
+                .and(ao::user_id.eq(user_id)),
+        )
+        .count()
+        .get_result::<i64>(&mut conn)?
+        > 0;
+
+    let is_renter: bool = ar::apartment_renters
+        .filter(
+            ar::apartment_id
+                .eq(apartment_id)
+                .and(ar::user_id.eq(user_id))
+                .and(ar::is_active.eq(true)),
+        )
+        .count()
+        .get_result::<i64>(&mut conn)?
+        > 0;
+
+    if !is_admin_or_manager && !is_owner && !is_renter {
+        return Err(AppError::Forbidden);
+    }
+
+    Ok(HttpResponse::Ok().json(ApartmentDetail {
+        id,
+        number,
+        building_id,
+        building_address,
+        size_sq_m,
+    }))
+}
+
+/// Get apartment permissions for current user
+///
+/// Returns what actions the current user can perform on a specific apartment.
+/// Requires authentication.
+#[utoipa::path(
+    get,
+    path = "/api/v1/apartments/{id}/permissions",
+    params(
+        ("id" = u64, Path, description = "Apartment ID")
+    ),
+    responses(
+        (status = 200, description = "User permissions for the apartment", body = ApartmentPermissions),
+        (status = 401, description = "Unauthorized - requires authentication"),
+        (status = 404, description = "Apartment not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Apartments",
+    security(("bearer_auth" = []))
+)]
+pub async fn get_apartment_permissions(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    use crate::schema::apartment_owners::dsl as ao;
+    use crate::schema::apartment_renters::dsl as ar;
+    use crate::schema::apartments::dsl as a;
+
+    let apartment_id = path.into_inner();
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
+    let user_id: u64 = auth
+        .claims
+        .sub
+        .parse()
+        .map_err(|_| AppError::Internal("invalid_user_id".into()))?;
+
+    // Check if apartment exists
+    let exists: i64 = a::apartments
+        .filter(a::id.eq(apartment_id).and(a::is_deleted.eq(false)))
+        .count()
+        .get_result(&mut conn)?;
+
+    if exists == 0 {
+        return Err(AppError::NotFound);
+    }
+
+    let is_admin_or_manager = auth.has_any_role(&["Admin", "Manager"]);
+
+    let is_owner: bool = ao::apartment_owners
+        .filter(
+            ao::apartment_id
+                .eq(apartment_id)
+                .and(ao::user_id.eq(user_id)),
+        )
+        .count()
+        .get_result::<i64>(&mut conn)?
+        > 0;
+
+    let is_renter: bool = ar::apartment_renters
+        .filter(
+            ar::apartment_id
+                .eq(apartment_id)
+                .and(ar::user_id.eq(user_id))
+                .and(ar::is_active.eq(true)),
+        )
+        .count()
+        .get_result::<i64>(&mut conn)?
+        > 0;
+
+    let can_view = is_admin_or_manager || is_owner || is_renter;
+    let can_manage_renters = is_admin_or_manager || is_owner;
+    let can_view_meters = is_admin_or_manager || is_owner || is_renter;
+
+    Ok(HttpResponse::Ok().json(ApartmentPermissions {
+        can_view,
+        can_manage_renters,
+        can_view_meters,
+        is_owner,
+        is_renter,
+    }))
+}
+
 /// List user's apartments with building info
 ///
 /// Returns apartments owned by the current user, enriched with building information.
@@ -1246,16 +1535,7 @@ pub async fn get_apartment_history(
         .map_err(|_| AppError::Internal("db_pool".into()))?;
 
     // Fetch history events with manual field selection
-    let history_data: Vec<(
-        u64,
-        u64,
-        String,
-        Option<u64>,
-        u64,
-        String,
-        Option<String>,
-        Option<chrono::NaiveDateTime>,
-    )> = ph::property_history
+    let history_data: Vec<PropertyHistoryRow> = ph::property_history
         .filter(ph::apartment_id.eq(apartment_id))
         .select((
             ph::id,
@@ -1310,6 +1590,433 @@ pub async fn get_apartment_history(
     Ok(HttpResponse::Ok().json(enriched))
 }
 
+fn generate_invitation_token() -> String {
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let mut rng = rand::thread_rng();
+    (0..64)
+        .map(|_| {
+            let idx = rng.gen_range(0..CHARSET.len());
+            CHARSET[idx] as char
+        })
+        .collect()
+}
+
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+pub struct InviteRenterPayload {
+    pub email: String,
+    pub start_date: Option<chrono::NaiveDate>,
+    pub end_date: Option<chrono::NaiveDate>,
+}
+
+#[derive(serde::Serialize, utoipa::ToSchema)]
+pub struct InviteRenterResponse {
+    pub invitation_id: u64,
+    pub email: String,
+    pub status: String,
+    pub message: String,
+}
+
+/// Invite a renter to an apartment by email
+///
+/// If the email exists in the system, the user is directly assigned as a renter.
+/// If the email doesn't exist, creates an invitation that can be accepted when the user registers.
+/// Requires Admin, Manager role, or apartment ownership.
+#[utoipa::path(
+    post,
+    path = "/api/v1/apartments/{id}/invite",
+    params(
+        ("id" = u64, Path, description = "Apartment ID")
+    ),
+    request_body = InviteRenterPayload,
+    responses(
+        (status = 200, description = "User exists - directly assigned as renter", body = InviteRenterResponse),
+        (status = 201, description = "User does not exist - invitation created", body = InviteRenterResponse),
+        (status = 403, description = "Forbidden - requires Admin, Manager role, or apartment ownership"),
+        (status = 404, description = "Apartment not found"),
+        (status = 409, description = "User is already a renter or invitation already pending"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Apartments",
+    security(("bearer_auth" = []))
+)]
+pub async fn invite_renter(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+    payload: web::Json<InviteRenterPayload>,
+) -> Result<impl Responder, AppError> {
+    use crate::schema::apartment_owners::dsl as ao;
+    use crate::schema::apartment_renters::dsl as ar;
+    use crate::schema::apartments::dsl as apt;
+    use crate::schema::renter_invitations::dsl as ri;
+    use crate::schema::users::dsl as users;
+
+    let apartment_id = path.into_inner();
+    let email = payload.email.trim().to_lowercase();
+
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
+
+    let current_user_id: u64 = auth
+        .claims
+        .sub
+        .parse()
+        .map_err(|_| AppError::Internal("invalid_user_id".into()))?;
+
+    let is_admin_or_manager = auth.has_any_role(&["Admin", "Manager"]);
+
+    if !is_admin_or_manager {
+        let is_owner: bool = ao::apartment_owners
+            .filter(
+                ao::apartment_id
+                    .eq(apartment_id)
+                    .and(ao::user_id.eq(current_user_id)),
+            )
+            .count()
+            .get_result::<i64>(&mut conn)?
+            > 0;
+
+        if !is_owner {
+            return Err(AppError::Forbidden);
+        }
+    }
+
+    let _apartment: Apartment = apt::apartments
+        .filter(apt::id.eq(apartment_id).and(apt::is_deleted.eq(false)))
+        .select(Apartment::as_select())
+        .first(&mut conn)
+        .map_err(|_| AppError::NotFound)?;
+
+    let existing_user: Option<User> = users::users
+        .filter(users::email.eq(&email))
+        .select(User::as_select())
+        .first(&mut conn)
+        .ok();
+
+    if let Some(user) = existing_user {
+        let already_renter: Result<u64, _> = ar::apartment_renters
+            .filter(
+                ar::apartment_id
+                    .eq(apartment_id)
+                    .and(ar::user_id.eq(user.id)),
+            )
+            .select(ar::id)
+            .first(&mut conn);
+
+        if already_renter.is_ok() {
+            return Err(AppError::BadRequest(
+                "User is already a renter of this apartment".into(),
+            ));
+        }
+
+        let new_renter = NewApartmentRenter {
+            apartment_id,
+            user_id: user.id,
+            start_date: payload.start_date,
+            end_date: payload.end_date,
+            is_active: Some(true),
+        };
+
+        diesel::insert_into(ar::apartment_renters)
+            .values(&new_renter)
+            .execute(&mut conn)?;
+
+        ensure_user_has_role(user.id, "Renter", &mut conn).await?;
+
+        log_property_event(
+            apartment_id,
+            "renter_added",
+            Some(user.id),
+            current_user_id,
+            format!("Added {} as renter (via invite)", user.name),
+            Some(
+                serde_json::json!({
+                    "start_date": payload.start_date.map(|d| d.to_string()),
+                    "end_date": payload.end_date.map(|d| d.to_string()),
+                    "method": "invite"
+                })
+                .to_string(),
+            ),
+            &mut conn,
+        )
+        .await?;
+
+        return Ok(HttpResponse::Ok().json(InviteRenterResponse {
+            invitation_id: 0,
+            email: email.clone(),
+            status: "assigned".to_string(),
+            message: format!("User {} has been assigned as a renter", user.name),
+        }));
+    }
+
+    let pending_invitation: Option<u64> = ri::renter_invitations
+        .filter(
+            ri::apartment_id
+                .eq(apartment_id)
+                .and(ri::email.eq(&email))
+                .and(ri::status.eq(InvitationStatus::Pending)),
+        )
+        .select(ri::id)
+        .first(&mut conn)
+        .ok();
+
+    if pending_invitation.is_some() {
+        return Err(AppError::BadRequest(
+            "An invitation is already pending for this email".into(),
+        ));
+    }
+
+    let token = generate_invitation_token();
+    let expires_at = chrono::Utc::now().naive_utc() + chrono::Duration::days(7);
+
+    let new_invitation = NewRenterInvitation {
+        apartment_id,
+        email: email.clone(),
+        token,
+        start_date: payload.start_date,
+        end_date: payload.end_date,
+        invited_by: current_user_id,
+        status: InvitationStatus::Pending,
+        expires_at,
+    };
+
+    diesel::insert_into(ri::renter_invitations)
+        .values(&new_invitation)
+        .execute(&mut conn)?;
+
+    let invitation_id: u64 = ri::renter_invitations
+        .filter(ri::email.eq(&email).and(ri::apartment_id.eq(apartment_id)))
+        .order(ri::created_at.desc())
+        .select(ri::id)
+        .first(&mut conn)?;
+
+    log_property_event(
+        apartment_id,
+        "renter_invited",
+        None,
+        current_user_id,
+        format!("Sent renter invitation to {}", email),
+        Some(
+            serde_json::json!({
+                "email": email,
+                "expires_at": expires_at.to_string(),
+            })
+            .to_string(),
+        ),
+        &mut conn,
+    )
+    .await?;
+
+    Ok(HttpResponse::Created().json(InviteRenterResponse {
+        invitation_id,
+        email: email.clone(),
+        status: "pending".to_string(),
+        message: format!(
+            "Invitation sent to {}. The user can accept it when they register.",
+            email
+        ),
+    }))
+}
+
+/// List pending invitations for an apartment
+///
+/// Returns all pending renter invitations for the specified apartment.
+/// Requires Admin, Manager role, or apartment ownership.
+#[utoipa::path(
+    get,
+    path = "/api/v1/apartments/{id}/invitations",
+    params(
+        ("id" = u64, Path, description = "Apartment ID")
+    ),
+    responses(
+        (status = 200, description = "List of invitations", body = Vec<RenterInvitationWithDetails>),
+        (status = 403, description = "Forbidden - requires Admin, Manager role, or apartment ownership"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Apartments",
+    security(("bearer_auth" = []))
+)]
+pub async fn list_apartment_invitations(
+    auth: AuthContext,
+    path: web::Path<u64>,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    use crate::schema::apartment_owners::dsl as ao;
+    use crate::schema::apartments::dsl as apt;
+    use crate::schema::buildings::dsl as bld;
+    use crate::schema::renter_invitations::dsl as ri;
+    use crate::schema::users::dsl as users;
+
+    let apartment_id = path.into_inner();
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
+
+    let is_admin_or_manager = auth.has_any_role(&["Admin", "Manager"]);
+
+    if !is_admin_or_manager {
+        let user_id: u64 = auth
+            .claims
+            .sub
+            .parse()
+            .map_err(|_| AppError::Internal("invalid_user_id".into()))?;
+
+        let is_owner: bool = ao::apartment_owners
+            .filter(
+                ao::apartment_id
+                    .eq(apartment_id)
+                    .and(ao::user_id.eq(user_id)),
+            )
+            .count()
+            .get_result::<i64>(&mut conn)?
+            > 0;
+
+        if !is_owner {
+            return Err(AppError::Forbidden);
+        }
+    }
+
+    let (apt_number, building_id): (String, u64) = apt::apartments
+        .filter(apt::id.eq(apartment_id))
+        .select((apt::number, apt::building_id))
+        .first(&mut conn)?;
+
+    let building_address: String = bld::buildings
+        .filter(bld::id.eq(building_id))
+        .select(bld::address)
+        .first(&mut conn)?;
+
+    let invitations_data: Vec<InvitationRow> = ri::renter_invitations
+        .filter(ri::apartment_id.eq(apartment_id))
+        .select((
+            ri::id,
+            ri::apartment_id,
+            ri::email,
+            ri::start_date,
+            ri::end_date,
+            ri::invited_by,
+            ri::status,
+            ri::expires_at,
+            ri::created_at,
+        ))
+        .order(ri::created_at.desc())
+        .load(&mut conn)?;
+
+    let mut result: Vec<RenterInvitationWithDetails> = Vec::new();
+    for (id, apt_id, email, start_date, end_date, invited_by, status, expires_at, created_at) in
+        invitations_data
+    {
+        let invited_by_name: String = users::users
+            .filter(users::id.eq(invited_by))
+            .select(users::name)
+            .first(&mut conn)?;
+
+        result.push(RenterInvitationWithDetails {
+            id,
+            apartment_id: apt_id,
+            apartment_number: apt_number.clone(),
+            building_address: building_address.clone(),
+            email,
+            start_date,
+            end_date,
+            invited_by,
+            invited_by_name,
+            status,
+            expires_at,
+            created_at,
+        });
+    }
+
+    Ok(HttpResponse::Ok().json(result))
+}
+
+/// Cancel a pending invitation
+///
+/// Cancels a pending renter invitation.
+/// Requires Admin, Manager role, or apartment ownership.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/apartments/{id}/invitations/{invitation_id}",
+    params(
+        ("id" = u64, Path, description = "Apartment ID"),
+        ("invitation_id" = u64, Path, description = "Invitation ID")
+    ),
+    responses(
+        (status = 204, description = "Invitation cancelled"),
+        (status = 403, description = "Forbidden - requires Admin, Manager role, or apartment ownership"),
+        (status = 404, description = "Invitation not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "Apartments",
+    security(("bearer_auth" = []))
+)]
+pub async fn cancel_invitation(
+    auth: AuthContext,
+    path: web::Path<(u64, u64)>,
+    pool: web::Data<DbPool>,
+) -> Result<impl Responder, AppError> {
+    use crate::schema::apartment_owners::dsl as ao;
+    use crate::schema::renter_invitations::dsl as ri;
+
+    let (apartment_id, invitation_id) = path.into_inner();
+    let mut conn = pool
+        .get()
+        .map_err(|_| AppError::Internal("db_pool".into()))?;
+
+    let current_user_id: u64 = auth
+        .claims
+        .sub
+        .parse()
+        .map_err(|_| AppError::Internal("invalid_user_id".into()))?;
+
+    let is_admin_or_manager = auth.has_any_role(&["Admin", "Manager"]);
+
+    if !is_admin_or_manager {
+        let is_owner: bool = ao::apartment_owners
+            .filter(
+                ao::apartment_id
+                    .eq(apartment_id)
+                    .and(ao::user_id.eq(current_user_id)),
+            )
+            .count()
+            .get_result::<i64>(&mut conn)?
+            > 0;
+
+        if !is_owner {
+            return Err(AppError::Forbidden);
+        }
+    }
+
+    let email: String = ri::renter_invitations
+        .filter(
+            ri::id
+                .eq(invitation_id)
+                .and(ri::apartment_id.eq(apartment_id))
+                .and(ri::status.eq(InvitationStatus::Pending)),
+        )
+        .select(ri::email)
+        .first(&mut conn)
+        .map_err(|_| AppError::NotFound)?;
+
+    diesel::update(ri::renter_invitations.filter(ri::id.eq(invitation_id)))
+        .set(ri::status.eq(InvitationStatus::Cancelled))
+        .execute(&mut conn)?;
+
+    log_property_event(
+        apartment_id,
+        "invitation_cancelled",
+        None,
+        current_user_id,
+        format!("Cancelled renter invitation for {}", email),
+        None,
+        &mut conn,
+    )
+    .await?;
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.route("/apartments", web::get().to(list_apartments))
         .route("/apartments", web::post().to(create_apartment))
@@ -1362,5 +2069,19 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             "/apartments/{id}/history",
             web::get().to(get_apartment_history),
         )
+        .route("/apartments/{id}/invite", web::post().to(invite_renter))
+        .route(
+            "/apartments/{id}/invitations",
+            web::get().to(list_apartment_invitations),
+        )
+        .route(
+            "/apartments/{id}/invitations/{invitation_id}",
+            web::delete().to(cancel_invitation),
+        )
+        .route(
+            "/apartments/{id}/permissions",
+            web::get().to(get_apartment_permissions),
+        )
+        .route("/apartments/{id}", web::get().to(get_apartment))
         .route("/apartments/{id}", web::delete().to(delete_apartment));
 }

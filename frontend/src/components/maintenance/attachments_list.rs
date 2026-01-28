@@ -1,28 +1,135 @@
 use serde::Deserialize;
+use web_sys::{FormData, HtmlInputElement};
 use yew::prelude::*;
 
-#[derive(Deserialize, Clone, PartialEq)]
+#[derive(Deserialize, Clone, PartialEq, Debug)]
 pub struct Attachment {
     pub id: u64,
-    pub filename: String,
-    pub uploaded_by: u64,
-    pub uploaded_at: String,
-    pub url: String,
+    pub request_id: u64,
+    pub original_filename: String,
+    pub stored_filename: String,
+    pub mime_type: String,
+    pub size_bytes: u64,
+    pub is_deleted: bool,
+    pub created_at: Option<String>,
+}
+
+fn format_file_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{} B", bytes)
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    }
+}
+
+fn format_date(datetime_str: &Option<String>) -> String {
+    match datetime_str {
+        Some(s) if !s.is_empty() => {
+            let parts: Vec<&str> = s.split('T').collect();
+            if parts.is_empty() {
+                return s.clone();
+            }
+            let date_part = parts[0];
+            let date_parts: Vec<&str> = date_part.split('-').collect();
+            if date_parts.len() == 3 {
+                let month_name = match date_parts[1] {
+                    "01" => "Jan",
+                    "02" => "Feb",
+                    "03" => "Mar",
+                    "04" => "Apr",
+                    "05" => "May",
+                    "06" => "Jun",
+                    "07" => "Jul",
+                    "08" => "Aug",
+                    "09" => "Sep",
+                    "10" => "Oct",
+                    "11" => "Nov",
+                    "12" => "Dec",
+                    _ => date_parts[1],
+                };
+                format!("{} {}, {}", month_name, date_parts[2], date_parts[0])
+            } else {
+                s.clone()
+            }
+        }
+        _ => "Unknown".to_string(),
+    }
 }
 
 #[derive(Properties, PartialEq)]
 pub struct AttachmentsListProps {
     pub attachments: Vec<Attachment>,
     pub loading: bool,
+    pub request_id: u64,
+    #[prop_or(false)]
+    pub can_upload: bool,
+    #[prop_or_default]
+    pub on_upload: Callback<FormData>,
+    #[prop_or(false)]
+    pub uploading: bool,
 }
 
-/// Component for displaying maintenance request attachments
 #[function_component(AttachmentsList)]
 pub fn attachments_list(props: &AttachmentsListProps) -> Html {
+    let file_input_ref = use_node_ref();
+
+    let on_file_change = {
+        let on_upload = props.on_upload.clone();
+        let file_input_ref = file_input_ref.clone();
+
+        Callback::from(move |_: Event| {
+            if let Some(input) = file_input_ref.cast::<HtmlInputElement>() {
+                if let Some(files) = input.files() {
+                    if let Some(file) = files.get(0) {
+                        let form_data = FormData::new().unwrap();
+                        form_data.append_with_blob("file", &file).unwrap();
+                        on_upload.emit(form_data);
+                        input.set_value("");
+                    }
+                }
+            }
+        })
+    };
+
+    let on_upload_click = {
+        let file_input_ref = file_input_ref.clone();
+        Callback::from(move |_: MouseEvent| {
+            if let Some(input) = file_input_ref.cast::<HtmlInputElement>() {
+                input.click();
+            }
+        })
+    };
+
     html! {
         <div class="card mt-3">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">{"Attachments"}</h5>
+                if props.can_upload {
+                    <div>
+                        <input
+                            type="file"
+                            ref={file_input_ref}
+                            style="display: none;"
+                            onchange={on_file_change}
+                            accept="image/*,application/pdf"
+                        />
+                        <button
+                            class="btn btn-sm btn-outline-primary"
+                            onclick={on_upload_click}
+                            disabled={props.uploading}
+                        >
+                            if props.uploading {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                {"Uploading..."}
+                            } else {
+                                <i class="bi bi-upload me-1"></i>
+                                {"Upload File"}
+                            }
+                        </button>
+                    </div>
+                }
             </div>
             <div class="card-body">
                 if props.loading {
@@ -32,20 +139,37 @@ pub fn attachments_list(props: &AttachmentsListProps) -> Html {
                 } else if props.attachments.is_empty() {
                     <p class="text-muted small mb-0">{"No attachments"}</p>
                 } else {
-                    <div class="row">
+                    <div class="list-group list-group-flush">
                         {
                             for props.attachments.iter().map(|att| {
+                                let download_url = format!("/api/v1/requests/{}/attachments/{}/download", props.request_id, att.id);
+                                let icon_class = if att.mime_type.starts_with("image/") {
+                                    "bi bi-file-image text-success"
+                                } else if att.mime_type == "application/pdf" {
+                                    "bi bi-file-pdf text-danger"
+                                } else {
+                                    "bi bi-file-earmark text-secondary"
+                                };
+
                                 html! {
-                                    <div class="col-md-4 mb-2">
-                                        <div class="card">
-                                            <div class="card-body p-2">
-                                                <p class="mb-1 small"><strong>{&att.filename}</strong></p>
-                                                <p class="mb-0 text-muted" style="font-size: 0.75rem;">
-                                                    {"Uploaded "}{&att.uploaded_at}
-                                                </p>
+                                    <a
+                                        href={download_url}
+                                        target="_blank"
+                                        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                                    >
+                                        <div class="d-flex align-items-center">
+                                            <i class={classes!(icon_class, "me-2")} style="font-size: 1.25rem;"></i>
+                                            <div>
+                                                <div class="fw-medium">{&att.original_filename}</div>
+                                                <small class="text-muted">
+                                                    {format_file_size(att.size_bytes)}
+                                                    {" • "}
+                                                    {format_date(&att.created_at)}
+                                                </small>
                                             </div>
                                         </div>
-                                    </div>
+                                        <i class="bi bi-download text-muted"></i>
+                                    </a>
                                 }
                             })
                         }

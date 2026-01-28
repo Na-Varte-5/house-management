@@ -19,7 +19,7 @@ use uuid::Uuid;
 ///
 /// Uploads a file attachment to a maintenance request using multipart/form-data.
 /// File size limit and MIME type restrictions apply (configured in AppConfig).
-/// Accessible by Admin, Manager, request creator, or assigned user.
+/// Accessible by Admin, Manager, request creator, assigned user, or apartment owner.
 #[utoipa::path(
     post,
     path = "/api/v1/requests/{id}/attachments",
@@ -156,17 +156,16 @@ struct RequestPerms {
 fn compute_perms(
     auth: &AuthContext,
     req: &MaintenanceRequest,
-    owns: bool,
+    owns_apartment: bool,
     user_id: u64,
 ) -> RequestPerms {
     let is_admin_mgr = auth.has_any_role(&["Admin", "Manager"]);
     let is_creator = req.created_by == user_id;
     let is_assigned = req.assigned_to.unwrap_or(0) == user_id && req.assigned_to.is_some();
-    let can_view = is_admin_mgr || is_creator || is_assigned || owns;
-    let can_modify = is_admin_mgr || is_creator || is_assigned;
+    let is_stakeholder = is_admin_mgr || is_creator || is_assigned || owns_apartment;
     RequestPerms {
-        can_view,
-        can_modify,
+        can_view: is_stakeholder,
+        can_modify: is_stakeholder,
     }
 }
 
@@ -217,7 +216,7 @@ pub async fn list_attachments(
 /// List deleted attachments
 ///
 /// Returns all soft-deleted attachments for a maintenance request.
-/// Accessible by Admin, Manager, request creator, or assigned user.
+/// Accessible by Admin, Manager, request creator, assigned user, or apartment owner.
 #[utoipa::path(
     get,
     path = "/api/v1/requests/{id}/attachments/deleted",
@@ -365,7 +364,7 @@ pub async fn download_attachment(
 /// Soft-delete attachment
 ///
 /// Marks an attachment as deleted (soft-delete). The file remains on disk but is hidden.
-/// Accessible by Admin, Manager, request creator, or assigned user.
+/// Accessible by Admin, Manager, request creator, assigned user, or apartment owner.
 #[utoipa::path(
     delete,
     path = "/api/v1/requests/{id}/attachments/{att_id}",
@@ -408,7 +407,7 @@ pub async fn delete_attachment(
 /// Restore attachment
 ///
 /// Restores a soft-deleted attachment, making it visible again.
-/// Accessible by Admin, Manager, request creator, or assigned user.
+/// Accessible by Admin, Manager, request creator, assigned user, or apartment owner.
 #[utoipa::path(
     post,
     path = "/api/v1/requests/{id}/attachments/{att_id}/restore",
