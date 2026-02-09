@@ -1,4 +1,5 @@
 use super::types::Apartment;
+use crate::i18n::t;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
@@ -17,7 +18,7 @@ pub fn apartment_list(props: &ApartmentListProps) -> Html {
         return html! {
             <div class="alert alert-info small mb-0">
                 <i class="bi bi-info-circle me-2"></i>
-                {"Select a building to view its apartments"}
+                {t("properties-select-building")}
             </div>
         };
     }
@@ -26,7 +27,7 @@ pub fn apartment_list(props: &ApartmentListProps) -> Html {
         return html! {
             <div class="text-center py-3">
                 <div class="spinner-border spinner-border-sm" role="status">
-                    <span class="visually-hidden">{"Loading..."}</span>
+                    <span class="visually-hidden">{t("loading")}</span>
                 </div>
             </div>
         };
@@ -35,7 +36,7 @@ pub fn apartment_list(props: &ApartmentListProps) -> Html {
     if props.apartments.is_empty() {
         return html! {
             <div class="alert alert-info small mb-0">
-                {"No apartments in this building. Create one using the form below."}
+                {t("properties-no-apartments-create")}
             </div>
         };
     }

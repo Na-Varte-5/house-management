@@ -1,8 +1,10 @@
+use crate::components::breadcrumb::BreadcrumbItem;
 use crate::components::{
-    Checkbox, DateTimeInput, ErrorAlert, FormGroup, Select, SelectOption, SuccessAlert, TextInput,
-    Textarea,
+    Breadcrumb, Checkbox, DateTimeInput, ErrorAlert, FormGroup, Select, SelectOption, SuccessAlert,
+    TextInput, Textarea,
 };
 use crate::contexts::AuthContext;
+use crate::i18n::{t, t_with_args};
 use crate::routes::Route;
 use crate::services::{ApiError, api_client};
 use serde::{Deserialize, Serialize};
@@ -64,7 +66,7 @@ pub fn voting_new_page() -> Html {
         return html! {
             <div class="container mt-4">
                 <div class="alert alert-danger">
-                    {"Only Admins and Managers can create proposals."}
+                    {t("voting-no-permission-create")}
                 </div>
             </div>
         };
@@ -130,19 +132,19 @@ pub fn voting_new_page() -> Html {
 
             // Validation
             if title.trim().is_empty() {
-                error.set(Some("Title is required".to_string()));
+                error.set(Some(t("voting-proposal-title-required")));
                 return;
             }
             if description.trim().is_empty() {
-                error.set(Some("Description is required".to_string()));
+                error.set(Some(t("voting-proposal-description-required")));
                 return;
             }
             if start_time.is_empty() {
-                error.set(Some("Start time is required".to_string()));
+                error.set(Some(t("voting-start-time-required")));
                 return;
             }
             if end_time.is_empty() {
-                error.set(Some("End time is required".to_string()));
+                error.set(Some(t("voting-end-time-required")));
                 return;
             }
 
@@ -164,7 +166,7 @@ pub fn voting_new_page() -> Html {
             }
 
             if eligible_roles.is_empty() {
-                error.set(Some("At least one role must be eligible".to_string()));
+                error.set(Some(t("voting-at-least-one-role")));
                 return;
             }
 
@@ -209,20 +211,21 @@ pub fn voting_new_page() -> Html {
                     .await
                 {
                     Ok(_) => {
-                        success.set(Some("Proposal created successfully".to_string()));
+                        success.set(Some(t("voting-proposal-created")));
                         gloo_timers::callback::Timeout::new(1500, move || {
                             navigator.push(&Route::Voting);
                         })
                         .forget();
                     }
                     Err(ApiError::Forbidden) => {
-                        error.set(Some(
-                            "You don't have permission to create proposals".to_string(),
-                        ));
+                        error.set(Some(t("voting-no-permission-create")));
                         submitting.set(false);
                     }
                     Err(e) => {
-                        error.set(Some(format!("Failed to create proposal: {}", e)));
+                        error.set(Some(t_with_args(
+                            "voting-failed-create",
+                            &[("error", &e.to_string())],
+                        )));
                         submitting.set(false);
                     }
                 }
@@ -305,7 +308,7 @@ pub fn voting_new_page() -> Html {
 
     // Build building options for Select component
     let building_options = {
-        let mut options = vec![SelectOption::new("", "Global (visible to all buildings)")];
+        let mut options = vec![SelectOption::new("", t("voting-global-scope"))];
         for building in buildings.iter() {
             options.push(SelectOption::new(
                 building.id.to_string(),
@@ -317,22 +320,23 @@ pub fn voting_new_page() -> Html {
 
     // Build voting method options
     let method_options = vec![
-        SelectOption::new("SimpleMajority", "Simple Majority (1 person = 1 vote)"),
-        SelectOption::new(
-            "WeightedArea",
-            "Weighted by Area (vote weight = apartment size)",
-        ),
-        SelectOption::new("PerSeat", "Per Seat (1 apartment = 1 vote)"),
-        SelectOption::new("Consensus", "Consensus (no 'No' votes allowed)"),
+        SelectOption::new("SimpleMajority", t("voting-method-simple-desc")),
+        SelectOption::new("WeightedArea", t("voting-method-weighted-desc")),
+        SelectOption::new("PerSeat", t("voting-method-per-seat-desc")),
+        SelectOption::new("Consensus", t("voting-method-consensus-desc")),
     ];
 
     html! {
         <div class="container mt-4">
+            <Breadcrumb items={vec![
+                BreadcrumbItem { label: t("voting-title"), route: Some(Route::Voting) },
+                BreadcrumbItem { label: t("voting-new-breadcrumb"), route: None },
+            ]} />
             <div class="row justify-content-center">
                 <div class="col-md-8 col-lg-6">
                     <div class="card">
                         <div class="card-header">
-                            <h4 class="mb-0">{"Create New Proposal"}</h4>
+                            <h4 class="mb-0">{t("voting-new-title")}</h4>
                         </div>
                         <div class="card-body">
                             if let Some(err) = (*error).clone() {
@@ -345,41 +349,41 @@ pub fn voting_new_page() -> Html {
 
                             <form onsubmit={on_submit}>
                                 <FormGroup
-                                    title="Basic Information"
-                                    description="Enter the proposal details"
+                                    title={t("voting-basic-info")}
+                                    description={t("voting-basic-info-desc")}
                                 >
                                     <TextInput
-                                        label="Title"
+                                        label={t("voting-proposal-title")}
                                         value={(*title).clone()}
                                         on_change={on_title_change}
-                                        placeholder="Proposal title"
+                                        placeholder={t("voting-proposal-title-placeholder")}
                                         disabled={*submitting}
                                         required=true
                                     />
 
                                     <Textarea
-                                        label="Description"
+                                        label={t("voting-proposal-description")}
                                         value={(*description).clone()}
                                         on_change={on_description_change}
-                                        placeholder="Describe the proposal"
+                                        placeholder={t("voting-proposal-description-placeholder")}
                                         rows={4}
                                         disabled={*submitting}
                                         required=true
                                     />
 
                                     <Select
-                                        label="Building Scope"
+                                        label={t("voting-building-scope")}
                                         value={(*selected_building).clone()}
                                         on_change={on_building_change}
                                         options={building_options}
                                         disabled={*submitting}
-                                        help_text="Leave as Global to make this proposal visible to all users, or select a building to restrict visibility"
+                                        help_text={t("voting-building-scope-help")}
                                     />
                                 </FormGroup>
 
-                                <FormGroup title="Voting Settings">
+                                <FormGroup title={t("voting-voting-settings")}>
                                     <Select
-                                        label="Voting Method"
+                                        label={t("voting-voting-method")}
                                         value={(*voting_method).clone()}
                                         on_change={on_method_change}
                                         options={method_options}
@@ -388,7 +392,7 @@ pub fn voting_new_page() -> Html {
                                     />
 
                                     <DateTimeInput
-                                        label="Voting Start Time"
+                                        label={t("voting-start-time")}
                                         value={(*start_time).clone()}
                                         on_change={on_start_change}
                                         input_type="datetime-local"
@@ -397,7 +401,7 @@ pub fn voting_new_page() -> Html {
                                     />
 
                                     <DateTimeInput
-                                        label="Voting End Time"
+                                        label={t("voting-end-time")}
                                         value={(*end_time).clone()}
                                         on_change={on_end_change}
                                         input_type="datetime-local"
@@ -408,12 +412,12 @@ pub fn voting_new_page() -> Html {
                                 </FormGroup>
 
                                 <FormGroup
-                                    title="Eligible Voters"
-                                    description="Select which roles can vote on this proposal"
+                                    title={t("voting-eligible-roles")}
+                                    description={t("voting-eligible-roles-desc")}
                                 >
                                     <Checkbox
                                         id="role-admin"
-                                        label="Admins"
+                                        label={t("voting-role-admin")}
                                         checked={*role_admin}
                                         on_change={on_admin_change}
                                         disabled={*submitting}
@@ -421,7 +425,7 @@ pub fn voting_new_page() -> Html {
 
                                     <Checkbox
                                         id="role-manager"
-                                        label="Managers"
+                                        label={t("voting-role-manager")}
                                         checked={*role_manager}
                                         on_change={on_manager_change}
                                         disabled={*submitting}
@@ -429,7 +433,7 @@ pub fn voting_new_page() -> Html {
 
                                     <Checkbox
                                         id="role-homeowner"
-                                        label="Homeowners"
+                                        label={t("voting-role-homeowner")}
                                         checked={*role_homeowner}
                                         on_change={on_homeowner_change}
                                         disabled={*submitting}
@@ -437,7 +441,7 @@ pub fn voting_new_page() -> Html {
 
                                     <Checkbox
                                         id="role-renter"
-                                        label="Renters"
+                                        label={t("voting-role-renter")}
                                         checked={*role_renter}
                                         on_change={on_renter_change}
                                         disabled={*submitting}
@@ -445,7 +449,7 @@ pub fn voting_new_page() -> Html {
 
                                     <Checkbox
                                         id="role-hoa"
-                                        label="HOA Members"
+                                        label={t("voting-role-hoa")}
                                         checked={*role_hoa}
                                         on_change={on_hoa_change}
                                         disabled={*submitting}
@@ -459,7 +463,7 @@ pub fn voting_new_page() -> Html {
                                         disabled={*submitting}
                                         onclick={on_cancel}
                                     >
-                                        {"Cancel"}
+                                        {t("button-cancel")}
                                     </button>
                                     <button
                                         type="submit"
@@ -469,10 +473,10 @@ pub fn voting_new_page() -> Html {
                                         if *submitting {
                                             <>
                                                 <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                                {"Creating..."}
+                                                {t("voting-creating")}
                                             </>
                                         } else {
-                                            {"Create Proposal"}
+                                            {t("voting-create-proposal")}
                                         }
                                     </button>
                                 </div>

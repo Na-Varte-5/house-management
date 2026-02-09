@@ -58,7 +58,7 @@ pub async fn create_api_key(
         return Err(AppError::Forbidden);
     }
 
-    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+    let user_id = auth.user_id()?;
 
     // Generate random API key
     use rand::Rng;

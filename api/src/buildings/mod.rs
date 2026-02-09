@@ -1,19 +1,21 @@
 use crate::auth::{AppError, AuthContext};
 use crate::db::DbPool;
 use crate::models::{Building, NewBuilding, User};
+use crate::pagination::{PaginatedResponse, PaginationParams};
 use actix_web::{HttpResponse, Responder, web};
 use diesel::prelude::*;
 use utoipa;
 
 /// List all active buildings
 ///
-/// Returns a list of all buildings that have not been soft-deleted.
+/// Returns a paginated list of all buildings that have not been soft-deleted.
 /// Requires authentication. Users see buildings they have access to.
 #[utoipa::path(
     get,
     path = "/api/v1/buildings",
+    params(PaginationParams),
     responses(
-        (status = 200, description = "List of buildings", body = Vec<Building>),
+        (status = 200, description = "Paginated list of buildings", body = PaginatedResponse<Building>),
         (status = 401, description = "Unauthorized - authentication required"),
         (status = 500, description = "Internal server error")
     ),
@@ -23,37 +25,49 @@ use utoipa;
 pub async fn list_buildings(
     auth: AuthContext,
     pool: web::Data<DbPool>,
+    query: web::Query<PaginationParams>,
 ) -> Result<impl Responder, AppError> {
     use crate::schema::buildings::dsl::*;
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;
 
-    // Admin/Manager see all buildings, others see only their buildings
     let is_admin = auth.has_any_role(&["Admin", "Manager"]);
-    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+    let uid = auth.user_id()?;
 
     use crate::auth::building_access::get_user_building_ids;
-    let maybe_building_ids = get_user_building_ids(user_id, is_admin, &mut conn)?;
+    let maybe_building_ids = get_user_building_ids(uid, is_admin, &mut conn)?;
 
-    let list = match maybe_building_ids {
+    let (total, list) = match maybe_building_ids {
         None => {
-            // Admin/Manager - see all buildings
-            buildings
+            let count = buildings
+                .filter(is_deleted.eq(false))
+                .count()
+                .get_result::<i64>(&mut conn)?;
+            let items = buildings
                 .filter(is_deleted.eq(false))
                 .select(Building::as_select())
-                .load(&mut conn)?
+                .limit(query.limit())
+                .offset(query.offset())
+                .load(&mut conn)?;
+            (count, items)
         }
-        Some(building_ids) => {
-            // Regular user - see only accessible buildings
-            buildings
-                .filter(id.eq_any(building_ids).and(is_deleted.eq(false)))
+        Some(ref bids) => {
+            let count = buildings
+                .filter(id.eq_any(bids).and(is_deleted.eq(false)))
+                .count()
+                .get_result::<i64>(&mut conn)?;
+            let items = buildings
+                .filter(id.eq_any(bids).and(is_deleted.eq(false)))
                 .select(Building::as_select())
-                .load(&mut conn)?
+                .limit(query.limit())
+                .offset(query.offset())
+                .load(&mut conn)?;
+            (count, items)
         }
     };
 
-    Ok(HttpResponse::Ok().json(list))
+    Ok(HttpResponse::Ok().json(PaginatedResponse::new(list, total, &query)))
 }
 
 /// Get a single building by ID
@@ -89,7 +103,7 @@ pub async fn get_building(
 
     // Check if user has access to this building
     let is_admin = auth.has_any_role(&["Admin", "Manager"]);
-    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+    let user_id = auth.user_id()?;
 
     use crate::auth::building_access::get_user_building_ids;
     let maybe_building_ids = get_user_building_ids(user_id, is_admin, &mut conn)?;

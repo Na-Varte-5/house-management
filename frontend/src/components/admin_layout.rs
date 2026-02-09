@@ -2,6 +2,7 @@ use yew::prelude::*;
 
 use crate::components::admin_sidebar::AdminSidebar;
 use crate::contexts::AuthContext;
+use crate::i18n::t;
 use crate::routes::Route;
 
 /// Layout for admin/manager pages: renders a sidebar with privileged actions and a main content area.
@@ -23,7 +24,7 @@ pub fn admin_layout(props: &AdminLayoutProps) -> Html {
     if !auth.is_admin_or_manager() {
         return html! {
             <div class="container mt-4">
-                <div class="alert alert-danger">{"Access denied"}</div>
+                <div class="alert alert-danger">{t("admin-layout-access-denied")}</div>
             </div>
         };
     }
@@ -46,7 +47,7 @@ pub fn admin_layout(props: &AdminLayoutProps) -> Html {
                             aria-expanded="false"
                             aria-controls="adminSidebarCollapse"
                         >
-                            {"Admin menu"}
+                            {t("admin-layout-menu")}
                         </button>
                         <div class="collapse mt-2" id="adminSidebarCollapse">
                             <AdminSidebar active_route={props.active_route.clone()} />

@@ -1,6 +1,6 @@
 use crate::components::spinner::Spinner;
 use crate::i18n::t;
-use crate::services::api_client;
+use crate::services::api::{PaginatedResponse, api_client};
 use crate::utils::datetime::format_dt_local;
 use serde::Deserialize;
 use yew::prelude::*;
@@ -41,8 +41,9 @@ pub fn announcement_list() -> Html {
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(None); // Public endpoint, no auth needed
                 match client
-                    .get::<Vec<AnnouncementDto>>("/announcements/public")
+                    .get::<PaginatedResponse<AnnouncementDto>>("/announcements/public")
                     .await
+                    .map(|r| r.data)
                 {
                     Ok(list) => {
                         let mapped: Vec<AnnouncementDto> = list

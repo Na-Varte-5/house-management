@@ -1,10 +1,22 @@
-use crate::components::{ErrorAlert, SuccessAlert};
+use crate::components::breadcrumb::BreadcrumbItem;
+use crate::components::{Breadcrumb, ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
+use crate::i18n::{t, t_with_args};
 use crate::routes::Route;
 use crate::services::{ApiError, api_client};
+use crate::utils::datetime::format_dt_local;
 use serde::{Deserialize, Serialize};
 use yew::prelude::*;
-use yew_router::prelude::*;
+
+fn friendly_voting_method(method: &str) -> String {
+    match method {
+        "SimpleMajority" => t("voting-method-simple"),
+        "WeightedArea" => t("voting-method-weighted"),
+        "PerSeat" => t("voting-method-per-seat"),
+        "Consensus" => t("voting-method-consensus"),
+        other => other.to_string(),
+    }
+}
 
 #[derive(Deserialize, Clone, PartialEq)]
 struct ProposalWithVotes {
@@ -53,7 +65,6 @@ pub struct Props {
 #[function_component(VotingDetailPage)]
 pub fn voting_detail_page(props: &Props) -> Html {
     let auth = use_context::<AuthContext>().expect("AuthContext not found");
-    let navigator = use_navigator().unwrap();
 
     let proposal = use_state(|| None::<ProposalWithVotes>);
     let loading = use_state(|| true);
@@ -86,7 +97,10 @@ pub fn voting_detail_page(props: &Props) -> Html {
                         loading.set(false);
                     }
                     Err(e) => {
-                        error.set(Some(format!("Failed to load proposal: {}", e)));
+                        error.set(Some(t_with_args(
+                            "voting-failed-load-proposal",
+                            &[("error", &e.to_string())],
+                        )));
                         loading.set(false);
                     }
                 }
@@ -128,7 +142,10 @@ pub fn voting_detail_page(props: &Props) -> Html {
                         .await
                     {
                         Ok(_) => {
-                            success.set(Some(format!("Vote cast: {}", choice)));
+                            success.set(Some(t_with_args(
+                                "voting-vote-cast-choice",
+                                &[("choice", &choice)],
+                            )));
                             // Reload proposal to get updated counts
                             if let Ok(updated) = client
                                 .get::<ProposalWithVotes>(&format!("/proposals/{}", p.id))
@@ -138,15 +155,16 @@ pub fn voting_detail_page(props: &Props) -> Html {
                             }
                         }
                         Err(ApiError::Forbidden) => {
-                            error.set(Some(
-                                "You are not eligible to vote on this proposal".to_string(),
-                            ));
+                            error.set(Some(t("voting-not-eligible-vote")));
                         }
                         Err(ApiError::BadRequest(msg)) => {
                             error.set(Some(msg));
                         }
                         Err(e) => {
-                            error.set(Some(format!("Failed to cast vote: {}", e)));
+                            error.set(Some(t_with_args(
+                                "voting-failed-vote",
+                                &[("error", &e.to_string())],
+                            )));
                         }
                     }
                     voting.set(false);
@@ -182,7 +200,7 @@ pub fn voting_detail_page(props: &Props) -> Html {
                         .await
                     {
                         Ok(_) => {
-                            success.set(Some("Results tallied successfully".to_string()));
+                            success.set(Some(t("voting-results-tallied")));
                             // Reload proposal to get results
                             if let Ok(updated) = client
                                 .get::<ProposalWithVotes>(&format!("/proposals/{}", p.id))
@@ -192,24 +210,18 @@ pub fn voting_detail_page(props: &Props) -> Html {
                             }
                         }
                         Err(ApiError::Forbidden) => {
-                            error.set(Some(
-                                "You don't have permission to tally results".to_string(),
-                            ));
+                            error.set(Some(t("voting-no-permission-tally")));
                         }
                         Err(e) => {
-                            error.set(Some(format!("Failed to tally results: {}", e)));
+                            error.set(Some(t_with_args(
+                                "voting-failed-tally",
+                                &[("error", &e.to_string())],
+                            )));
                         }
                     }
                     tallying.set(false);
                 });
             }
-        })
-    };
-
-    let on_back = {
-        let navigator = navigator.clone();
-        Callback::from(move |_| {
-            navigator.push(&Route::Voting);
         })
     };
 
@@ -234,11 +246,10 @@ pub fn voting_detail_page(props: &Props) -> Html {
 
     html! {
         <div class="container mt-4">
-            <div class="mb-3">
-                <button class="btn btn-outline-secondary btn-sm" onclick={on_back}>
-                    {"← Back to Proposals"}
-                </button>
-            </div>
+            <Breadcrumb items={vec![
+                BreadcrumbItem { label: t("voting-title"), route: Some(Route::Voting) },
+                BreadcrumbItem { label: t("voting-breadcrumb-detail"), route: None },
+            ]} />
 
             if let Some(err) = (*error).clone() {
                 <ErrorAlert message={err} on_close={clear_error.clone()} />
@@ -251,7 +262,7 @@ pub fn voting_detail_page(props: &Props) -> Html {
             if *loading {
                 <div class="text-center py-5">
                     <div class="spinner-border" role="status">
-                        <span class="visually-hidden">{"Loading..."}</span>
+                        <span class="visually-hidden">{t("voting-loading")}</span>
                     </div>
                 </div>
             } else if let Some(p) = (*proposal).clone() {
@@ -274,51 +285,51 @@ pub fn voting_detail_page(props: &Props) -> Html {
 
                                 <div class="row small">
                                     <div class="col-md-6 mb-2">
-                                        <strong>{"Voting Method:"}</strong>{" "}{&p.voting_method}
+                                        <strong>{t("voting-voting-method-label")}</strong>{" "}{friendly_voting_method(&p.voting_method)}
                                     </div>
                                     <div class="col-md-6 mb-2">
-                                        <strong>{"Eligible Voters:"}</strong>{" "}{&p.eligible_roles}
+                                        <strong>{t("voting-eligible-voters-label")}</strong>{" "}{&p.eligible_roles}
                                     </div>
                                     <div class="col-md-6 mb-2">
-                                        <strong>{"Start Time:"}</strong>{" "}{&p.start_time}
+                                        <strong>{t("voting-start-time-label")}</strong>{" "}{format_dt_local(&p.start_time)}
                                     </div>
                                     <div class="col-md-6 mb-2">
-                                        <strong>{"End Time:"}</strong>{" "}{&p.end_time}
+                                        <strong>{t("voting-end-time-label")}</strong>{" "}{format_dt_local(&p.end_time)}
                                     </div>
                                 </div>
 
                                 <hr />
 
-                                <h5>{"Vote Counts"}</h5>
+                                <h5>{t("voting-vote-counts")}</h5>
                                 <div class="row text-center mb-3">
                                     <div class="col-4">
                                         <div class="border rounded p-2 bg-success-subtle">
                                             <div class="fs-4 fw-bold text-success">{p.yes_count}</div>
-                                            <div class="small">{"Yes"}</div>
+                                            <div class="small">{t("voting-yes-votes")}</div>
                                         </div>
                                     </div>
                                     <div class="col-4">
                                         <div class="border rounded p-2 bg-danger-subtle">
                                             <div class="fs-4 fw-bold text-danger">{p.no_count}</div>
-                                            <div class="small">{"No"}</div>
+                                            <div class="small">{t("voting-no-votes")}</div>
                                         </div>
                                     </div>
                                     <div class="col-4">
                                         <div class="border rounded p-2 bg-secondary-subtle">
                                             <div class="fs-4 fw-bold text-secondary">{p.abstain_count}</div>
-                                            <div class="small">{"Abstain"}</div>
+                                            <div class="small">{t("voting-abstain-votes")}</div>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="text-center text-muted small">
-                                    {"Total votes: "}{p.total_votes}
+                                    {t_with_args("voting-total-votes-label", &[("count", &p.total_votes.to_string())])}
                                 </div>
 
                                 {
                                     if let Some(user_vote) = &p.user_vote {
                                         html! {
                                             <div class="alert alert-info mt-3">
-                                                {"Your current vote: "}<strong>{user_vote}</strong>
+                                                {t_with_args("voting-your-current-vote", &[("vote", user_vote)])}
                                             </div>
                                         }
                                     } else {
@@ -331,19 +342,19 @@ pub fn voting_detail_page(props: &Props) -> Html {
                                         html! {
                                             <>
                                                 <hr />
-                                                <h5>{"Final Results"}</h5>
+                                                <h5>{t("voting-final-results")}</h5>
                                                 <div class={classes!("alert", if result.passed { "alert-success" } else { "alert-danger" })}>
                                                     <strong>
-                                                        {if result.passed { "✓ Proposal PASSED" } else { "✗ Proposal FAILED" }}
+                                                        {if result.passed { t("voting-proposal-passed") } else { t("voting-proposal-failed") }}
                                                     </strong>
                                                 </div>
                                                 <div class="small">
-                                                    <div>{"Yes Weight: "}{&result.yes_weight}</div>
-                                                    <div>{"No Weight: "}{&result.no_weight}</div>
-                                                    <div>{"Abstain Weight: "}{&result.abstain_weight}</div>
-                                                    <div>{"Total Weight: "}{&result.total_weight}</div>
+                                                    <div>{t("voting-yes-weight")}{" "}{&result.yes_weight}</div>
+                                                    <div>{t("voting-no-weight")}{" "}{&result.no_weight}</div>
+                                                    <div>{t("voting-abstain-weight")}{" "}{&result.abstain_weight}</div>
+                                                    <div>{t("voting-total-weight-label")}{" "}{&result.total_weight}</div>
                                                     <div class="text-muted mt-2">
-                                                        {"Tallied at: "}{result.tallied_at.as_ref().unwrap_or(&"(unknown)".to_string())}
+                                                        {t("voting-tallied-at")}{" "}{format_dt_local(result.tallied_at.as_ref().unwrap_or(&"N/A".to_string()))}
                                                     </div>
                                                 </div>
                                             </>
@@ -363,7 +374,7 @@ pub fn voting_detail_page(props: &Props) -> Html {
                                 html! {
                                     <div class="card">
                                         <div class="card-header">
-                                            <h5 class="mb-0">{"Cast Your Vote"}</h5>
+                                            <h5 class="mb-0">{t("voting-cast-vote")}</h5>
                                         </div>
                                         <div class="card-body">
                                             <div class="d-grid gap-2">
@@ -378,7 +389,7 @@ pub fn voting_detail_page(props: &Props) -> Html {
                                                     if *voting {
                                                         <span class="spinner-border spinner-border-sm me-1"></span>
                                                     }
-                                                    {"Vote Yes"}
+                                                    {t("voting-vote-yes")}
                                                 </button>
                                                 <button
                                                     class="btn btn-danger"
@@ -391,7 +402,7 @@ pub fn voting_detail_page(props: &Props) -> Html {
                                                     if *voting {
                                                         <span class="spinner-border spinner-border-sm me-1"></span>
                                                     }
-                                                    {"Vote No"}
+                                                    {t("voting-vote-no")}
                                                 </button>
                                                 <button
                                                     class="btn btn-secondary"
@@ -404,11 +415,11 @@ pub fn voting_detail_page(props: &Props) -> Html {
                                                     if *voting {
                                                         <span class="spinner-border spinner-border-sm me-1"></span>
                                                     }
-                                                    {"Abstain"}
+                                                    {t("voting-vote-abstain")}
                                                 </button>
                                             </div>
                                             <div class="text-muted small mt-3">
-                                                {"You can change your vote at any time before voting closes."}
+                                                {t("voting-can-change-vote")}
                                             </div>
                                         </div>
                                     </div>
@@ -417,12 +428,12 @@ pub fn voting_detail_page(props: &Props) -> Html {
                                 html! {
                                     <div class="card">
                                         <div class="card-header">
-                                            <h5 class="mb-0">{"Voting Information"}</h5>
+                                            <h5 class="mb-0">{t("voting-info")}</h5>
                                         </div>
                                         <div class="card-body">
                                             <div class="alert alert-warning mb-0">
-                                                <strong>{"Not Eligible"}</strong>
-                                                <p class="mb-0 small">{"You are not eligible to vote on this proposal. Only members with the following roles can vote: "}{&p.eligible_roles}</p>
+                                                <strong>{t("voting-not-eligible-msg")}</strong>
+                                                <p class="mb-0 small">{t_with_args("voting-not-eligible-desc", &[("roles", &p.eligible_roles)])}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -431,10 +442,10 @@ pub fn voting_detail_page(props: &Props) -> Html {
                                 html! {
                                     <div class="card">
                                         <div class="card-header">
-                                            <h5 class="mb-0">{"Management"}</h5>
+                                            <h5 class="mb-0">{t("voting-management")}</h5>
                                         </div>
                                         <div class="card-body">
-                                            <p class="small text-muted">{"Voting is closed. Tally the results to finalize the outcome."}</p>
+                                            <p class="small text-muted">{t("voting-closed-tally-desc")}</p>
                                             <button
                                                 class="btn btn-primary w-100"
                                                 disabled={*tallying}
@@ -443,10 +454,10 @@ pub fn voting_detail_page(props: &Props) -> Html {
                                                 if *tallying {
                                                     <>
                                                         <span class="spinner-border spinner-border-sm me-1"></span>
-                                                        {"Tallying..."}
+                                                        {t("voting-tallying")}
                                                     </>
                                                 } else {
-                                                    {"Tally Results"}
+                                                    {t("voting-tally-results")}
                                                 }
                                             </button>
                                         </div>
@@ -459,10 +470,10 @@ pub fn voting_detail_page(props: &Props) -> Html {
                                             <p class="text-muted mb-0">
                                                 {
                                                     match p.status.as_str() {
-                                                        "Scheduled" => "Voting has not started yet.",
-                                                        "Closed" => "Voting has closed.",
-                                                        "Tallied" => "Results have been tallied.",
-                                                        _ => "Voting is not available.",
+                                                        "Scheduled" => t("voting-not-started-yet"),
+                                                        "Closed" => t("voting-has-closed"),
+                                                        "Tallied" => t("voting-results-tallied-msg"),
+                                                        _ => t("voting-not-available"),
                                                     }
                                                 }
                                             </p>
@@ -475,7 +486,7 @@ pub fn voting_detail_page(props: &Props) -> Html {
                 </div>
             } else {
                 <div class="alert alert-warning">
-                    {"Proposal not found"}
+                    {t("voting-proposal-not-found")}
                 </div>
             }
         </div>

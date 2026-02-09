@@ -32,7 +32,7 @@ pub async fn list_readings(
     pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
     let meter_id = meter_id.into_inner();
-    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+    let user_id = auth.user_id()?;
     let is_admin_or_manager = auth.has_any_role(&["Admin", "Manager"]);
 
     let mut conn = pool
@@ -188,7 +188,7 @@ pub async fn export_readings_csv(
     pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
     let meter_id = meter_id.into_inner();
-    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+    let user_id = auth.user_id()?;
     let is_admin_or_manager = auth.has_any_role(&["Admin", "Manager"]);
 
     let mut conn = pool

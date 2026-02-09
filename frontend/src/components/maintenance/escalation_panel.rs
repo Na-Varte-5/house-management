@@ -1,3 +1,4 @@
+use crate::i18n::{t, t_with_args};
 use crate::services::api_client;
 use serde::{Deserialize, Serialize};
 use yew::prelude::*;
@@ -120,7 +121,10 @@ pub fn escalation_panel(props: &EscalationPanelProps) -> Html {
                             on_escalated.emit(());
                         }
                         Err(e) => {
-                            on_error.emit(format!("Failed to escalate: {}", e));
+                            on_error.emit(t_with_args(
+                                "maintenance-failed-escalate",
+                                &[("error", &e.to_string())],
+                            ));
                         }
                     }
                     escalating.set(false);
@@ -132,41 +136,41 @@ pub fn escalation_panel(props: &EscalationPanelProps) -> Html {
     html! {
         <div class="card mt-3">
             <div class="card-header">
-                <h5 class="mb-0">{"Escalate Request"}</h5>
+                <h5 class="mb-0">{t("maintenance-escalate")}</h5>
             </div>
             <div class="card-body">
                 if !*show_panel {
                     <p class="text-muted small mb-2">
-                        {"Need help from a building manager? Escalate this request for faster resolution."}
+                        {t("maintenance-escalate-desc")}
                     </p>
                     <button
                         class="btn btn-warning btn-sm"
                         onclick={on_show_panel}
                     >
                         <i class="bi bi-arrow-up-circle me-1"></i>
-                        {"Escalate to Manager"}
+                        {t("maintenance-escalate-to-manager")}
                     </button>
                 } else {
                     if *loading_managers {
                         <div class="text-center py-2">
                             <div class="spinner-border spinner-border-sm" role="status"></div>
-                            <span class="ms-2">{"Loading managers..."}</span>
+                            <span class="ms-2">{t("maintenance-loading-managers")}</span>
                         </div>
                     } else if managers.is_empty() {
                         <div class="alert alert-info mb-2">
-                            {"No managers assigned to this building. Please contact administration."}
+                            {t("maintenance-no-managers")}
                         </div>
                         <button class="btn btn-secondary btn-sm" onclick={on_cancel}>
-                            {"Cancel"}
+                            {t("maintenance-cancel")}
                         </button>
                     } else {
                         <div class="mb-3">
-                            <label class="form-label">{"Select a manager"}</label>
+                            <label class="form-label">{t("maintenance-select-manager")}</label>
                             <select
                                 class="form-select"
                                 onchange={on_select_manager}
                             >
-                                <option value="">{"-- Select Manager --"}</option>
+                                <option value="">{t("maintenance-select-manager-option")}</option>
                                 {
                                     for managers.iter().map(|m| {
                                         html! {
@@ -186,9 +190,9 @@ pub fn escalation_panel(props: &EscalationPanelProps) -> Html {
                             >
                                 if *escalating {
                                     <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                    {"Escalating..."}
+                                    {t("maintenance-escalating")}
                                 } else {
-                                    {"Confirm Escalation"}
+                                    {t("maintenance-confirm-escalation")}
                                 }
                             </button>
                             <button
@@ -196,7 +200,7 @@ pub fn escalation_panel(props: &EscalationPanelProps) -> Html {
                                 onclick={on_cancel}
                                 disabled={*escalating}
                             >
-                                {"Cancel"}
+                                {t("maintenance-cancel")}
                             </button>
                         </div>
                     }

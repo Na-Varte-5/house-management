@@ -1,3 +1,4 @@
+use crate::i18n::{t, t_with_args};
 use crate::services::{ApiError, api_client};
 use serde::Serialize;
 use web_sys::HtmlInputElement;
@@ -56,7 +57,7 @@ pub fn reading_entry_form(props: &ReadingEntryFormProps) -> Html {
             e.prevent_default();
 
             if entry_value.trim().is_empty() {
-                on_error.emit("Reading value is required".to_string());
+                on_error.emit(t("meters-reading-required"));
                 return;
             }
 
@@ -84,16 +85,19 @@ pub fn reading_entry_form(props: &ReadingEntryFormProps) -> Html {
                     .await
                 {
                     Ok(_) => {
-                        on_success.emit("Reading recorded successfully".to_string());
+                        on_success.emit(t("meters-reading-success"));
                         submitting.set(false);
                         entry_value.set(String::default());
                     }
                     Err(ApiError::Forbidden) => {
-                        on_error.emit("Permission denied".to_string());
+                        on_error.emit(t("meters-permission-denied"));
                         submitting.set(false);
                     }
                     Err(e) => {
-                        on_error.emit(format!("Failed to record reading: {}", e));
+                        on_error.emit(t_with_args(
+                            "meters-failed-load",
+                            &[("error", &e.to_string())],
+                        ));
                         submitting.set(false);
                     }
                 }
@@ -104,28 +108,28 @@ pub fn reading_entry_form(props: &ReadingEntryFormProps) -> Html {
     html! {
         <div class="card mb-4">
             <div class="card-header">
-                <h5>{"Add Manual Reading"}</h5>
+                <h5>{t("meters-add-reading")}</h5>
             </div>
             <div class="card-body">
                 <form onsubmit={on_submit}>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">{"Reading Value"}</label>
+                            <label class="form-label">{t("meters-reading-value-label")}</label>
                             <input
                                 type="text"
                                 class="form-control"
                                 value={(*entry_value).clone()}
                                 oninput={on_value_change}
-                                placeholder="123.456"
+                                placeholder={t("meters-reading-value-placeholder")}
                                 required=true
                             />
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">{"Unit"}</label>
+                            <label class="form-label">{t("meters-reading-unit-label")}</label>
                             <select class="form-select" value={(*entry_unit).clone()} onchange={on_unit_change}>
-                                <option value="m3">{"m³ (cubic meters)"}</option>
-                                <option value="kWh">{"kWh (kilowatt-hours)"}</option>
-                                <option value="L">{"L (liters)"}</option>
+                                <option value="m3">{t("meters-unit-m3")}</option>
+                                <option value="kWh">{t("meters-unit-kwh")}</option>
+                                <option value="L">{t("meters-unit-liters")}</option>
                             </select>
                         </div>
                     </div>
@@ -134,10 +138,10 @@ pub fn reading_entry_form(props: &ReadingEntryFormProps) -> Html {
                             if *submitting {
                                 <span class="spinner-border spinner-border-sm me-2"></span>
                             }
-                            {"Save Reading"}
+                            {t("meters-save-reading")}
                         </button>
                         <button type="button" class="btn btn-secondary" onclick={props.on_cancel.reform(|_| ())}>
-                            {"Cancel"}
+                            {t("button-cancel")}
                         </button>
                     </div>
                 </form>

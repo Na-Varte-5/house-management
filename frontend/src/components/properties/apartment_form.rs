@@ -1,3 +1,4 @@
+use crate::i18n::t;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
@@ -17,7 +18,7 @@ pub fn apartment_form(props: &ApartmentFormProps) -> Html {
         return html! {
             <div class="alert alert-info small mb-0">
                 <i class="bi bi-info-circle me-2"></i>
-                {"Select a building to create apartments"}
+                {t("properties-select-building-create")}
             </div>
         };
     }
@@ -32,12 +33,12 @@ pub fn apartment_form(props: &ApartmentFormProps) -> Html {
 
     html! {
         <form onsubmit={on_submit}>
-            <h6 class="small fw-semibold mb-2">{"Create New Apartment"}</h6>
+            <h6 class="small fw-semibold mb-2">{t("properties-create-apartment")}</h6>
             <div class="mb-2">
                 <input
                     type="text"
                     class="form-control form-control-sm"
-                    placeholder="Apartment Number"
+                    placeholder={t("properties-apartment-number-placeholder")}
                     value={props.number.clone()}
                     disabled={props.submitting}
                     oninput={{
@@ -54,7 +55,7 @@ pub fn apartment_form(props: &ApartmentFormProps) -> Html {
                     type="number"
                     step="0.1"
                     class="form-control form-control-sm"
-                    placeholder="Size (m²) - optional"
+                    placeholder={t("properties-size-placeholder")}
                     value={props.size.clone()}
                     disabled={props.submitting}
                     oninput={{
@@ -74,7 +75,7 @@ pub fn apartment_form(props: &ApartmentFormProps) -> Html {
                 if props.submitting {
                     <span class="spinner-border spinner-border-sm me-1" role="status"></span>
                 }
-                {"Create Apartment"}
+                {t("properties-create-apartment-btn")}
             </button>
         </form>
     }

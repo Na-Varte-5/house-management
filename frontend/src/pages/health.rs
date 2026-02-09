@@ -1,3 +1,4 @@
+use crate::i18n::t;
 use crate::services::api_client;
 use serde::Deserialize;
 use yew::prelude::*;
@@ -30,23 +31,23 @@ pub fn health_page() -> Html {
 
     html! {
         <div class="container mt-4">
-            <h1>{"System Health"}</h1>
+            <h1>{t("health-title")}</h1>
             {
                 if let Some(err) = (*error).clone() {
                     html! { <p class="text-danger">{err}</p> }
                 } else if let Some(h) = (*state).clone() {
                     html! {
                         <div class="alert alert-success">
-                            <strong>{"Status: "}</strong>{&h.status}
+                            <strong>{t("health-status")}</strong>{" "}{&h.status}
                             <br />
-                            <strong>{"Message: "}</strong>{&h.message}
+                            <strong>{t("health-message")}</strong>{" "}{&h.message}
                         </div>
                     }
                 } else {
                     html! {
                         <div class="text-center py-5">
                             <div class="spinner-border" role="status">
-                                <span class="visually-hidden">{"Loading..."}</span>
+                                <span class="visually-hidden">{t("loading")}</span>
                             </div>
                         </div>
                     }

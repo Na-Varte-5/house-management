@@ -1,12 +1,13 @@
+use crate::components::breadcrumb::BreadcrumbItem;
 use crate::components::meters::{
     Meter as MeterComponent, MeterEditForm, MeterReading, ReadingEntryForm, ReadingHistory,
 };
-use crate::components::{ErrorAlert, SuccessAlert};
+use crate::components::{Breadcrumb, ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
+use crate::i18n::{t, t_with_args};
 use crate::routes::Route;
 use crate::services::api_client;
 use yew::prelude::*;
-use yew_router::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct Props {
@@ -16,7 +17,6 @@ pub struct Props {
 #[function_component(MeterDetailPage)]
 pub fn meter_detail_page(props: &Props) -> Html {
     let auth = use_context::<AuthContext>().expect("AuthContext not found");
-    let navigator = use_navigator().unwrap();
 
     let meter = use_state(|| None::<MeterComponent>);
     let readings = use_state(|| Vec::<MeterReading>::new());
@@ -79,20 +79,6 @@ pub fn meter_detail_page(props: &Props) -> Html {
         });
     }
 
-    let on_back = {
-        let navigator = navigator.clone();
-        let meter = meter.clone();
-        Callback::from(move |_| {
-            if let Some(ref m) = *meter {
-                navigator.push(&Route::ApartmentMeters {
-                    apartment_id: m.apartment_id,
-                });
-            } else {
-                navigator.push(&Route::Buildings);
-            }
-        })
-    };
-
     let toggle_entry_form = {
         let show_entry_form = show_entry_form.clone();
         Callback::from(move |_: web_sys::MouseEvent| show_entry_form.set(!*show_entry_form))
@@ -144,7 +130,7 @@ pub fn meter_detail_page(props: &Props) -> Html {
         let meter = meter.clone();
 
         Callback::from(move |updated_meter: MeterComponent| {
-            success.set(Some("Meter updated successfully".to_string()));
+            success.set(Some(t("meters-meter-updated-success")));
             show_edit_form.set(false);
             meter.set(Some(updated_meter));
         })
@@ -195,23 +181,38 @@ pub fn meter_detail_page(props: &Props) -> Html {
         Callback::from(move |_| success.set(None))
     };
 
+    let meter_ref = meter.clone();
+
     html! {
         <div class="container mt-4">
+            {
+                if let Some(ref m) = *meter_ref {
+                    html! {
+                        <Breadcrumb items={vec![
+                            BreadcrumbItem { label: t("breadcrumb-my-properties"), route: Some(Route::MyProperties) },
+                            BreadcrumbItem { label: t_with_args("breadcrumb-apartment", &[("id", &m.apartment_id.to_string())]), route: Some(Route::ApartmentMeters { apartment_id: m.apartment_id }) },
+                            BreadcrumbItem { label: t("breadcrumb-meter-details"), route: None },
+                        ]} />
+                    }
+                } else {
+                    html! {
+                        <Breadcrumb items={vec![
+                            BreadcrumbItem { label: t("breadcrumb-meters"), route: Some(Route::Buildings) },
+                            BreadcrumbItem { label: t("breadcrumb-meter-details"), route: None },
+                        ]} />
+                    }
+                }
+            }
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                    <button class="btn btn-outline-secondary me-2" onclick={on_back}>
-                        <i class="bi bi-arrow-left"></i> {"Back"}
-                    </button>
-                    <h2 class="d-inline">{"Meter Details"}</h2>
-                </div>
+                <h2>{t("meters-detail-title")}</h2>
                 <div>
                     if is_admin_or_manager {
                         <>
                             <button class="btn btn-success me-2" onclick={toggle_entry_form.clone()}>
-                                {"+ Add Reading"}
+                                {t("meters-add-reading-btn")}
                             </button>
                             <button class="btn btn-warning me-2" onclick={toggle_edit_form.clone()}>
-                                <i class="bi bi-pencil"></i> {"Edit/Replace Meter"}
+                                <i class="bi bi-pencil"></i> {t("meters-edit-replace")}
                             </button>
                         </>
                     }
@@ -229,7 +230,7 @@ pub fn meter_detail_page(props: &Props) -> Html {
             if *loading {
                 <div class="text-center py-5">
                     <div class="spinner-border" role="status">
-                        <span class="visually-hidden">{"Loading..."}</span>
+                        <span class="visually-hidden">{t("loading")}</span>
                     </div>
                 </div>
             } else if let Some(ref m) = *meter {
@@ -239,26 +240,26 @@ pub fn meter_detail_page(props: &Props) -> Html {
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-md-6">
-                                    <p><strong>{"Type:"}</strong> {&m.meter_type}</p>
-                                    <p><strong>{"Serial Number:"}</strong> {&m.serial_number}</p>
+                                    <p><strong>{t("meters-detail-type")}</strong> {&m.meter_type}</p>
+                                    <p><strong>{t("meters-detail-serial-label")}</strong> {&m.serial_number}</p>
                                     if let Some(ref inst_date) = m.installation_date {
-                                        <p><strong>{"Installation Date:"}</strong> {inst_date}</p>
+                                        <p><strong>{t("meters-detail-installation-label")}</strong> {inst_date}</p>
                                     }
                                 </div>
                                 <div class="col-md-6">
                                     if let Some(ref cal_date) = m.calibration_due_date {
-                                        <p><strong>{"Calibration Due:"}</strong> {cal_date}</p>
+                                        <p><strong>{t("meters-detail-calibration-due-label")}</strong> {cal_date}</p>
                                     }
                                     if let Some(ref last_cal) = m.last_calibration_date {
-                                        <p><strong>{"Last Calibration:"}</strong> {last_cal}</p>
+                                        <p><strong>{t("meters-detail-last-calibration-label")}</strong> {last_cal}</p>
                                     }
                                     <p>
-                                        <strong>{"Visible to Renters:"}</strong>
+                                        <strong>{t("meters-detail-visible-renters-label")}</strong>
                                         {" "}
                                         if m.is_visible_to_renters {
-                                            <span class="badge bg-success">{"Yes"}</span>
+                                            <span class="badge bg-success">{t("meters-detail-yes")}</span>
                                         } else {
-                                            <span class="badge bg-secondary">{"No"}</span>
+                                            <span class="badge bg-secondary">{t("meters-detail-no")}</span>
                                         }
                                     </p>
                                 </div>
@@ -297,7 +298,7 @@ pub fn meter_detail_page(props: &Props) -> Html {
                 </div>
             } else {
                 <div class="alert alert-danger">
-                    {"Meter not found"}
+                    {t("meters-detail-not-found")}
                 </div>
             }
         </div>

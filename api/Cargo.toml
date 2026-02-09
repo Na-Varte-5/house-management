@@ -42,6 +42,10 @@ pulldown-cmark = "0.13"
 ammonia = "4"
 utoipa = { version = "5", features = ["actix_extras", "chrono", "decimal"] }
 utoipa-swagger-ui = { version = "8", features = ["actix-web"] }
+actix-governor = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-actix-web = "0.7"
 
 [dev-dependencies]
 actix-rt = "2"

@@ -1,7 +1,9 @@
+use crate::components::breadcrumb::BreadcrumbItem;
 use crate::components::{
-    ErrorAlert, FormGroup, Select, SelectOption, SuccessAlert, TextInput, Textarea,
+    Breadcrumb, ErrorAlert, FormGroup, Select, SelectOption, SuccessAlert, TextInput, Textarea,
 };
 use crate::contexts::AuthContext;
+use crate::i18n::t;
 use crate::routes::Route;
 use crate::services::{ApiError, api_client};
 use serde::{Deserialize, Serialize};
@@ -67,7 +69,7 @@ pub fn maintenance_new_page() -> Html {
                         loading.set(false);
                     }
                     Err(e) => {
-                        error.set(Some(format!("Failed to load apartments: {}", e)));
+                        error.set(Some(format!("{}: {}", t("error-load-failed"), e)));
                         loading.set(false);
                     }
                 }
@@ -93,15 +95,15 @@ pub fn maintenance_new_page() -> Html {
 
             // Validation
             if apartment_id.is_empty() {
-                error.set(Some("Please select an apartment".to_string()));
+                error.set(Some(t("maintenance-select-apartment-error")));
                 return;
             }
             if title.trim().is_empty() {
-                error.set(Some("Title is required".to_string()));
+                error.set(Some(t("maintenance-title-required")));
                 return;
             }
             if description.trim().is_empty() {
-                error.set(Some("Description is required".to_string()));
+                error.set(Some(t("maintenance-description-required")));
                 return;
             }
 
@@ -127,7 +129,7 @@ pub fn maintenance_new_page() -> Html {
                 let apt_id = match apartment_id.parse::<u64>() {
                     Ok(id) => id,
                     Err(_) => {
-                        error.set(Some("Invalid apartment selected".to_string()));
+                        error.set(Some(t("maintenance-invalid-apartment")));
                         submitting.set(false);
                         return;
                     }
@@ -146,9 +148,7 @@ pub fn maintenance_new_page() -> Html {
                     .await
                 {
                     Ok(response) => {
-                        success.set(Some(
-                            "Request created successfully! Redirecting...".to_string(),
-                        ));
+                        success.set(Some(t("maintenance-created-redirect")));
                         // Redirect to the created request's detail page
                         let request_id = response.id;
                         gloo_timers::callback::Timeout::new(1000, move || {
@@ -157,13 +157,11 @@ pub fn maintenance_new_page() -> Html {
                         .forget();
                     }
                     Err(ApiError::Forbidden) => {
-                        error.set(Some(
-                            "You don't have permission to create requests".to_string(),
-                        ));
+                        error.set(Some(t("maintenance-no-permission-create")));
                         submitting.set(false);
                     }
                     Err(e) => {
-                        error.set(Some(format!("Failed to create request: {}", e)));
+                        error.set(Some(format!("{}: {}", t("error-load-failed"), e)));
                         submitting.set(false);
                     }
                 }
@@ -216,9 +214,14 @@ pub fn maintenance_new_page() -> Html {
 
     // Build apartment options
     let apartment_options = {
-        let mut options = vec![SelectOption::new("", "-- Select Apartment --")];
+        let mut options = vec![SelectOption::new("", t("maintenance-select-apartment"))];
         for apt in apartments.iter() {
-            let label = format!("Apartment {} - {}", apt.number, apt.building_address);
+            let label = format!(
+                "{} {} - {}",
+                t("label-apartment"),
+                apt.number,
+                apt.building_address
+            );
             options.push(SelectOption::new(apt.id.to_string(), label));
         }
         options
@@ -226,30 +229,34 @@ pub fn maintenance_new_page() -> Html {
 
     // Build request type options
     let type_options = vec![
-        SelectOption::new("General", "General"),
-        SelectOption::new("Plumbing", "Plumbing"),
-        SelectOption::new("Electrical", "Electrical"),
-        SelectOption::new("HVAC", "HVAC"),
-        SelectOption::new("Appliance", "Appliance"),
-        SelectOption::new("Structural", "Structural"),
-        SelectOption::new("Other", "Other"),
+        SelectOption::new("General", t("maintenance-type-general")),
+        SelectOption::new("Plumbing", t("maintenance-type-plumbing")),
+        SelectOption::new("Electrical", t("maintenance-type-electrical")),
+        SelectOption::new("HVAC", t("maintenance-type-hvac")),
+        SelectOption::new("Appliance", t("maintenance-type-appliance")),
+        SelectOption::new("Structural", t("maintenance-type-structural")),
+        SelectOption::new("Other", t("maintenance-type-other")),
     ];
 
     // Build priority options
     let priority_options = vec![
-        SelectOption::new("Low", "Low"),
-        SelectOption::new("Medium", "Medium"),
-        SelectOption::new("High", "High"),
-        SelectOption::new("Urgent", "Urgent"),
+        SelectOption::new("Low", t("maintenance-priority-low")),
+        SelectOption::new("Medium", t("maintenance-priority-medium")),
+        SelectOption::new("High", t("maintenance-priority-high")),
+        SelectOption::new("Urgent", t("maintenance-priority-urgent")),
     ];
 
     html! {
         <div class="container mt-4">
+            <Breadcrumb items={vec![
+                BreadcrumbItem { label: t("nav-maintenance"), route: Some(Route::Maintenance) },
+                BreadcrumbItem { label: t("maintenance-new-breadcrumb"), route: None },
+            ]} />
             <div class="row justify-content-center">
                 <div class="col-md-8 col-lg-6">
                     <div class="card">
                         <div class="card-header">
-                            <h4 class="mb-0">{"New Maintenance Request"}</h4>
+                            <h4 class="mb-0">{t("maintenance-new-title")}</h4>
                         </div>
                         <div class="card-body">
                             if let Some(err) = (*error).clone() {
@@ -262,67 +269,67 @@ pub fn maintenance_new_page() -> Html {
 
                             <form onsubmit={on_submit}>
                                 <FormGroup
-                                    title="Request Details"
-                                    description="Provide information about the maintenance issue"
+                                    title={t("maintenance-request-details")}
+                                    description={t("maintenance-request-details-desc")}
                                 >
                                     if *loading_apartments {
                                         <div class="mb-3">
                                             <label class="form-label">
-                                                {"Apartment"}
+                                                {t("label-apartment")}
                                                 <span class="text-danger">{" *"}</span>
                                             </label>
-                                            <div class="text-muted small">{"Loading apartments..."}</div>
+                                            <div class="text-muted small">{t("maintenance-loading-apartments")}</div>
                                         </div>
                                     } else {
                                         <Select
-                                            label="Apartment"
+                                            label={t("label-apartment")}
                                             value={(*apartment_id).clone()}
                                             on_change={on_apartment_change}
                                             options={apartment_options}
                                             disabled={*submitting}
                                             required=true
-                                            help_text="Select the apartment with the maintenance issue"
+                                            help_text={t("maintenance-select-apartment-help")}
                                         />
                                     }
 
                                     <Select
-                                        label="Request Type"
+                                        label={t("label-type")}
                                         value={(*request_type).clone()}
                                         on_change={on_type_change}
                                         options={type_options}
                                         disabled={*submitting}
                                         required=true
-                                        help_text="Category of the maintenance issue"
+                                        help_text={t("maintenance-request-type-help")}
                                     />
 
                                     <Select
-                                        label="Priority"
+                                        label={t("label-priority")}
                                         value={(*priority).clone()}
                                         on_change={on_priority_change}
                                         options={priority_options}
                                         disabled={*submitting}
                                         required=true
-                                        help_text="How urgent is this issue?"
+                                        help_text={t("maintenance-priority-help")}
                                     />
 
                                     <TextInput
-                                        label="Title"
+                                        label={t("label-title")}
                                         value={(*title).clone()}
                                         on_change={on_title_change}
-                                        placeholder="Brief description of the issue"
+                                        placeholder={t("maintenance-title-placeholder")}
                                         disabled={*submitting}
                                         required=true
                                     />
 
                                     <Textarea
-                                        label="Description"
+                                        label={t("label-description")}
                                         value={(*description).clone()}
                                         on_change={on_description_change}
-                                        placeholder="Detailed description of the maintenance issue"
+                                        placeholder={t("maintenance-description-placeholder")}
                                         rows={5}
                                         disabled={*submitting}
                                         required=true
-                                        help_text="Include any relevant details that will help us address the issue"
+                                        help_text={t("maintenance-description-help")}
                                     />
                                 </FormGroup>
 
@@ -333,7 +340,7 @@ pub fn maintenance_new_page() -> Html {
                                         disabled={*submitting}
                                         onclick={on_cancel}
                                     >
-                                        {"Cancel"}
+                                        {t("button-cancel")}
                                     </button>
                                     <button
                                         type="submit"
@@ -343,10 +350,10 @@ pub fn maintenance_new_page() -> Html {
                                         if *submitting {
                                             <>
                                                 <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                                {"Creating..."}
+                                                {t("loading")}
                                             </>
                                         } else {
-                                            {"Create Request"}
+                                            {t("button-submit")}
                                         }
                                     </button>
                                 </div>

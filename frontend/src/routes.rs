@@ -16,8 +16,6 @@ pub enum Route {
     AdminAnnouncements,
     #[at("/admin/properties")]
     AdminProperties,
-    #[at("/manage")]
-    Manage,
     #[at("/health")]
     Health,
     #[at("/maintenance")]

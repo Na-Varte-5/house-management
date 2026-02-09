@@ -1,4 +1,5 @@
 use super::types::Building;
+use crate::i18n::t;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
@@ -16,7 +17,7 @@ pub fn building_list(props: &BuildingListProps) -> Html {
         return html! {
             <div class="text-center py-3">
                 <div class="spinner-border spinner-border-sm" role="status">
-                    <span class="visually-hidden">{"Loading..."}</span>
+                    <span class="visually-hidden">{t("loading")}</span>
                 </div>
             </div>
         };
@@ -25,7 +26,7 @@ pub fn building_list(props: &BuildingListProps) -> Html {
     if props.buildings.is_empty() {
         return html! {
             <div class="alert alert-info small mb-0">
-                {"No buildings found. Create one using the form below."}
+                {t("properties-no-buildings-create")}
             </div>
         };
     }

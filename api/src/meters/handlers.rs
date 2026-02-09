@@ -29,7 +29,7 @@ pub async fn list_apartment_meters(
     pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
     let apartment_id = apartment_id.into_inner();
-    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+    let user_id = auth.user_id()?;
     let is_admin_or_manager = auth.has_any_role(&["Admin", "Manager"]);
 
     let mut conn = pool
@@ -95,7 +95,7 @@ pub async fn get_meter(
     pool: web::Data<DbPool>,
 ) -> Result<impl Responder, AppError> {
     let meter_id = meter_id.into_inner();
-    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+    let user_id = auth.user_id()?;
     let is_admin_or_manager = auth.has_any_role(&["Admin", "Manager"]);
 
     let mut conn = pool

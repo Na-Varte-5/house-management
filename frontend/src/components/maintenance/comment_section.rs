@@ -1,4 +1,6 @@
 use crate::components::forms::Textarea;
+use crate::i18n::t;
+use crate::utils::datetime::format_dt_option;
 use serde::{Deserialize, Serialize};
 use yew::prelude::*;
 
@@ -23,56 +25,6 @@ pub struct CommentSectionProps {
     pub is_admin_or_manager: bool,
     pub on_add_comment: Callback<String>,
     pub on_delete_comment: Callback<u64>,
-}
-
-/// Helper function to format datetime strings to be more user-friendly
-fn format_date(datetime_str: Option<&String>) -> String {
-    match datetime_str {
-        None => String::from("N/A"),
-        Some(dt) if dt.is_empty() => String::from("N/A"),
-        Some(dt) => {
-            // Parse the datetime string (format: "2026-01-24T10:30:00" or "2026-01-24 10:30:00")
-            let normalized = dt.replace('T', " ");
-            let parts: Vec<&str> = normalized.split(' ').collect();
-            if parts.len() >= 2 {
-                let date_parts: Vec<&str> = parts[0].split('-').collect();
-                if date_parts.len() == 3 {
-                    let year = date_parts[0];
-                    let month = date_parts[1];
-                    let day = date_parts[2];
-                    let time = parts[1];
-
-                    // Format as "Jan 24, 2026 at 10:30"
-                    let month_name = match month {
-                        "01" => "Jan",
-                        "02" => "Feb",
-                        "03" => "Mar",
-                        "04" => "Apr",
-                        "05" => "May",
-                        "06" => "Jun",
-                        "07" => "Jul",
-                        "08" => "Aug",
-                        "09" => "Sep",
-                        "10" => "Oct",
-                        "11" => "Nov",
-                        "12" => "Dec",
-                        _ => month,
-                    };
-
-                    let time_parts: Vec<&str> = time.split(':').collect();
-                    let short_time = if time_parts.len() >= 2 {
-                        format!("{}:{}", time_parts[0], time_parts[1])
-                    } else {
-                        time.to_string()
-                    };
-
-                    return format!("{} {}, {} at {}", month_name, day, year, short_time);
-                }
-            }
-
-            dt.clone()
-        }
-    }
 }
 
 /// CommentSection component for displaying and adding comments
@@ -119,17 +71,17 @@ pub fn comment_section(props: &CommentSectionProps) -> Html {
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="bi bi-chat-dots me-2"></i>
-                    {"Comments"}
+                    {t("maintenance-comments")}
                 </h5>
             </div>
             <div class="card-body">
                 if props.loading && props.comments.is_empty() {
                     <div class="text-center py-3">
                         <div class="spinner-border spinner-border-sm" role="status"></div>
-                        <span class="ms-2">{"Loading comments..."}</span>
+                        <span class="ms-2">{t("maintenance-loading-comments")}</span>
                     </div>
                 } else if props.comments.is_empty() {
-                    <p class="text-muted mb-0">{"No comments yet. Be the first to comment!"}</p>
+                    <p class="text-muted mb-0">{t("maintenance-no-comments")}</p>
                 } else {
                     <div class="comments-list">
                         { for props.comments.iter().map(|comment| render_comment(comment, props.current_user_id, props.is_admin_or_manager, props.on_delete_comment.clone())) }
@@ -138,13 +90,13 @@ pub fn comment_section(props: &CommentSectionProps) -> Html {
 
                 // Add comment form
                 <div class="mt-4">
-                    <h6>{"Add a Comment"}</h6>
+                    <h6>{t("maintenance-add-comment")}</h6>
                     <form onsubmit={on_submit}>
                         <Textarea
                             label=""
                             value={(*comment_text).clone()}
                             on_change={on_text_change}
-                            placeholder="Write your comment here..."
+                            placeholder={t("maintenance-comment-placeholder")}
                             rows={3}
                             required={true}
                         />
@@ -156,12 +108,12 @@ pub fn comment_section(props: &CommentSectionProps) -> Html {
                             if *submitting {
                                 <>
                                     <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                                    {"Posting..."}
+                                    {t("maintenance-posting")}
                                 </>
                             } else {
                                 <>
                                     <i class="bi bi-send me-2"></i>
-                                    {"Post Comment"}
+                                    {t("maintenance-post-comment")}
                                 </>
                             }
                         </button>
@@ -185,7 +137,7 @@ fn render_comment(
         Callback::from(move |_: MouseEvent| {
             if web_sys::window()
                 .and_then(|w| {
-                    w.confirm_with_message("Are you sure you want to delete this comment?")
+                    w.confirm_with_message(&t("maintenance-delete-comment-confirm"))
                         .ok()
                 })
                 .unwrap_or(false)
@@ -201,7 +153,7 @@ fn render_comment(
                 <div class="flex-grow-1">
                     <div class="d-flex align-items-center mb-1">
                         <strong class="me-2">{&comment.user_name}</strong>
-                        <small class="text-muted">{format_date(comment.created_at.as_ref())}</small>
+                        <small class="text-muted">{format_dt_option(comment.created_at.as_ref())}</small>
                     </div>
                     <p class="mb-0" style="white-space: pre-wrap;">{&comment.comment_text}</p>
                 </div>

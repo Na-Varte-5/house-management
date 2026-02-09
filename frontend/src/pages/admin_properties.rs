@@ -1,13 +1,23 @@
-use yew::prelude::*;
-use serde::Deserialize;
 use crate::components::spinner::Spinner;
 use crate::components::AdminLayout;
-use crate::utils::{auth::current_user, api::api_url};
+use crate::i18n::t;
+use crate::utils::{api::api_url, auth::current_user};
+use serde::Deserialize;
+use yew::prelude::*;
 
 #[derive(Deserialize, Clone, PartialEq)]
-struct Building { id: u64, address: String, construction_year: Option<i32> }
+struct Building {
+    id: u64,
+    address: String,
+    construction_year: Option<i32>,
+}
 #[derive(Deserialize, Clone, PartialEq)]
-struct Apartment { id: u64, building_id: u64, number: String, size_sq_m: Option<f64> }
+struct Apartment {
+    id: u64,
+    building_id: u64,
+    number: String,
+    size_sq_m: Option<f64>,
+}
 
 /// Admin/manager page focused only on buildings, apartments and owner assignments.
 #[function_component(AdminPropertiesPage)]
@@ -18,7 +28,7 @@ pub fn admin_properties_page() -> Html {
         .map(|u| u.roles.iter().any(|r| r == "Admin" || r == "Manager"))
         .unwrap_or(false);
     if !can_manage {
-        return html! {<div class="container mt-4"><div class="alert alert-danger">{"Access denied"}</div></div>};
+        return html! {<div class="container mt-4"><div class="alert alert-danger">{t("admin-access-denied")}</div></div>};
     }
 
     // State copied from ManagePage, but scoped to properties only.
@@ -35,8 +45,8 @@ pub fn admin_properties_page() -> Html {
     let pending_delete_apartment = use_state(|| None::<u64>);
 
     let selected_apartment = use_state(|| None::<u64>);
-    let apartment_owners = use_state(|| Vec::<(u64,String,String)>::new()); // (id,name,email)
-    let all_users = use_state(|| Vec::<(u64,String,String)>::new());
+    let apartment_owners = use_state(|| Vec::<(u64, String, String)>::new()); // (id,name,email)
+    let all_users = use_state(|| Vec::<(u64, String, String)>::new());
     let user_query = use_state(String::default);
 
     let deleted_buildings = use_state(|| Vec::<Building>::new());
@@ -51,7 +61,7 @@ pub fn admin_properties_page() -> Html {
     // ...reuse effects and handlers from ManagePage for buildings/apartments/owners...
 
     html! {
-        <AdminLayout title={"Properties".to_string()} active_route={crate::routes::Route::AdminProperties}>
+        <AdminLayout title={t("admin-properties-title")} active_route={crate::routes::Route::AdminProperties}>
             <div class="container-fluid px-0">
                 // ...reuse the buildings and apartments cards from ManagePage, without announcements...
             </div>

@@ -1,3 +1,4 @@
+use crate::i18n::{t, t_with_args};
 use crate::services::{ApiError, api_client};
 use serde::{Deserialize, Serialize};
 use web_sys::HtmlInputElement;
@@ -104,7 +105,7 @@ pub fn meter_edit_form(props: &MeterEditFormProps) -> Html {
             e.prevent_default();
 
             if edit_serial.trim().is_empty() {
-                on_error.emit("Serial number is required".to_string());
+                on_error.emit(t("meters-serial-required"));
                 return;
             }
 
@@ -142,11 +143,14 @@ pub fn meter_edit_form(props: &MeterEditFormProps) -> Html {
                         updating.set(false);
                     }
                     Err(ApiError::Forbidden) => {
-                        on_error.emit("Permission denied".to_string());
+                        on_error.emit(t("meters-permission-denied"));
                         updating.set(false);
                     }
                     Err(e) => {
-                        on_error.emit(format!("Failed to update meter: {}", e));
+                        on_error.emit(t_with_args(
+                            "meters-failed-load",
+                            &[("error", &e.to_string())],
+                        ));
                         updating.set(false);
                     }
                 }
@@ -157,37 +161,37 @@ pub fn meter_edit_form(props: &MeterEditFormProps) -> Html {
     html! {
         <div class="card mb-4">
             <div class="card-header">
-                <h5>{"Edit/Replace Meter"}</h5>
-                <p class="mb-0 text-muted small">{"Update meter details or replace with a new serial number (e.g., after calibration)"}</p>
+                <h5>{t("meters-edit-title")}</h5>
+                <p class="mb-0 text-muted small">{t("meters-edit-desc")}</p>
             </div>
             <div class="card-body">
                 <form onsubmit={on_submit}>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">{"Meter Type"}</label>
+                            <label class="form-label">{t("meters-detail-meter-type")}</label>
                             <select class="form-select" value={(*edit_meter_type).clone()} onchange={on_meter_type_change} required=true>
-                                <option value="ColdWater">{"Cold Water"}</option>
-                                <option value="HotWater">{"Hot Water"}</option>
-                                <option value="Gas">{"Gas"}</option>
-                                <option value="Electricity">{"Electricity"}</option>
+                                <option value="ColdWater">{t("meters-cold-water")}</option>
+                                <option value="HotWater">{t("meters-hot-water")}</option>
+                                <option value="Gas">{t("meters-gas")}</option>
+                                <option value="Electricity">{t("meters-electricity")}</option>
                             </select>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">{"Serial Number"}</label>
+                            <label class="form-label">{t("meters-serial-number")}</label>
                             <input
                                 type="text"
                                 class="form-control"
                                 value={(*edit_serial).clone()}
                                 oninput={on_serial_change}
-                                placeholder="Enter new serial number"
+                                placeholder={t("meters-edit-serial-placeholder")}
                                 required=true
                             />
-                            <div class="form-text">{"Update this when replacing the physical meter"}</div>
+                            <div class="form-text">{t("meters-edit-serial-help")}</div>
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">{"Installation Date"}</label>
+                            <label class="form-label">{t("meters-installation-date")}</label>
                             <input
                                 type="date"
                                 class="form-control"
@@ -196,14 +200,14 @@ pub fn meter_edit_form(props: &MeterEditFormProps) -> Html {
                             />
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">{"Calibration Due Date"}</label>
+                            <label class="form-label">{t("meters-calibration-due")}</label>
                             <input
                                 type="date"
                                 class="form-control"
                                 value={(*edit_calibration_due).clone()}
                                 oninput={on_calibration_change}
                             />
-                            <div class="form-text">{"Set new calibration due date after replacement"}</div>
+                            <div class="form-text">{t("meters-edit-calibration-help")}</div>
                         </div>
                     </div>
                     <div class="mb-3">
@@ -216,7 +220,7 @@ pub fn meter_edit_form(props: &MeterEditFormProps) -> Html {
                                 onchange={on_visible_change}
                             />
                             <label class="form-check-label" for="edit-visible-check">
-                                {"Visible to Renters"}
+                                {t("meters-visible-to-renters")}
                             </label>
                         </div>
                     </div>
@@ -225,10 +229,10 @@ pub fn meter_edit_form(props: &MeterEditFormProps) -> Html {
                             if *updating {
                                 <span class="spinner-border spinner-border-sm me-2"></span>
                             }
-                            {"Update Meter"}
+                            {t("meters-update-meter")}
                         </button>
                         <button type="button" class="btn btn-secondary" onclick={props.on_cancel.reform(|_| ())}>
-                            {"Cancel"}
+                            {t("button-cancel")}
                         </button>
                     </div>
                 </form>

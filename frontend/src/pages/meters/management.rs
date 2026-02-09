@@ -1,8 +1,8 @@
 use crate::components::meters::{MeterBuilding, MeterList, MeterRegisterForm};
-use crate::components::{AdminLayout, ErrorAlert, SuccessAlert};
+use crate::components::{ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
-use crate::routes::Route;
-use crate::services::api_client;
+use crate::i18n::t;
+use crate::services::api::{PaginatedResponse, api_client};
 use yew::prelude::*;
 
 #[derive(PartialEq, Clone)]
@@ -19,7 +19,7 @@ pub fn meter_management_page() -> Html {
         return html! {
             <div class="container mt-4">
                 <div class="alert alert-danger">
-                    {"Access denied. Only Admins and Managers can access meter management."}
+                    {t("meters-access-denied")}
                 </div>
             </div>
         };
@@ -42,7 +42,11 @@ pub fn meter_management_page() -> Html {
         use_effect_with((), move |_| {
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                match client.get::<Vec<MeterBuilding>>("/buildings").await {
+                match client
+                    .get::<PaginatedResponse<MeterBuilding>>("/buildings")
+                    .await
+                    .map(|r| r.data)
+                {
                     Ok(list) => buildings.set(list),
                     Err(e) => error.set(Some(format!("Failed to load buildings: {}", e))),
                 }
@@ -95,7 +99,8 @@ pub fn meter_management_page() -> Html {
     };
 
     html! {
-        <AdminLayout title="Meter Management" active_route={Route::MeterManagement}>
+        <>
+            <h2 class="mb-3">{t("meters-management-title")}</h2>
             // Tabs
             <ul class="nav nav-tabs mb-3">
                 <li class="nav-item">
@@ -104,7 +109,7 @@ pub fn meter_management_page() -> Html {
                         style="cursor: pointer;"
                         onclick={let on_tab = on_tab_change.clone(); Callback::from(move |_| on_tab(Tab::List))}
                     >
-                        {"List Meters"}
+                        {t("meters-list-meters")}
                     </a>
                 </li>
                 <li class="nav-item">
@@ -113,7 +118,7 @@ pub fn meter_management_page() -> Html {
                         style="cursor: pointer;"
                         onclick={let on_tab = on_tab_change.clone(); Callback::from(move |_| on_tab(Tab::Register))}
                     >
-                        {"Register Meter"}
+                        {t("meters-register-meter-tab")}
                     </a>
                 </li>
             </ul>
@@ -140,6 +145,6 @@ pub fn meter_management_page() -> Html {
                     on_error={on_error}
                 />
             }
-        </AdminLayout>
+        </>
     }
 }

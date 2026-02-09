@@ -1,5 +1,6 @@
 use crate::components::{ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
+use crate::i18n::{t, t_with_args};
 use crate::routes::Route;
 use crate::services::api_client;
 use serde::Deserialize;
@@ -101,13 +102,13 @@ pub fn meter_list_page(props: &Props) -> Html {
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <div>
                     <button class="btn btn-outline-secondary me-2" onclick={on_back}>
-                        <i class="bi bi-arrow-left"></i> {"Back"}
+                        <i class="bi bi-arrow-left"></i> {t("meters-back")}
                     </button>
-                    <h2 class="d-inline">{"Water Meters"}</h2>
+                    <h2 class="d-inline">{t("meters-title")}</h2>
                 </div>
                 if is_admin_or_manager {
                     <button class="btn btn-primary" onclick={on_new_meter}>
-                        {"+ Register New Meter"}
+                        {t("meters-register-new-btn")}
                     </button>
                 }
             </div>
@@ -123,14 +124,14 @@ pub fn meter_list_page(props: &Props) -> Html {
             if *loading {
                 <div class="text-center py-5">
                     <div class="spinner-border" role="status">
-                        <span class="visually-hidden">{"Loading..."}</span>
+                        <span class="visually-hidden">{t("loading")}</span>
                     </div>
                 </div>
             } else if meters.is_empty() {
                 <div class="alert alert-info">
-                    {"No meters registered for this apartment."}
+                    {t("meters-no-meters")}
                     if is_admin_or_manager {
-                        {" Click 'Register New Meter' to add one."}
+                        {" "}{t("meters-empty-state-hint")}
                     }
                 </div>
             } else {
@@ -168,20 +169,20 @@ pub fn meter_list_page(props: &Props) -> Html {
                                     let days_until = (diff_ms / (1000.0 * 60.0 * 60.0 * 24.0)).floor() as i32;
 
                                     if days_until < 0 {
-                                        ("badge bg-danger", format!("Overdue by {} days", -days_until))
+                                        ("badge bg-danger", t_with_args("meters-overdue-by-days", &[("days", &(-days_until).to_string())]))
                                     } else if days_until <= 30 {
-                                        ("badge bg-warning text-dark", format!("Due in {} days", days_until))
+                                        ("badge bg-warning text-dark", t_with_args("meters-due-in-days", &[("days", &days_until.to_string())]))
                                     } else {
-                                        ("badge bg-success", format!("Valid ({} days)", days_until))
+                                        ("badge bg-success", t_with_args("meters-valid-days", &[("days", &days_until.to_string())]))
                                     }
                                 } else {
-                                    ("badge bg-secondary", "Unknown".to_string())
+                                    ("badge bg-secondary", t("meters-unknown"))
                                 }
                             } else {
-                                ("badge bg-secondary", "Unknown".to_string())
+                                ("badge bg-secondary", t("meters-unknown"))
                             }
                         } else {
-                            ("badge bg-secondary", "Not set".to_string())
+                            ("badge bg-secondary", t("meters-not-set"))
                         };
 
                         html! {
@@ -197,13 +198,13 @@ pub fn meter_list_page(props: &Props) -> Html {
                                             </span>
                                         </div>
                                         <p class="card-text text-muted mb-2">
-                                            <small>{"Serial: "}{&meter.serial_number}</small>
+                                            <small>{t("meters-serial-label")}{&meter.serial_number}</small>
                                         </p>
 
                                         if let Some(ref last_value) = meter.last_reading_value {
                                             <div class="mt-3 pt-3 border-top">
                                                 <div class="d-flex justify-content-between">
-                                                    <span class="text-muted">{"Last Reading:"}</span>
+                                                    <span class="text-muted">{t("meters-last-reading-label")}</span>
                                                     <strong>
                                                         { last_value }
                                                         {" "}
@@ -218,13 +219,13 @@ pub fn meter_list_page(props: &Props) -> Html {
                                             </div>
                                         } else {
                                             <div class="mt-3 pt-3 border-top text-muted">
-                                                <em>{"No readings yet"}</em>
+                                                <em>{t("meters-no-readings-short")}</em>
                                             </div>
                                         }
 
                                         if let Some(ref inst_date) = meter.installation_date {
                                             <div class="mt-2 text-muted small">
-                                                {"Installed: "}{inst_date}
+                                                {t("meters-installed-label")}{inst_date}
                                             </div>
                                         }
                                     </div>

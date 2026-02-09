@@ -51,6 +51,38 @@ pub fn t(key: &str) -> String {
     })
 }
 
+pub fn t_with_args(key: &str, args: &[(&str, &str)]) -> String {
+    use fluent_bundle::FluentArgs;
+    BUNDLES.with(|bundles| {
+        let lang = CURRENT_LANG_CODE.with(|l| l.borrow().clone());
+        let mut fluent_args = FluentArgs::new();
+        for (k, v) in args {
+            fluent_args.set(*k, fluent_bundle::FluentValue::from(*v));
+        }
+        if let Some(bundle) = bundles.get(&lang) {
+            if let Some(msg) = bundle.get_message(key) {
+                if let Some(pattern) = msg.value() {
+                    let mut errors = vec![];
+                    let value = bundle.format_pattern(pattern, Some(&fluent_args), &mut errors);
+                    return value.to_string();
+                }
+            }
+        }
+        if lang != "en" {
+            if let Some(bundle) = bundles.get("en") {
+                if let Some(msg) = bundle.get_message(key) {
+                    if let Some(pattern) = msg.value() {
+                        let mut errors = vec![];
+                        let value = bundle.format_pattern(pattern, Some(&fluent_args), &mut errors);
+                        return value.to_string();
+                    }
+                }
+            }
+        }
+        key.to_string()
+    })
+}
+
 pub fn init_translations() {
     BUNDLES.with(|_| {
         if let Some(win) = window() {

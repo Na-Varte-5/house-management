@@ -42,7 +42,7 @@ pub async fn get_dashboard_stats(
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;
-    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+    let user_id = auth.user_id()?;
     let is_admin = auth.has_any_role(&["Admin"]);
     let is_manager = auth.has_any_role(&["Admin", "Manager"]);
 

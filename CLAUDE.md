@@ -281,7 +281,23 @@ Only these endpoint types should NOT require authentication:
 - Component state: Yew hooks (`use_state`, `use_effect`) and props
 - API calls: Always use `api_client(token)` from services module
 
-**i18n**: Fluent-based translations; locale files in `frontend/locales/` and `api/locales/`; detect browser language or allow manual selection
+**i18n (MANDATORY - read carefully)**:
+- Fluent-based translations; locale files in `frontend/locales/` and `api/locales/`; detect browser language or allow manual selection
+- Translation module: `frontend/src/i18n.rs` provides `t(key: &str) -> String` and `t_with_args(key: &str, args: &[(&str, &str)]) -> String`
+- **CRITICAL: When adding ANY new user-facing string to the frontend, you MUST:**
+  1. Add the translation key to BOTH `frontend/locales/en/frontend.ftl` AND `frontend/locales/cs/frontend.ftl`
+  2. Use `t("key")` or `t_with_args("key", &[("var", &val)])` instead of hardcoded English strings
+  3. Reuse existing keys when possible — check the FTL files first before creating new ones
+  4. Use kebab-case with section prefixes for new keys (e.g., `maintenance-title`, `meters-serial-number`)
+  5. Keep both FTL files in sync — never add a key to one without adding it to the other
+- **What gets translated**: Display text in RSX (`{"text"}`), component props (`label="text"`), error/success messages shown to users
+- **What stays in English**: Data/enum values used for filtering/matching (e.g., status strings compared against API responses), CSS class names, API field names
+- **Pattern examples**:
+  - RSX text: `{"Loading..."}` → `{t("common-loading")}`
+  - Props: `label="Email"` → `label=t("login-email")`
+  - With args: `{t_with_args("error-load", &[("error", &e.to_string())])}`
+  - FTL format: `error-load = Failed to load: {$error}`
+- Failing to add i18n entries when adding new strings will cause the app to display raw translation keys to users
 
 **API communication**:
 - **ALWAYS** use `api_client(token)` from `src/services/api.rs`

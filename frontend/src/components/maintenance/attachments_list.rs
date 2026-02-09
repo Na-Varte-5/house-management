@@ -1,3 +1,5 @@
+use crate::i18n::t;
+use crate::utils::datetime::format_dt_option;
 use serde::Deserialize;
 use web_sys::{FormData, HtmlInputElement};
 use yew::prelude::*;
@@ -21,40 +23,6 @@ fn format_file_size(bytes: u64) -> String {
         format!("{:.1} KB", bytes as f64 / 1024.0)
     } else {
         format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
-    }
-}
-
-fn format_date(datetime_str: &Option<String>) -> String {
-    match datetime_str {
-        Some(s) if !s.is_empty() => {
-            let parts: Vec<&str> = s.split('T').collect();
-            if parts.is_empty() {
-                return s.clone();
-            }
-            let date_part = parts[0];
-            let date_parts: Vec<&str> = date_part.split('-').collect();
-            if date_parts.len() == 3 {
-                let month_name = match date_parts[1] {
-                    "01" => "Jan",
-                    "02" => "Feb",
-                    "03" => "Mar",
-                    "04" => "Apr",
-                    "05" => "May",
-                    "06" => "Jun",
-                    "07" => "Jul",
-                    "08" => "Aug",
-                    "09" => "Sep",
-                    "10" => "Oct",
-                    "11" => "Nov",
-                    "12" => "Dec",
-                    _ => date_parts[1],
-                };
-                format!("{} {}, {}", month_name, date_parts[2], date_parts[0])
-            } else {
-                s.clone()
-            }
-        }
-        _ => "Unknown".to_string(),
     }
 }
 
@@ -105,7 +73,7 @@ pub fn attachments_list(props: &AttachmentsListProps) -> Html {
     html! {
         <div class="card mt-3">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">{"Attachments"}</h5>
+                <h5 class="mb-0">{t("maintenance-attachments")}</h5>
                 if props.can_upload {
                     <div>
                         <input
@@ -122,10 +90,10 @@ pub fn attachments_list(props: &AttachmentsListProps) -> Html {
                         >
                             if props.uploading {
                                 <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                {"Uploading..."}
+                                {t("maintenance-uploading")}
                             } else {
                                 <i class="bi bi-upload me-1"></i>
-                                {"Upload File"}
+                                {t("maintenance-upload-file")}
                             }
                         </button>
                     </div>
@@ -137,7 +105,7 @@ pub fn attachments_list(props: &AttachmentsListProps) -> Html {
                         <div class="spinner-border spinner-border-sm" role="status"></div>
                     </div>
                 } else if props.attachments.is_empty() {
-                    <p class="text-muted small mb-0">{"No attachments"}</p>
+                    <p class="text-muted small mb-0">{t("maintenance-no-attachments")}</p>
                 } else {
                     <div class="list-group list-group-flush">
                         {
@@ -164,7 +132,7 @@ pub fn attachments_list(props: &AttachmentsListProps) -> Html {
                                                 <small class="text-muted">
                                                     {format_file_size(att.size_bytes)}
                                                     {" • "}
-                                                    {format_date(&att.created_at)}
+                                                    {format_dt_option(att.created_at.as_ref())}
                                                 </small>
                                             </div>
                                         </div>

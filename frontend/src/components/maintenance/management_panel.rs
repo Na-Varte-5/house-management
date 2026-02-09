@@ -1,3 +1,4 @@
+use crate::i18n::{t, t_with_args};
 use crate::services::{ApiError, api_client};
 use serde::{Deserialize, Serialize};
 use yew::prelude::*;
@@ -76,16 +77,18 @@ pub fn management_panel(props: &ManagementPanelProps) -> Html {
                         .await
                     {
                         Ok(_) => {
-                            on_success.emit("Status updated successfully".to_string());
+                            on_success.emit(t("maintenance-status-updated"));
                             on_update.emit(());
                             new_status.set(None);
                         }
                         Err(ApiError::Forbidden) => {
-                            on_error
-                                .emit("You don't have permission to update requests".to_string());
+                            on_error.emit(t("maintenance-no-permission-update"));
                         }
                         Err(e) => {
-                            on_error.emit(format!("Failed to update status: {}", e));
+                            on_error.emit(t_with_args(
+                                "maintenance-failed-update-status",
+                                &[("error", &e.to_string())],
+                            ));
                         }
                     }
                     updating.set(false);
@@ -127,16 +130,18 @@ pub fn management_panel(props: &ManagementPanelProps) -> Html {
                         .await
                     {
                         Ok(_) => {
-                            on_success.emit("Priority updated successfully".to_string());
+                            on_success.emit(t("maintenance-priority-updated"));
                             on_update.emit(());
                             new_priority.set(None);
                         }
                         Err(ApiError::Forbidden) => {
-                            on_error
-                                .emit("You don't have permission to update requests".to_string());
+                            on_error.emit(t("maintenance-no-permission-update"));
                         }
                         Err(e) => {
-                            on_error.emit(format!("Failed to update priority: {}", e));
+                            on_error.emit(t_with_args(
+                                "maintenance-failed-update-priority",
+                                &[("error", &e.to_string())],
+                            ));
                         }
                     }
                     updating.set(false);
@@ -178,16 +183,18 @@ pub fn management_panel(props: &ManagementPanelProps) -> Html {
                         .await
                     {
                         Ok(_) => {
-                            on_success.emit("Request assigned successfully".to_string());
+                            on_success.emit(t("maintenance-assigned-success"));
                             on_update.emit(());
                             new_assigned.set(None);
                         }
                         Err(ApiError::Forbidden) => {
-                            on_error
-                                .emit("You don't have permission to assign requests".to_string());
+                            on_error.emit(t("maintenance-no-permission-assign"));
                         }
                         Err(e) => {
-                            on_error.emit(format!("Failed to assign request: {}", e));
+                            on_error.emit(t_with_args(
+                                "maintenance-failed-assign",
+                                &[("error", &e.to_string())],
+                            ));
                         }
                     }
                     updating.set(false);
@@ -199,12 +206,12 @@ pub fn management_panel(props: &ManagementPanelProps) -> Html {
     html! {
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">{"Management"}</h5>
+                <h5 class="mb-0">{t("maintenance-management")}</h5>
             </div>
             <div class="card-body">
                 // Update Status
                 <div class="mb-3">
-                    <label class="form-label small fw-semibold">{"Update Status"}</label>
+                    <label class="form-label small fw-semibold">{t("maintenance-update-status")}</label>
                     <select
                         class="form-select form-select-sm mb-2"
                         disabled={*updating}
@@ -220,9 +227,9 @@ pub fn management_panel(props: &ManagementPanelProps) -> Html {
                             })
                         }}
                     >
-                        <option value="Open" selected={props.request.status == "Open"}>{"Open"}</option>
-                        <option value="InProgress" selected={props.request.status == "InProgress"}>{"In Progress"}</option>
-                        <option value="Resolved" selected={props.request.status == "Resolved"}>{"Resolved"}</option>
+                        <option value="Open" selected={props.request.status == "Open"}>{t("maintenance-status-open")}</option>
+                        <option value="InProgress" selected={props.request.status == "InProgress"}>{t("maintenance-status-in-progress")}</option>
+                        <option value="Resolved" selected={props.request.status == "Resolved"}>{t("maintenance-status-resolved")}</option>
                     </select>
                     <button
                         class="btn btn-sm btn-primary w-100"
@@ -232,7 +239,7 @@ pub fn management_panel(props: &ManagementPanelProps) -> Html {
                         if *updating {
                             <span class="spinner-border spinner-border-sm me-1"></span>
                         }
-                        {"Update Status"}
+                        {t("maintenance-update-status-btn")}
                     </button>
                 </div>
 
@@ -240,7 +247,7 @@ pub fn management_panel(props: &ManagementPanelProps) -> Html {
 
                 // Update Priority
                 <div class="mb-3">
-                    <label class="form-label small fw-semibold">{"Update Priority"}</label>
+                    <label class="form-label small fw-semibold">{t("maintenance-update-priority")}</label>
                     <select
                         class="form-select form-select-sm mb-2"
                         disabled={*updating}
@@ -256,10 +263,10 @@ pub fn management_panel(props: &ManagementPanelProps) -> Html {
                             })
                         }}
                     >
-                        <option value="Low" selected={props.request.priority == "Low"}>{"Low"}</option>
-                        <option value="Medium" selected={props.request.priority == "Medium"}>{"Medium"}</option>
-                        <option value="High" selected={props.request.priority == "High"}>{"High"}</option>
-                        <option value="Urgent" selected={props.request.priority == "Urgent"}>{"Urgent"}</option>
+                        <option value="Low" selected={props.request.priority == "Low"}>{t("maintenance-priority-low")}</option>
+                        <option value="Medium" selected={props.request.priority == "Medium"}>{t("maintenance-priority-medium")}</option>
+                        <option value="High" selected={props.request.priority == "High"}>{t("maintenance-priority-high")}</option>
+                        <option value="Urgent" selected={props.request.priority == "Urgent"}>{t("maintenance-priority-urgent")}</option>
                     </select>
                     <button
                         class="btn btn-sm btn-primary w-100"
@@ -269,7 +276,7 @@ pub fn management_panel(props: &ManagementPanelProps) -> Html {
                         if *updating {
                             <span class="spinner-border spinner-border-sm me-1"></span>
                         }
-                        {"Update Priority"}
+                        {t("maintenance-update-priority-btn")}
                     </button>
                 </div>
 
@@ -277,7 +284,7 @@ pub fn management_panel(props: &ManagementPanelProps) -> Html {
 
                 // Assign User
                 <div class="mb-3">
-                    <label class="form-label small fw-semibold">{"Assign To"}</label>
+                    <label class="form-label small fw-semibold">{t("maintenance-assign-to")}</label>
                     <select
                         class="form-select form-select-sm mb-2"
                         disabled={*updating}
@@ -299,7 +306,7 @@ pub fn management_panel(props: &ManagementPanelProps) -> Html {
                             })
                         }}
                     >
-                        <option value="">{"-- Unassigned --"}</option>
+                        <option value="">{t("maintenance-unassigned-option")}</option>
                         {
                             for props.users.iter().map(|user| {
                                 let is_selected = props.request.assigned_to == Some(user.id);
@@ -319,7 +326,7 @@ pub fn management_panel(props: &ManagementPanelProps) -> Html {
                         if *updating {
                             <span class="spinner-border spinner-border-sm me-1"></span>
                         }
-                        {"Assign Request"}
+                        {t("maintenance-assign-request-btn")}
                     </button>
                 </div>
             </div>

@@ -1,7 +1,7 @@
 use crate::components::announcement_editor_form::AnnouncementEditorForm;
 use crate::contexts::AuthContext;
 use crate::i18n::t;
-use crate::services::api_client;
+use crate::services::api::{PaginatedResponse, api_client};
 use serde::{Deserialize, Serialize};
 use yew::prelude::*;
 
@@ -162,10 +162,15 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
     // Load buildings
     {
         let buildings_state = buildings.clone();
+        let token = token.clone();
         use_effect_with((), move |_| {
             wasm_bindgen_futures::spawn_local(async move {
-                let client = api_client(None);
-                if let Ok(list) = client.get::<Vec<BuildingDto>>("/buildings").await {
+                let client = api_client(token.as_deref());
+                if let Ok(list) = client
+                    .get::<PaginatedResponse<BuildingDto>>("/buildings")
+                    .await
+                    .map(|r| r.data)
+                {
                     let mapped = list.into_iter().map(|b| (b.id, b.address)).collect();
                     buildings_state.set(mapped);
                 }
@@ -178,12 +183,13 @@ pub fn announcement_editor(props: &EditorProps) -> Html {
     {
         let apartments_state = apartments.clone();
         let selected_building_state = selected_building.clone();
+        let token = token.clone();
         use_effect_with(selected_building.clone(), move |_| {
             apartments_state.set(Vec::new());
             if let Some(bid) = *selected_building_state {
                 let apartments_state2 = apartments_state.clone();
                 wasm_bindgen_futures::spawn_local(async move {
-                    let client = api_client(None);
+                    let client = api_client(token.as_deref());
                     let endpoint = format!("/buildings/{}/apartments", bid);
                     if let Ok(list) = client.get::<Vec<ApartmentDto>>(&endpoint).await {
                         let mapped = list

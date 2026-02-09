@@ -1,5 +1,6 @@
 use crate::components::{ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
+use crate::i18n::{t, t_with_args};
 use crate::routes::Route;
 use crate::services::api_client;
 use serde::Deserialize;
@@ -28,7 +29,7 @@ pub fn meter_calibration_page() -> Html {
         return html! {
             <div class="container mt-4">
                 <div class="alert alert-danger">
-                    {"Access denied. Only Admins and Managers can view the calibration dashboard."}
+                    {t("meters-access-denied")}
                 </div>
             </div>
         };
@@ -102,15 +103,15 @@ pub fn meter_calibration_page() -> Html {
     html! {
         <div class="container mt-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h2>{"Calibration Dashboard"}</h2>
+                <h2>{t("meters-calibration-dashboard")}</h2>
                 <div class="d-flex align-items-center gap-2">
-                    <label class="form-label mb-0">{"Show meters due within:"}</label>
+                    <label class="form-label mb-0">{t("meters-show-due-within")}</label>
                     <select class="form-select" style="width: auto;" value={days_before.to_string()} onchange={on_days_change}>
-                        <option value="7">{"7 days"}</option>
-                        <option value="30">{"30 days"}</option>
-                        <option value="60">{"60 days"}</option>
-                        <option value="90">{"90 days"}</option>
-                        <option value="365">{"1 year"}</option>
+                        <option value="7">{t("calibration-7-days")}</option>
+                        <option value="30">{t("calibration-30-days")}</option>
+                        <option value="60">{t("calibration-60-days")}</option>
+                        <option value="90">{t("calibration-90-days")}</option>
+                        <option value="365">{t("calibration-1-year")}</option>
                     </select>
                 </div>
             </div>
@@ -126,18 +127,18 @@ pub fn meter_calibration_page() -> Html {
             if *loading {
                 <div class="text-center py-5">
                     <div class="spinner-border" role="status">
-                        <span class="visually-hidden">{"Loading..."}</span>
+                        <span class="visually-hidden">{t("loading")}</span>
                     </div>
                 </div>
             } else if meters.is_empty() {
                 <div class="alert alert-success">
                     <i class="bi bi-check-circle"></i>
-                    {" No meters requiring calibration in the selected time period."}
+                    {" "}{t("calibration-no-meters-period")}
                 </div>
             } else {
                 <div class="alert alert-info mb-4">
                     <i class="bi bi-info-circle"></i>
-                    {format!(" {} meter(s) requiring calibration within {} days", meters.len(), *days_before)}
+                    {" "}{t_with_args("calibration-meters-count", &[("count", &meters.len().to_string()), ("days", &days_before.to_string())])}
                 </div>
 
                 <div class="row">
@@ -174,22 +175,22 @@ pub fn meter_calibration_page() -> Html {
                                     let days_until = (diff_ms / (1000.0 * 60.0 * 60.0 * 24.0)).floor() as i32;
 
                                     if days_until < 0 {
-                                        ("card border-danger", "badge bg-danger", format!("OVERDUE by {} days", -days_until))
+                                        ("card border-danger", "badge bg-danger", t_with_args("meters-overdue-label", &[("days", &(-days_until).to_string())]))
                                     } else if days_until <= 7 {
-                                        ("card border-danger", "badge bg-danger", format!("Due in {} days", days_until))
+                                        ("card border-danger", "badge bg-danger", t_with_args("meters-due-in-days", &[("days", &days_until.to_string())]))
                                     } else if days_until <= 30 {
-                                        ("card border-warning", "badge bg-warning text-dark", format!("Due in {} days", days_until))
+                                        ("card border-warning", "badge bg-warning text-dark", t_with_args("meters-due-in-days", &[("days", &days_until.to_string())]))
                                     } else {
-                                        ("card border-info", "badge bg-info", format!("Due in {} days", days_until))
+                                        ("card border-info", "badge bg-info", t_with_args("meters-due-in-days", &[("days", &days_until.to_string())]))
                                     }
                                 } else {
-                                    ("card", "badge bg-secondary", "Unknown".to_string())
+                                    ("card", "badge bg-secondary", t("meters-unknown"))
                                 }
                             } else {
-                                ("card", "badge bg-secondary", "Unknown".to_string())
+                                ("card", "badge bg-secondary", t("meters-unknown"))
                             }
                         } else {
-                            ("card", "badge bg-secondary", "Not set".to_string())
+                            ("card", "badge bg-secondary", t("meters-not-set"))
                         };
 
                         html! {
@@ -206,32 +207,32 @@ pub fn meter_calibration_page() -> Html {
                                         </div>
 
                                         <p class="card-text text-muted mb-2">
-                                            <small>{"Serial: "}{&meter.serial_number}</small>
+                                            <small>{t("meters-calibration-serial")}{&meter.serial_number}</small>
                                         </p>
 
                                         <div class="mt-3 pt-3 border-top">
                                             if let Some(ref due_date) = meter.calibration_due_date {
                                                 <p class="mb-1">
-                                                    <strong>{"Calibration Due:"}</strong>
+                                                     <strong>{t("meters-calibration-due-label")}</strong>
                                                     <br/>
                                                     {due_date}
                                                 </p>
                                             }
                                             if let Some(ref last_cal) = meter.last_calibration_date {
                                                 <p class="mb-1 text-muted">
-                                                    <small>{"Last Calibrated: "}{last_cal}</small>
+                                                     <small>{t("meters-calibration-last")}{last_cal}</small>
                                                 </p>
                                             }
                                             if let Some(ref inst_date) = meter.installation_date {
                                                 <p class="mb-0 text-muted">
-                                                    <small>{"Installed: "}{inst_date}</small>
+                                                     <small>{t("meters-calibration-installed")}{inst_date}</small>
                                                 </p>
                                             }
                                         </div>
 
                                         <div class="mt-3">
                                             <small class="text-muted">
-                                                {"Click to view meter details and record calibration"}
+                                                {t("meters-calibration-click")}
                                             </small>
                                         </div>
                                     </div>
@@ -242,19 +243,19 @@ pub fn meter_calibration_page() -> Html {
                 </div>
 
                 <div class="alert alert-light mt-4">
-                    <h6>{"Legend:"}</h6>
+                    <h6>{t("meters-calibration-legend")}</h6>
                     <div class="d-flex flex-wrap gap-3">
                         <div>
-                            <span class="badge bg-danger">{"Overdue / Due in ≤7 days"}</span>
-                            {" - Immediate action required"}
+                            <span class="badge bg-danger">{t("meters-calibration-overdue-legend")}</span>
+                            {" "}{t("calibration-action-immediate")}
                         </div>
                         <div>
-                            <span class="badge bg-warning text-dark">{"Due in 8-30 days"}</span>
-                            {" - Schedule calibration soon"}
+                            <span class="badge bg-warning text-dark">{t("meters-calibration-warning-legend")}</span>
+                            {" "}{t("calibration-action-schedule")}
                         </div>
                         <div>
-                            <span class="badge bg-info">{"Due in >30 days"}</span>
-                            {" - Monitor"}
+                            <span class="badge bg-info">{t("meters-calibration-info-legend")}</span>
+                            {" "}{t("calibration-action-monitor")}
                         </div>
                     </div>
                 </div>

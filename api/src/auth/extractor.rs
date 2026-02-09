@@ -10,6 +10,13 @@ pub struct AuthContext {
 }
 
 impl AuthContext {
+    pub fn user_id(&self) -> Result<u64, AppError> {
+        self.claims
+            .sub
+            .parse::<u64>()
+            .map_err(|_| AppError::Unauthorized)
+    }
+
     pub fn has_any_role(&self, roles: &[&str]) -> bool {
         crate::auth::roles::has_any_role(&self.claims.roles, roles)
     }

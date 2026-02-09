@@ -152,6 +152,9 @@ use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
             crate::users::SetRolesRequest,
             crate::users::UserRolesResponse,
             crate::users::UserWithRoles,
+
+            // Pagination types
+            crate::pagination::PaginationMeta,
         )
     ),
     tags(

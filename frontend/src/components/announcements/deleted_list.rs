@@ -1,3 +1,4 @@
+use crate::i18n::t;
 use yew::prelude::*;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -18,9 +19,9 @@ pub struct DeletedAnnouncementsListProps {
 pub fn deleted_announcements_list(props: &DeletedAnnouncementsListProps) -> Html {
     html! {
         <div class="mt-3">
-            <h6>{"Deleted"}</h6>
+            <h6>{t("announcement-deleted")}</h6>
             { if props.announcements.is_empty() {
-                html!{<div class="text-muted small">{"None"}</div>}
+                html!{<div class="text-muted small">{t("announcement-deleted-none")}</div>}
             } else {
                 html!{
                     <>
@@ -37,13 +38,13 @@ pub fn deleted_announcements_list(props: &DeletedAnnouncementsListProps) -> Html
                                                 class="btn btn-outline-success"
                                                 onclick={Callback::from(move |_| restore_cb.emit(id))}
                                             >
-                                                {"Restore"}
+                                                {t("announcement-restore-btn")}
                                             </button>
                                             <button
                                                 class="btn btn-outline-danger"
                                                 onclick={Callback::from(move |_| purge_cb.emit(id))}
                                             >
-                                                {"Purge"}
+                                                {t("announcement-purge-btn")}
                                             </button>
                                         </div>
                                     </div>

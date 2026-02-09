@@ -1,3 +1,4 @@
+use crate::i18n::t;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
@@ -20,7 +21,7 @@ pub fn error_alert(props: &ErrorAlertProps) -> Html {
 
     html! {
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <strong>{"Error: "}</strong> {&props.message}
+            <strong>{t("error-prefix")}{" "}</strong> {&props.message}
             if props.on_close.is_some() {
                 <button type="button" class="btn-close" onclick={on_close_click} aria-label="Close"></button>
             }

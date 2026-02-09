@@ -1,3 +1,4 @@
+use crate::i18n::t;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
@@ -22,12 +23,12 @@ pub fn building_form(props: &BuildingFormProps) -> Html {
 
     html! {
         <form onsubmit={on_submit}>
-            <h6 class="small fw-semibold mb-2">{"Create New Building"}</h6>
+            <h6 class="small fw-semibold mb-2">{t("properties-create-building")}</h6>
             <div class="mb-2">
                 <input
                     type="text"
                     class="form-control form-control-sm"
-                    placeholder="Address"
+                    placeholder={t("properties-address-placeholder")}
                     value={props.address.clone()}
                     disabled={props.submitting}
                     oninput={{
@@ -43,7 +44,7 @@ pub fn building_form(props: &BuildingFormProps) -> Html {
                 <input
                     type="number"
                     class="form-control form-control-sm"
-                    placeholder="Construction Year (optional)"
+                    placeholder={t("properties-construction-year-placeholder")}
                     value={props.year.clone()}
                     disabled={props.submitting}
                     oninput={{
@@ -63,7 +64,7 @@ pub fn building_form(props: &BuildingFormProps) -> Html {
                 if props.submitting {
                     <span class="spinner-border spinner-border-sm me-1" role="status"></span>
                 }
-                {"Create Building"}
+                {t("properties-create-building-btn")}
             </button>
         </form>
     }

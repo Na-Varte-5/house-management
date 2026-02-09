@@ -4,6 +4,7 @@ use yew_router::prelude::*;
 
 use crate::components::ErrorAlert;
 use crate::contexts::AuthContext;
+use crate::i18n::{t, t_with_args};
 use crate::routes::Route;
 use crate::services::api_client;
 
@@ -63,7 +64,10 @@ pub fn building_apartments_page() -> Html {
                         loading.set(false);
                     }
                     (Err(e), _) | (_, Err(e)) => {
-                        error.set(Some(format!("Failed to load data: {}", e)));
+                        error.set(Some(t_with_args(
+                            "buildings-failed-load-data",
+                            &[("error", &e.to_string())],
+                        )));
                         loading.set(false);
                     }
                 }
@@ -80,14 +84,11 @@ pub fn building_apartments_page() -> Html {
     html! {
         <div class="container mt-4">
             <h3>
-                {"Apartments in "}
-                {
-                    if let Some(ref b) = *building {
-                        b.address.clone()
-                    } else {
-                        format!("Building {}", building_id)
-                    }
-                }
+                {t_with_args("buildings-apartments-in", &[("address", &if let Some(ref b) = *building {
+                    b.address.clone()
+                } else {
+                    format!("Building {}", building_id)
+                })])}
             </h3>
 
             if let Some(err) = (*error).clone() {
@@ -97,20 +98,20 @@ pub fn building_apartments_page() -> Html {
             if *loading {
                 <div class="text-center py-5">
                     <div class="spinner-border" role="status">
-                        <span class="visually-hidden">{"Loading..."}</span>
+                        <span class="visually-hidden">{t("loading")}</span>
                     </div>
                 </div>
             } else if (*apartments).is_empty() {
                 <div class="alert alert-info">
-                    {"No apartments found in this building that you have access to."}
+                    {t("buildings-no-access")}
                 </div>
             } else {
                 <table class="table table-striped">
                     <thead>
                         <tr>
-                            <th>{"ID"}</th>
-                            <th>{"Number"}</th>
-                            <th>{"Size (m²)"}</th>
+                            <th>{t("buildings-id")}</th>
+                            <th>{t("buildings-number")}</th>
+                            <th>{t("buildings-size")}</th>
                         </tr>
                     </thead>
                     <tbody>

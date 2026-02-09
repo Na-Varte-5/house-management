@@ -1,4 +1,5 @@
 use crate::components::{Select, SelectOption, TextInput};
+use crate::i18n::t;
 use crate::routes::Route;
 use crate::services::api_client;
 use serde::Deserialize;
@@ -286,14 +287,14 @@ pub fn meter_list(props: &MeterListProps) -> Html {
                     html! {
                         <div class="text-center py-5">
                             <div class="spinner-border" role="status">
-                                <span class="visually-hidden">{"Loading..."}</span>
+                                <span class="visually-hidden">{t("loading")}</span>
                             </div>
                         </div>
                     }
                 } else if filtered_meters.is_empty() {
                     html! {
                         <div class="alert alert-info">
-                            {"No meters found. Register a meter to get started."}
+                            {t("meters-no-meters-found")}
                         </div>
                     }
                 } else {
@@ -302,14 +303,14 @@ pub fn meter_list(props: &MeterListProps) -> Html {
                             <table class="table table-hover">
                                 <thead>
                                     <tr>
-                                        <th>{"Building"}</th>
-                                        <th>{"Apartment"}</th>
-                                        <th>{"Type"}</th>
-                                        <th>{"Serial Number"}</th>
-                                        <th>{"Last Reading"}</th>
-                                        <th>{"Installation Date"}</th>
-                                        <th>{"Calibration Due"}</th>
-                                        <th>{"Cal. Status"}</th>
+                                        <th>{t("meters-building")}</th>
+                                        <th>{t("meters-apartment")}</th>
+                                        <th>{t("meters-type")}</th>
+                                        <th>{t("meters-serial-number")}</th>
+                                        <th>{t("meters-last-reading")}</th>
+                                        <th>{t("meters-installation-date")}</th>
+                                        <th>{t("meters-calibration-due")}</th>
+                                        <th>{t("meters-calibration-status")}</th>
                                     </tr>
                                 </thead>
                                 <tbody>

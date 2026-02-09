@@ -29,6 +29,20 @@ impl fmt::Display for ApiError {
 
 pub type ApiResult<T> = Result<T, ApiError>;
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct PaginatedResponse<T> {
+    pub data: Vec<T>,
+    pub pagination: PaginationMeta,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PaginationMeta {
+    pub page: i64,
+    pub per_page: i64,
+    pub total: i64,
+    pub total_pages: i64,
+}
+
 pub struct ApiClient {
     base_url: String,
     token: Option<String>,

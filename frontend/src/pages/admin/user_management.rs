@@ -1,5 +1,6 @@
-use crate::components::{AdminLayout, ErrorAlert};
+use crate::components::ErrorAlert;
 use crate::contexts::AuthContext;
+use crate::i18n::t;
 use crate::services::{ApiError, api_client};
 use serde::{Deserialize, Serialize};
 use yew::prelude::*;
@@ -33,7 +34,7 @@ pub fn admin_page() -> Html {
         return html! {
             <div class="container mt-4">
                 <div class="alert alert-danger">
-                    <strong>{"Access denied"}</strong>
+                    <strong>{t("admin-access-denied")}</strong>
                     <p class="mb-0 small">{"Only Admins can access user management."}</p>
                 </div>
             </div>
@@ -204,7 +205,8 @@ pub fn admin_page() -> Html {
     };
 
     html! {
-        <AdminLayout title={"Admin - User Management".to_string()} active_route={crate::routes::Route::Admin}>
+        <>
+            <h2 class="mb-3">{"User Management"}</h2>
             <div class="card">
                 <div class="card-body">
                     if let Some(err) = (*error).clone() {
@@ -221,21 +223,21 @@ pub fn admin_page() -> Html {
                     if *loading {
                         <div class="text-center py-5">
                             <div class="spinner-border" role="status">
-                                <span class="visually-hidden">{"Loading users..."}</span>
+                                <span class="visually-hidden">{t("user-mgmt-loading")}</span>
                             </div>
                         </div>
                     } else if (*users).is_empty() {
-                        <div class="alert alert-info">{"No users found."}</div>
+                        <div class="alert alert-info">{t("user-mgmt-no-users")}</div>
                     } else {
                         <div class="table-responsive">
                             <table class="table table-sm table-striped mb-0">
                                 <thead>
                                     <tr>
-                                        <th>{"ID"}</th>
-                                        <th>{"Name"}</th>
-                                        <th>{"Email"}</th>
-                                        <th>{"Roles"}</th>
-                                        <th>{"Add Role"}</th>
+                                        <th>{t("user-mgmt-id")}</th>
+                                        <th>{t("user-mgmt-name")}</th>
+                                        <th>{t("user-mgmt-email")}</th>
+                                        <th>{t("user-mgmt-roles")}</th>
+                                        <th>{t("user-mgmt-add-role")}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -280,7 +282,7 @@ pub fn admin_page() -> Html {
                                                             })
                                                         }}
                                                     >
-                                                        <option value="">{"-- Select Role --"}</option>
+                                                        <option value="">{t("user-mgmt-select-role")}</option>
                                                         { for ALL_ROLES.iter().map(|r| {
                                                             html! { <option value={r.to_string()}>{r.to_string()}</option> }
                                                         }) }
@@ -293,11 +295,11 @@ pub fn admin_page() -> Html {
                             </table>
                         </div>
                         <p class="small text-muted mt-3 mb-0">
-                            {"Remove a role by clicking the × on its badge. Add a role using the dropdown."}
+                            {t("user-mgmt-help")}
                         </p>
                     }
                 </div>
             </div>
-        </AdminLayout>
+        </>
     }
 }

@@ -1,5 +1,6 @@
 use crate::components::AdminLayout;
 use crate::contexts::AuthContext;
+use crate::i18n::t;
 use crate::routes::Route;
 use yew::prelude::*;
 use yew_router::prelude::*;
@@ -12,44 +13,44 @@ pub fn manage_page() -> Html {
         return html! {
             <div class="container mt-4">
                 <div class="alert alert-danger">
-                    <strong>{"Access denied"}</strong>
-                    <p class="mb-0 small">{"You need Admin or Manager permissions to access this page."}</p>
+                    <strong>{t("admin-access-denied")}</strong>
+                    <p class="mb-0 small">{t("admin-need-permission")}</p>
                 </div>
             </div>
         };
     }
 
     html! {
-        <AdminLayout title={"Dashboard".to_string()} active_route={Route::Manage}>
+        <AdminLayout title={t("manage-dashboard-title")} active_route={Route::Manage}>
             <div class="container-fluid px-0 mt-2">
                 <div class="alert alert-info small">
-                    {"Use the sidebar or the quick links below to manage users, announcements, and properties."}
+                    {t("manage-dashboard-desc")}
                 </div>
                 <div class="row g-3 mt-1">
                     <div class="col-md-4">
                         <div class="card h-100">
                             <div class="card-body d-flex flex-column">
-                                <h5 class="card-title">{"User Management"}</h5>
-                                <p class="card-text small text-muted flex-grow-1">{"View users and assign roles."}</p>
-                                <Link<Route> to={Route::Admin} classes="btn btn-sm btn-primary mt-2">{"Go to users"}</Link<Route>>
+                                <h5 class="card-title">{t("manage-user-management")}</h5>
+                                <p class="card-text small text-muted flex-grow-1">{t("manage-user-management-desc")}</p>
+                                <Link<Route> to={Route::Admin} classes="btn btn-sm btn-primary mt-2">{t("manage-go-to-users")}</Link<Route>>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="card h-100">
                             <div class="card-body d-flex flex-column">
-                                <h5 class="card-title">{"Announcements"}</h5>
-                                <p class="card-text small text-muted flex-grow-1">{"Create and manage building/community announcements."}</p>
-                                <Link<Route> to={Route::AdminAnnouncements} classes="btn btn-sm btn-primary mt-2">{"Go to announcements"}</Link<Route>>
+                                <h5 class="card-title">{t("manage-announcements")}</h5>
+                                <p class="card-text small text-muted flex-grow-1">{t("manage-announcements-desc")}</p>
+                                <Link<Route> to={Route::AdminAnnouncements} classes="btn btn-sm btn-primary mt-2">{t("manage-go-to-announcements")}</Link<Route>>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="card h-100">
                             <div class="card-body d-flex flex-column">
-                                <h5 class="card-title">{"Properties"}</h5>
-                                <p class="card-text small text-muted flex-grow-1">{"Manage buildings, apartments, and owners."}</p>
-                                <Link<Route> to={Route::AdminProperties} classes="btn btn-sm btn-primary mt-2">{"Go to properties"}</Link<Route>>
+                                <h5 class="card-title">{t("manage-properties")}</h5>
+                                <p class="card-text small text-muted flex-grow-1">{t("manage-properties-desc")}</p>
+                                <Link<Route> to={Route::AdminProperties} classes="btn btn-sm btn-primary mt-2">{t("manage-go-to-properties")}</Link<Route>>
                             </div>
                         </div>
                     </div>

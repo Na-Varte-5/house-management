@@ -1,7 +1,10 @@
 use crate::components::ErrorAlert;
+use crate::components::pagination::Pagination;
+use crate::components::search_input::SearchInput;
 use crate::contexts::AuthContext;
+use crate::i18n::t;
 use crate::routes::Route;
-use crate::services::api_client;
+use crate::services::api::{PaginatedResponse, PaginationMeta, api_client};
 use serde::Deserialize;
 use std::collections::HashMap;
 use yew::prelude::*;
@@ -30,27 +33,37 @@ pub fn maintenance_list_page() -> Html {
     let navigator = use_navigator().unwrap();
 
     let requests = use_state(|| Vec::<MaintenanceRequest>::new());
+    let pagination_meta = use_state(|| None::<PaginationMeta>);
+    let current_page = use_state(|| 1i64);
     let filter_status = use_state(|| "All".to_string());
+    let search_query = use_state(String::default);
     let loading = use_state(|| true);
     let error = use_state(|| None::<String>);
 
-    // Load requests on mount
     {
         let requests = requests.clone();
+        let pagination_meta = pagination_meta.clone();
         let loading = loading.clone();
         let error = error.clone();
         let token = auth.token().map(|t| t.to_string());
+        let page = *current_page;
 
-        use_effect_with((), move |_| {
+        use_effect_with(page, move |_| {
             wasm_bindgen_futures::spawn_local(async move {
+                loading.set(true);
                 let client = api_client(token.as_deref());
-                match client.get::<Vec<MaintenanceRequest>>("/requests").await {
-                    Ok(list) => {
-                        requests.set(list);
+                let url = format!("/requests?page={}&per_page=20", page);
+                match client
+                    .get::<PaginatedResponse<MaintenanceRequest>>(&url)
+                    .await
+                {
+                    Ok(resp) => {
+                        pagination_meta.set(Some(resp.pagination));
+                        requests.set(resp.data);
                         loading.set(false);
                     }
                     Err(e) => {
-                        error.set(Some(format!("Failed to load requests: {}", e)));
+                        error.set(Some(format!("{}: {}", t("error-load-failed"), e)));
                         loading.set(false);
                     }
                 }
@@ -71,18 +84,32 @@ pub fn maintenance_list_page() -> Html {
         Callback::from(move |_| error.set(None))
     };
 
-    // Filter requests by status
-    let filtered_requests: Vec<MaintenanceRequest> = if *filter_status == "All" {
-        (*requests).clone()
-    } else {
-        requests
-            .iter()
-            .filter(|r| r.status == *filter_status)
-            .cloned()
-            .collect()
+    let on_page_change = {
+        let current_page = current_page.clone();
+        Callback::from(move |page: i64| {
+            current_page.set(page);
+        })
     };
 
-    // Group requests by building
+    let on_search_change = {
+        let search_query = search_query.clone();
+        Callback::from(move |val: String| search_query.set(val))
+    };
+
+    let query_lower = search_query.to_lowercase();
+    let filtered_requests: Vec<MaintenanceRequest> = requests
+        .iter()
+        .filter(|r| *filter_status == "All" || r.status == *filter_status)
+        .filter(|r| {
+            query_lower.is_empty()
+                || r.title.to_lowercase().contains(&query_lower)
+                || r.description.to_lowercase().contains(&query_lower)
+                || r.apartment_number.to_lowercase().contains(&query_lower)
+                || r.building_address.to_lowercase().contains(&query_lower)
+        })
+        .cloned()
+        .collect();
+
     let mut grouped_requests: HashMap<u64, (String, Vec<MaintenanceRequest>)> = HashMap::new();
     for req in filtered_requests.iter() {
         grouped_requests
@@ -92,14 +119,12 @@ pub fn maintenance_list_page() -> Html {
             .push(req.clone());
     }
 
-    // Sort buildings by address
     let mut building_groups: Vec<(u64, String, Vec<MaintenanceRequest>)> = grouped_requests
         .into_iter()
         .map(|(id, (addr, reqs))| (id, addr, reqs))
         .collect();
     building_groups.sort_by(|a, b| a.1.cmp(&b.1));
 
-    // Priority badge color
     let priority_class = |priority: &str| match priority {
         "Urgent" => "bg-danger",
         "High" => "bg-warning text-dark",
@@ -108,7 +133,6 @@ pub fn maintenance_list_page() -> Html {
         _ => "bg-light text-dark",
     };
 
-    // Status badge color
     let status_class = |status: &str| match status {
         "Open" => "bg-primary",
         "InProgress" => "bg-warning text-dark",
@@ -116,12 +140,14 @@ pub fn maintenance_list_page() -> Html {
         _ => "bg-secondary",
     };
 
+    let meta = (*pagination_meta).clone();
+
     html! {
         <div class="container mt-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h2>{"Maintenance Requests"}</h2>
+                <h2>{t("maintenance-title")}</h2>
                 <button class="btn btn-primary" onclick={on_new_request}>
-                    {"+ New Request"}
+                    {t("maintenance-new-request")}
                 </button>
             </div>
 
@@ -129,13 +155,20 @@ pub fn maintenance_list_page() -> Html {
                 <ErrorAlert message={err} on_close={clear_error.clone()} />
             }
 
-            // Filter buttons
-            <div class="btn-group mb-3" role="group">
-                {
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                <div class="btn-group" role="group">
+                    {
                     for ["All", "Open", "InProgress", "Resolved"].iter().map(|status| {
                         let status_str = status.to_string();
                         let filter_status = filter_status.clone();
                         let is_active = *filter_status == status_str;
+                        let display = match *status {
+                            "All" => t("maintenance-status-all"),
+                            "Open" => t("maintenance-status-open"),
+                            "InProgress" => t("maintenance-status-in-progress"),
+                            "Resolved" => t("maintenance-status-resolved"),
+                            _ => status_str.clone(),
+                        };
                         html! {
                             <button
                                 type="button"
@@ -145,26 +178,32 @@ pub fn maintenance_list_page() -> Html {
                                     Callback::from(move |_| filter_status.set(status_str.clone()))
                                 }}
                             >
-                                {status_str}
+                                {display}
                             </button>
                         }
                     })
                 }
+                </div>
+                <SearchInput
+                    value={(*search_query).clone()}
+                    on_change={on_search_change}
+                    placeholder={t("maintenance-search-placeholder")}
+                />
             </div>
 
             if *loading {
                 <div class="text-center py-5">
                     <div class="spinner-border" role="status">
-                        <span class="visually-hidden">{"Loading..."}</span>
+                        <span class="visually-hidden">{t("loading")}</span>
                     </div>
                 </div>
             } else if filtered_requests.is_empty() {
                 <div class="alert alert-info">
                     {
                         if *filter_status == "All" {
-                            "No maintenance requests found. Create your first request above."
+                            t("maintenance-no-requests")
                         } else {
-                            "No requests with this status."
+                            t("maintenance-no-requests-status")
                         }
                     }
                 </div>
@@ -208,7 +247,7 @@ pub fn maintenance_list_page() -> Html {
                                                                     <small class="text-muted">{&req.request_type}</small>
                                                                 </div>
                                                                 <small class="text-muted d-block mt-2">
-                                                                    {"Apartment "}{&req.apartment_number}
+                                                                    {t("label-apartment")}{" "}{&req.apartment_number}
                                                                 </small>
                                                             </div>
                                                         </div>
@@ -222,6 +261,15 @@ pub fn maintenance_list_page() -> Html {
                         })
                     }
                 </div>
+
+                if let Some(ref m) = meta {
+                    <Pagination
+                        current_page={m.page}
+                        total_pages={m.total_pages}
+                        total_items={m.total}
+                        on_page_change={on_page_change.clone()}
+                    />
+                }
             }
         </div>
     }

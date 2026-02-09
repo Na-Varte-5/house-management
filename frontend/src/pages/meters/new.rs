@@ -1,6 +1,8 @@
 use crate::components::{ErrorAlert, SuccessAlert};
 use crate::contexts::AuthContext;
+use crate::i18n::t;
 use crate::routes::Route;
+use crate::services::api::PaginatedResponse;
 use crate::services::{ApiError, api_client};
 use serde::{Deserialize, Serialize};
 use web_sys::HtmlInputElement;
@@ -46,7 +48,7 @@ pub fn meter_new_page() -> Html {
         return html! {
             <div class="container mt-4">
                 <div class="alert alert-danger">
-                    {"Access denied. Only Admins and Managers can register meters."}
+                    {t("meters-access-denied")}
                 </div>
             </div>
         };
@@ -80,7 +82,11 @@ pub fn meter_new_page() -> Html {
         use_effect_with((), move |_| {
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                match client.get::<Vec<Building>>("/buildings").await {
+                match client
+                    .get::<PaginatedResponse<Building>>("/buildings")
+                    .await
+                    .map(|r| r.data)
+                {
                     Ok(list) => {
                         buildings.set(list);
                         loading_buildings.set(false);
@@ -204,12 +210,12 @@ pub fn meter_new_page() -> Html {
             e.prevent_default();
 
             if *apartment_id == 0 {
-                error.set(Some("Please select an apartment".to_string()));
+                error.set(Some(t("meters-select-apartment-error")));
                 return;
             }
 
             if serial_number.trim().is_empty() {
-                error.set(Some("Serial number is required".to_string()));
+                error.set(Some(t("meters-serial-required")));
                 return;
             }
 
@@ -243,7 +249,7 @@ pub fn meter_new_page() -> Html {
                 let client = api_client(token.as_deref());
                 match client.post::<_, Meter>("/meters", &payload).await {
                     Ok(meter) => {
-                        success.set(Some("Meter registered successfully".to_string()));
+                        success.set(Some(t("meters-register-success")));
                         submitting.set(false);
 
                         // Navigate to meter detail after short delay
@@ -255,7 +261,7 @@ pub fn meter_new_page() -> Html {
                         .forget();
                     }
                     Err(ApiError::Forbidden) => {
-                        error.set(Some("Permission denied".to_string()));
+                        error.set(Some(t("meters-permission-denied")));
                         submitting.set(false);
                     }
                     Err(e) => {
@@ -284,7 +290,7 @@ pub fn meter_new_page() -> Html {
 
     html! {
         <div class="container mt-4">
-            <h2>{"Register New Meter"}</h2>
+            <h2>{t("meters-register-title")}</h2>
 
             if let Some(err) = (*error).clone() {
                 <ErrorAlert message={err} on_close={clear_error.clone()} />
@@ -297,7 +303,7 @@ pub fn meter_new_page() -> Html {
             if *loading_buildings {
                 <div class="text-center py-5">
                     <div class="spinner-border" role="status">
-                        <span class="visually-hidden">{"Loading..."}</span>
+                        <span class="visually-hidden">{t("loading")}</span>
                     </div>
                 </div>
             } else {
@@ -305,9 +311,9 @@ pub fn meter_new_page() -> Html {
                     <div class="card-body">
                         <form onsubmit={on_submit}>
                             <div class="mb-3">
-                                <label class="form-label">{"Building"}</label>
+                                <label class="form-label">{t("label-building")}</label>
                                 <select class="form-select" value={selected_building.to_string()} onchange={on_building_change} required=true>
-                                    <option value="0">{"-- Select Building --"}</option>
+                                    <option value="0">{t("meters-select-building-option")}</option>
                                     { for buildings.iter().map(|b| html! {
                                         <option key={b.id} value={b.id.to_string()}>{&b.address}</option>
                                     }) }
@@ -315,27 +321,27 @@ pub fn meter_new_page() -> Html {
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">{"Apartment"}</label>
+                                <label class="form-label">{t("label-apartment")}</label>
                                 <select class="form-select" value={apartment_id.to_string()} onchange={on_apartment_change} required=true disabled={apartments.is_empty()}>
-                                    <option value="0">{"-- Select Apartment --"}</option>
+                                    <option value="0">{t("meters-select-apartment-option")}</option>
                                     { for apartments.iter().map(|a| html! {
-                                        <option key={a.id} value={a.id.to_string()}>{"Apartment "}{&a.number}</option>
+                                        <option key={a.id} value={a.id.to_string()}>{t("meters-apartment-prefix")}{" "}{&a.number}</option>
                                     }) }
                                 </select>
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">{"Meter Type"}</label>
+                                <label class="form-label">{t("label-type")}</label>
                                 <select class="form-select" value={(*meter_type).clone()} onchange={on_meter_type_change}>
-                                    <option value="ColdWater">{"Cold Water"}</option>
-                                    <option value="HotWater">{"Hot Water"}</option>
-                                    <option value="Gas">{"Gas"}</option>
-                                    <option value="Electricity">{"Electricity"}</option>
+                                    <option value="ColdWater">{t("meter-type-cold-water")}</option>
+                                    <option value="HotWater">{t("meter-type-hot-water")}</option>
+                                    <option value="Gas">{t("meter-type-gas")}</option>
+                                    <option value="Electricity">{t("meter-type-electricity")}</option>
                                 </select>
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">{"Serial Number"}</label>
+                                <label class="form-label">{t("meters-serial-number")}</label>
                                 <input
                                     type="text"
                                     class="form-control"
@@ -347,7 +353,7 @@ pub fn meter_new_page() -> Html {
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">{"Installation Date"}</label>
+                                <label class="form-label">{t("meters-installation-date")}</label>
                                 <input
                                     type="date"
                                     class="form-control"
@@ -357,14 +363,14 @@ pub fn meter_new_page() -> Html {
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">{"Calibration Due Date"}</label>
+                                <label class="form-label">{t("meters-calibration-due")}</label>
                                 <input
                                     type="date"
                                     class="form-control"
                                     value={(*calibration_due_date).clone()}
                                     oninput={on_calibration_due_change}
                                 />
-                                <div class="form-text">{"When the meter needs to be recalibrated/renewed"}</div>
+                                <div class="form-text">{t("meters-when-recalibrate")}</div>
                             </div>
 
                             <div class="mb-3 form-check">
@@ -376,7 +382,7 @@ pub fn meter_new_page() -> Html {
                                     onchange={on_visible_change}
                                 />
                                 <label class="form-check-label" for="visibleToRenters">
-                                    {"Visible to Renters"}
+                                    {t("meters-visible-to-renters")}
                                 </label>
                             </div>
 
@@ -385,10 +391,10 @@ pub fn meter_new_page() -> Html {
                                     if *submitting {
                                         <span class="spinner-border spinner-border-sm me-2"></span>
                                     }
-                                    {"Register Meter"}
+                                    {t("meters-register-meter")}
                                 </button>
                                 <button type="button" class="btn btn-secondary" onclick={on_cancel}>
-                                    {"Cancel"}
+                                    {t("button-cancel")}
                                 </button>
                             </div>
                         </form>

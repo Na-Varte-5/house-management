@@ -1,7 +1,6 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
 
-use crate::components::auth_dropdown::AuthDropdown;
 use crate::contexts::AuthContext;
 use crate::i18n::{available_languages, current_language, set_language, t};
 use crate::routes::Route;
@@ -35,6 +34,12 @@ pub fn navbar() -> Html {
     html! {
         <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top">
             <div class="container-fluid">
+                if auth.is_authenticated() {
+                    <button class="btn btn-sm btn-outline-light me-2 sidebar-mobile-toggle"
+                            type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar">
+                        <i class="bi bi-list"></i>
+                    </button>
+                }
                 <Link<Route> to={Route::Home} classes="navbar-brand">{ t("app-name") }</Link<Route>>
 
                 // Right side: language selector and user dropdown
@@ -75,12 +80,9 @@ pub fn navbar() -> Html {
                             <button class="btn btn-sm btn-outline-light" onclick={on_logout}>{ t("nav-logout") }</button>
                         }
                     } else {
-                        <div class="dropdown ms-2" data-bs-auto-close="outside">
-                            <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">{ t("nav-login") }</button>
-                            <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 280px;">
-                                <AuthDropdown />
-                            </div>
-                        </div>
+                        <Link<Route> to={Route::Login} classes="btn btn-sm btn-outline-light">
+                            { t("nav-login") }
+                        </Link<Route>>
                     }
                 </div>
             </div>

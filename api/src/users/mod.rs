@@ -1,6 +1,7 @@
 use crate::auth::{AppError, AuthContext};
 use crate::db::DbPool;
 use crate::models::{NewUser, PublicUser, User}; // added PublicUser import
+use crate::pagination::{PaginatedResponse, PaginationParams};
 use crate::schema::{roles as roles_schema, user_roles as ur_schema};
 use actix_web::{HttpResponse, Responder, web};
 use diesel::prelude::*;
@@ -39,8 +40,9 @@ type RentedApartmentRow = (
 #[utoipa::path(
     get,
     path = "/api/v1/users",
+    params(PaginationParams),
     responses(
-        (status = 200, description = "List of users", body = Vec<User>),
+        (status = 200, description = "Paginated list of users", body = PaginatedResponse<User>),
         (status = 403, description = "Forbidden - requires Admin role"),
         (status = 500, description = "Internal server error")
     ),
@@ -50,6 +52,7 @@ type RentedApartmentRow = (
 pub async fn list_users(
     auth: AuthContext,
     pool: web::Data<DbPool>,
+    query: web::Query<PaginationParams>,
 ) -> Result<impl Responder, AppError> {
     if !auth.has_any_role(&["Admin"]) {
         return Err(AppError::Forbidden);
@@ -58,8 +61,13 @@ pub async fn list_users(
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;
-    let user_list = users.select(User::as_select()).load(&mut conn)?;
-    Ok(HttpResponse::Ok().json(user_list))
+    let total = users.count().get_result::<i64>(&mut conn)?;
+    let user_list = users
+        .select(User::as_select())
+        .limit(query.limit())
+        .offset(query.offset())
+        .load(&mut conn)?;
+    Ok(HttpResponse::Ok().json(PaginatedResponse::new(user_list, total, &query)))
 }
 
 /// Create a new user
@@ -344,7 +352,7 @@ pub async fn get_my_properties(
     use crate::schema::proposals::dsl as prop;
     use crate::schema::votes::dsl as v;
 
-    let user_id = auth.claims.sub.parse::<u64>().unwrap_or(0);
+    let user_id = auth.user_id()?;
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;

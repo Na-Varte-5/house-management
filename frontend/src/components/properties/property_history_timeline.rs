@@ -1,6 +1,8 @@
 use crate::components::ErrorAlert;
 use crate::contexts::auth::AuthContext;
+use crate::i18n::{t, t_with_args};
 use crate::services::api::{ApiError, api_client};
+use crate::utils::datetime::format_dt_local;
 use serde::{Deserialize, Serialize};
 use yew::prelude::*;
 
@@ -49,7 +51,10 @@ pub fn property_history_timeline(props: &Props) -> Html {
                         loading.set(false);
                     }
                     Err(e) => {
-                        error.set(Some(format!("Failed to load property history: {}", e)));
+                        error.set(Some(t_with_args(
+                            "properties-failed-load-history",
+                            &[("error", &e.to_string())],
+                        )));
                         loading.set(false);
                     }
                 }
@@ -60,7 +65,7 @@ pub fn property_history_timeline(props: &Props) -> Html {
 
     html! {
         <div class="property-history-timeline">
-            <h5 class="mb-3">{"Property History"}</h5>
+            <h5 class="mb-3">{t("properties-property-history")}</h5>
 
             if let Some(err) = (*error).clone() {
                 <ErrorAlert message={err} />
@@ -69,13 +74,13 @@ pub fn property_history_timeline(props: &Props) -> Html {
             if *loading {
                 <div class="text-center py-4">
                     <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">{"Loading..."}</span>
+                        <span class="visually-hidden">{t("loading")}</span>
                     </div>
                 </div>
             } else if events.is_empty() {
                 <div class="alert alert-info">
                     <i class="bi bi-info-circle me-2"></i>
-                    {"No property history events yet."}
+                    {t("properties-no-history")}
                 </div>
             } else {
                 <div class="timeline">
@@ -97,9 +102,9 @@ fn render_event(event: &PropertyHistoryEvent) -> Html {
     };
 
     let formatted_date = if let Some(date_str) = &event.created_at {
-        format_datetime(date_str)
+        format_dt_local(date_str)
     } else {
-        "Unknown date".to_string()
+        t("properties-unknown-date")
     };
 
     html! {
@@ -117,8 +122,7 @@ fn render_event(event: &PropertyHistoryEvent) -> Html {
                             <p class="card-text text-muted small mb-2">
                                 <i class="bi bi-clock me-1"></i>
                                 {formatted_date}
-                                {" by "}
-                                <strong>{&event.changed_by_name}</strong>
+                                {" "}{t_with_args("properties-by-user", &[("name", &event.changed_by_name)])}
                             </p>
                             if let Some(metadata) = &event.metadata {
                                 if !metadata.is_empty() {
@@ -145,13 +149,13 @@ fn render_metadata(metadata_json: &str) -> Html {
                         let formatted_value = match value {
                             serde_json::Value::String(s) => {
                                 if s == "null" {
-                                    "Not set".to_string()
+                                    t("properties-not-set")
                                 } else {
                                     s.clone()
                                 }
                             },
                             serde_json::Value::Bool(b) => b.to_string(),
-                            serde_json::Value::Null => "Not set".to_string(),
+                            serde_json::Value::Null => t("properties-not-set"),
                             _ => value.to_string().trim_matches('"').to_string(),
                         };
 
@@ -171,49 +175,6 @@ fn render_metadata(metadata_json: &str) -> Html {
     html! {
         <code class="small">{metadata_json}</code>
     }
-}
-
-fn format_datetime(date_str: &str) -> String {
-    // Parse ISO datetime and format it nicely
-    // Input format: "2026-01-24T14:30:00"
-    // Output format: "Jan 24, 2026 at 14:30"
-
-    let parts: Vec<&str> = date_str.split('T').collect();
-    if parts.len() != 2 {
-        return date_str.to_string();
-    }
-
-    let date_parts: Vec<&str> = parts[0].split('-').collect();
-    let time_parts: Vec<&str> = parts[1].split(':').collect();
-
-    if date_parts.len() != 3 || time_parts.len() < 2 {
-        return date_str.to_string();
-    }
-
-    let month = match date_parts[1] {
-        "01" => "Jan",
-        "02" => "Feb",
-        "03" => "Mar",
-        "04" => "Apr",
-        "05" => "May",
-        "06" => "Jun",
-        "07" => "Jul",
-        "08" => "Aug",
-        "09" => "Sep",
-        "10" => "Oct",
-        "11" => "Nov",
-        "12" => "Dec",
-        _ => return date_str.to_string(),
-    };
-
-    format!(
-        "{} {}, {} at {}:{}",
-        month,
-        date_parts[2].trim_start_matches('0'),
-        date_parts[0],
-        time_parts[0],
-        time_parts[1]
-    )
 }
 
 async fn fetch_property_history(

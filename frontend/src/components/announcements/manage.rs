@@ -6,7 +6,7 @@ use crate::components::announcement_editor::AnnouncementFull;
 use crate::components::comment_list::CommentList;
 use crate::contexts::AuthContext;
 use crate::i18n::t;
-use crate::services::api_client;
+use crate::services::api::{PaginatedResponse, api_client};
 use yew::prelude::*;
 
 #[function_component(AnnouncementsManage)]
@@ -36,7 +36,11 @@ pub fn announcements_manage() -> Html {
             let token = token.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                match client.get::<Vec<serde_json::Value>>("/announcements").await {
+                match client
+                    .get::<PaginatedResponse<serde_json::Value>>("/announcements")
+                    .await
+                    .map(|r| r.data)
+                {
                     Ok(v) => {
                         let mapped = v
                             .into_iter()
@@ -104,8 +108,9 @@ pub fn announcements_manage() -> Html {
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
                 match client
-                    .get::<Vec<serde_json::Value>>("/announcements/deleted")
+                    .get::<PaginatedResponse<serde_json::Value>>("/announcements/deleted")
                     .await
+                    .map(|r| r.data)
                 {
                     Ok(v) => {
                         let mapped = v
@@ -397,7 +402,7 @@ pub fn announcements_manage() -> Html {
                 html! {
                     <div class="card mb-3">
                         <div class="card-header d-flex justify-content-between align-items-center">
-                            <span>{"New announcement"}</span>
+                            <span>{t("announcement-new-btn")}</span>
                             <button
                                 class="btn btn-sm btn-outline-secondary"
                                 onclick={Callback::from({
@@ -405,7 +410,7 @@ pub fn announcements_manage() -> Html {
                                     move |_e: web_sys::MouseEvent| cancel.emit(())
                                 })}
                             >
-                                {"Cancel"}
+                                {t("announcement-cancel-btn")}
                             </button>
                         </div>
                         <div class="card-body">
@@ -422,7 +427,7 @@ pub fn announcements_manage() -> Html {
                 html! {
                     <div class="card mb-3">
                         <div class="card-header d-flex justify-content-between align-items-center">
-                            <span>{"Edit announcement"}</span>
+                            <span>{t("announcement-edit-label")}</span>
                             <button
                                 class="btn btn-sm btn-outline-secondary"
                                 onclick={Callback::from({
@@ -430,7 +435,7 @@ pub fn announcements_manage() -> Html {
                                     move |_e: web_sys::MouseEvent| cancel.emit(())
                                 })}
                             >
-                                {"Cancel"}
+                                {t("announcement-cancel-btn")}
                             </button>
                         </div>
                         <div class="card-body">
@@ -479,16 +484,16 @@ pub fn announcements_manage() -> Html {
                         { {
                             let mut nodes: Vec<Html> = Vec::new();
                             if item.pinned {
-                                nodes.push(html!{<span class="badge bg-warning text-dark me-1">{"Pinned"}</span>});
+                                nodes.push(html!{<span class="badge bg-warning text-dark me-1">{t("announcement-status-pinned")}</span>});
                             }
                             if let Some(p) = &item.publish_at {
                                 if p > &now_iso {
-                                    nodes.push(html!{<span class="badge bg-info text-dark me-1">{"Scheduled"}</span>});
+                                    nodes.push(html!{<span class="badge bg-info text-dark me-1">{t("announcement-status-scheduled")}</span>});
                                 }
                             }
                             if let Some(e) = &item.expire_at {
                                 if e < &now_iso {
-                                    nodes.push(html!{<span class="badge bg-dark me-1">{"Expired"}</span>});
+                                    nodes.push(html!{<span class="badge bg-dark me-1">{t("announcement-status-expired")}</span>});
                                 }
                             }
                             html!{<>{ for nodes }</>}
@@ -498,9 +503,9 @@ pub fn announcements_manage() -> Html {
                         { {
                             let mut badges: Vec<Html> = Vec::new();
                             if item.public {
-                                badges.push(html!{<span class="badge bg-success me-1">{"Public"}</span>});
+                                badges.push(html!{<span class="badge bg-success me-1">{t("announcement-public-label")}</span>});
                             } else {
-                                badges.push(html!{<span class="badge bg-secondary me-1">{"Private"}</span>});
+                                badges.push(html!{<span class="badge bg-secondary me-1">{t("announcement-private-label")}</span>});
                             }
                             if let Some(csv) = &item.roles_csv {
                                 for role in csv.split(',').map(|r| r.trim()).filter(|r| !r.is_empty()) {

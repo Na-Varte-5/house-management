@@ -11,6 +11,7 @@ pub mod maintenance;
 pub mod meters;
 pub mod models;
 pub mod openapi;
+pub mod pagination;
 pub mod schema;
 pub mod users;
 pub mod voting;

@@ -23,10 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          override: true
           components: rustfmt, clippy
       - name: Install trunk
         run: |
@@ -47,6 +45,7 @@ jobs:
         run: |
           echo "API_PORT=8080" >> .env
           echo "DATABASE_URL=$DATABASE_URL" >> .env
+          echo "JWT_SECRET=ci-test-secret-not-for-production" >> .env
           cargo install diesel_cli --no-default-features --features mysql || true
           diesel setup
           diesel migration run

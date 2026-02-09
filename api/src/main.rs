@@ -1,4 +1,5 @@
 use actix_cors::Cors;
+use actix_web::http::header;
 use actix_web::{App, HttpRequest, HttpServer, Responder, web};
 use api::i18n::{get_message, init_translations, negotiate_language};
 use api::{
@@ -10,8 +11,44 @@ use diesel::r2d2::ConnectionManager;
 use diesel_migrations::MigrationHarness;
 use serde::Serialize;
 use std::env;
+use tracing::info;
+use tracing_actix_web::TracingLogger;
+use tracing_subscriber::EnvFilter;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
+
+/// Build CORS middleware from `CORS_ALLOWED_ORIGINS` env var.
+///
+/// - If the env var is set to `"*"`, allows any origin (development only).
+/// - If the env var contains a comma-separated list of origins, only those are allowed.
+/// - If the env var is unset, defaults to `http://localhost:8081` (local Trunk dev server).
+fn build_cors() -> Cors {
+    let allowed = env::var("CORS_ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:8081,http://127.0.0.1:8081".to_string());
+
+    if allowed.trim() == "*" {
+        Cors::permissive()
+    } else {
+        let mut cors = Cors::default()
+            .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+            .allowed_headers(vec![
+                header::AUTHORIZATION,
+                header::CONTENT_TYPE,
+                header::ACCEPT,
+                header::ACCEPT_LANGUAGE,
+            ])
+            .max_age(3600);
+
+        for origin in allowed.split(',') {
+            let origin = origin.trim();
+            if !origin.is_empty() {
+                cors = cors.allowed_origin(origin);
+            }
+        }
+
+        cors
+    }
+}
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -35,15 +72,40 @@ async fn health(req: HttpRequest) -> impl Responder {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenvy::dotenv().ok();
+
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info,actix_web=info")),
+        )
+        .init();
+
     let port = env::var("API_PORT").unwrap_or_else(|_| "8080".to_string());
     let addr = format!("0.0.0.0:{}", port);
-    println!("Starting server at http://{}", addr);
+    info!("Starting server at http://{}", addr);
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let manager = ConnectionManager::<MysqlConnection>::new(database_url);
     let pool = DbPool::builder()
+        .max_size(
+            env::var("DB_POOL_SIZE")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(10),
+        )
+        .min_idle(Some(2))
+        .connection_timeout(std::time::Duration::from_secs(5))
+        .idle_timeout(Some(std::time::Duration::from_secs(300)))
+        .test_on_check_out(true)
         .build(manager)
         .expect("Failed to create pool.");
+
+    let pool_state = pool.state();
+    info!(
+        connections = pool_state.connections,
+        idle = pool_state.idle_connections,
+        "DB pool initialized"
+    );
 
     {
         // Run migrations
@@ -56,20 +118,22 @@ async fn main() -> std::io::Result<()> {
 
     init_translations();
 
-    let jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| "dev-secret-change-me".to_string());
+    let jwt_secret = env::var("JWT_SECRET")
+        .expect("JWT_SECRET must be set. Generate one with: openssl rand -base64 32");
     let keys = JwtKeys::from_secret(&jwt_secret);
     let app_config = AppConfig::load();
-    println!(
-        "AppConfig: attachments_path={}, max_size={}, mime_types={:?}",
-        app_config.attachments_base_path,
-        app_config.max_attachment_size_bytes,
-        app_config.allowed_mime_types
+    info!(
+        attachments_path = %app_config.attachments_base_path,
+        max_size = app_config.max_attachment_size_bytes,
+        mime_types = ?app_config.allowed_mime_types,
+        "AppConfig loaded"
     );
 
     let openapi = ApiDoc::openapi();
 
     HttpServer::new(move || {
         App::new()
+            .wrap(TracingLogger::default())
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(keys.clone()))
             .app_data(web::Data::new(app_config.clone()))
@@ -78,7 +142,7 @@ async fn main() -> std::io::Result<()> {
             )
             .service(
                 web::scope("/api/v1")
-                    .wrap(Cors::permissive())
+                    .wrap(build_cors())
                     .route("/health", web::get().to(health))
                     .configure(auth::configure)
                     .configure(users::configure)

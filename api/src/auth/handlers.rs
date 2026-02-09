@@ -4,6 +4,7 @@ use crate::auth::{crypto, roles};
 use crate::db::DbPool;
 use crate::models::{NewUser, User};
 use crate::schema::users;
+use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{HttpResponse, Responder, web};
 use diesel::prelude::*;
 use utoipa;
@@ -27,20 +28,47 @@ pub async fn register(
     pool: web::Data<DbPool>,
     payload: web::Json<RegisterRequest>,
 ) -> Result<impl Responder, AppError> {
+    let email = payload.email.trim();
+    let name = payload.name.trim();
+
+    if email.is_empty() || !email.contains('@') || !email.contains('.') {
+        return Err(AppError::BadRequest("Invalid email address".into()));
+    }
+    if email.len() > 255 {
+        return Err(AppError::BadRequest(
+            "Email must be 255 characters or fewer".into(),
+        ));
+    }
+    if name.is_empty() || name.len() > 255 {
+        return Err(AppError::BadRequest(
+            "Name must be between 1 and 255 characters".into(),
+        ));
+    }
+    if payload.password.len() < 8 {
+        return Err(AppError::BadRequest(
+            "Password must be at least 8 characters".into(),
+        ));
+    }
+    if payload.password.len() > 128 {
+        return Err(AppError::BadRequest(
+            "Password must be 128 characters or fewer".into(),
+        ));
+    }
+
     let mut conn = pool
         .get()
         .map_err(|_| AppError::Internal("db_pool".into()))?;
     let password_hash = crypto::hash_password(&payload.password)?;
     let new_user = NewUser {
-        email: payload.email.clone(),
-        name: payload.name.clone(),
+        email: email.to_string(),
+        name: name.to_string(),
         password_hash,
     };
     diesel::insert_into(users::table)
         .values(&new_user)
         .execute(&mut conn)?;
     let created: User = users::table
-        .filter(users::email.eq(&payload.email))
+        .filter(users::email.eq(email))
         .select(User::as_select())
         .first(&mut conn)?;
     let total = roles::count_users(&mut conn);
@@ -70,6 +98,12 @@ pub async fn login(
     keys: web::Data<JwtKeys>,
     payload: web::Json<LoginRequest>,
 ) -> Result<impl Responder, AppError> {
+    if payload.email.trim().is_empty() || payload.password.is_empty() {
+        return Err(AppError::BadRequest(
+            "Email and password are required".into(),
+        ));
+    }
+
     use crate::schema::users::dsl as u;
     let mut conn = pool
         .get()
@@ -102,22 +136,32 @@ pub async fn login(
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
     use actix_web::http::Method;
+
+    // 5 requests per 10 seconds per IP, burst of 5
+    let rate_limit_config = GovernorConfigBuilder::default()
+        .seconds_per_request(2)
+        .burst_size(5)
+        .finish()
+        .expect("Invalid rate limit config");
+
     cfg.service(
-        web::resource("/auth/register")
-            .route(web::post().to(register))
-            .route(
-                web::route()
-                    .method(Method::OPTIONS)
-                    .to(|| async { HttpResponse::NoContent().finish() }),
-            ),
-    )
-    .service(
-        web::resource("/auth/login")
-            .route(web::post().to(login))
-            .route(
-                web::route()
-                    .method(Method::OPTIONS)
-                    .to(|| async { HttpResponse::NoContent().finish() }),
+        web::scope("/auth")
+            .wrap(Governor::new(&rate_limit_config))
+            .service(
+                web::resource("/register")
+                    .route(web::post().to(register))
+                    .route(
+                        web::route()
+                            .method(Method::OPTIONS)
+                            .to(|| async { HttpResponse::NoContent().finish() }),
+                    ),
+            )
+            .service(
+                web::resource("/login").route(web::post().to(login)).route(
+                    web::route()
+                        .method(Method::OPTIONS)
+                        .to(|| async { HttpResponse::NoContent().finish() }),
+                ),
             ),
     );
 }

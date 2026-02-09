@@ -1,5 +1,6 @@
 use crate::components::{DateTimeInput, FormGroup, Select, SelectOption, TextInput};
-use crate::services::api_client;
+use crate::i18n::{t, t_with_args};
+use crate::services::api::{PaginatedResponse, api_client};
 use serde::{Deserialize, Serialize};
 use yew::prelude::*;
 
@@ -58,9 +59,16 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
         use_effect_with((), move |_| {
             wasm_bindgen_futures::spawn_local(async move {
                 let client = api_client(token.as_deref());
-                match client.get::<Vec<Building>>("/buildings").await {
+                match client
+                    .get::<PaginatedResponse<Building>>("/buildings")
+                    .await
+                    .map(|r| r.data)
+                {
                     Ok(list) => buildings.set(list),
-                    Err(e) => on_error.emit(format!("Failed to load buildings: {}", e)),
+                    Err(e) => on_error.emit(t_with_args(
+                        "meters-failed-load-buildings",
+                        &[("error", &e.to_string())],
+                    )),
                 }
             });
             || ()
@@ -109,18 +117,18 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
 
             // Validation
             if selected_apartment.is_empty() {
-                on_error.emit("Please select an apartment".to_string());
+                on_error.emit(t("meters-select-apartment-error"));
                 return;
             }
             if serial_number.trim().is_empty() {
-                on_error.emit("Serial number is required".to_string());
+                on_error.emit(t("meters-serial-required"));
                 return;
             }
 
             let apt_id = match selected_apartment.parse::<u64>() {
                 Ok(id) => id,
                 Err(_) => {
-                    on_error.emit("Invalid apartment selected".to_string());
+                    on_error.emit(t("meters-invalid-apartment"));
                     return;
                 }
             };
@@ -173,7 +181,10 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
                         on_success.emit(());
                     }
                     Err(e) => {
-                        on_error.emit(format!("Failed to register meter: {}", e));
+                        on_error.emit(t_with_args(
+                            "meters-failed-register",
+                            &[("error", &e.to_string())],
+                        ));
                     }
                 }
                 submitting.set(false);
@@ -218,7 +229,7 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
 
     // Build options
     let building_options = {
-        let mut options = vec![SelectOption::new("", "Select building...")];
+        let mut options = vec![SelectOption::new("", &t("meters-select-building"))];
         for building in buildings.iter() {
             options.push(SelectOption::new(
                 building.id.to_string(),
@@ -229,7 +240,7 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
     };
 
     let apartment_options = {
-        let mut options = vec![SelectOption::new("", "Select apartment...")];
+        let mut options = vec![SelectOption::new("", &t("meters-select-apartment"))];
         for apartment in apartments.iter() {
             options.push(SelectOption::new(
                 apartment.id.to_string(),
@@ -240,10 +251,10 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
     };
 
     let meter_type_options = vec![
-        SelectOption::new("ColdWater", "Cold Water"),
-        SelectOption::new("HotWater", "Hot Water"),
-        SelectOption::new("Gas", "Gas"),
-        SelectOption::new("Electricity", "Electricity"),
+        SelectOption::new("ColdWater", &t("meters-cold-water")),
+        SelectOption::new("HotWater", &t("meters-hot-water")),
+        SelectOption::new("Gas", &t("meters-gas")),
+        SelectOption::new("Electricity", &t("meters-electricity")),
     ];
 
     html! {
@@ -251,13 +262,13 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
             <div class="card-body">
                 <form onsubmit={on_submit}>
                     <FormGroup
-                        title="Meter Location"
-                        description="Select the building and apartment for this meter"
+                        title={t("meters-meter-location")}
+                        description={t("meters-meter-location-desc")}
                     >
                         <div class="row">
                             <div class="col-md-6">
                                 <Select
-                                    label="Building"
+                                    label={t("meters-building")}
                                     value={(*selected_building).clone()}
                                     on_change={on_building_change}
                                     options={building_options}
@@ -266,7 +277,7 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
                             </div>
                             <div class="col-md-6">
                                 <Select
-                                    label="Apartment"
+                                    label={t("meters-apartment")}
                                     value={(*selected_apartment).clone()}
                                     on_change={on_apartment_change}
                                     options={apartment_options}
@@ -278,13 +289,13 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
                     </FormGroup>
 
                     <FormGroup
-                        title="Meter Details"
-                        description="Enter the meter type and serial number"
+                        title={t("meters-meter-details")}
+                        description={t("meters-meter-details-desc")}
                     >
                         <div class="row">
                             <div class="col-md-6">
                                 <Select
-                                    label="Meter Type"
+                                    label={t("meters-detail-meter-type")}
                                     value={(*meter_type).clone()}
                                     on_change={on_meter_type_change}
                                     options={meter_type_options}
@@ -293,10 +304,10 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
                             </div>
                             <div class="col-md-6">
                                 <TextInput
-                                    label="Serial Number"
+                                    label={t("meters-serial-number")}
                                     value={(*serial_number).clone()}
                                     on_change={on_serial_change}
-                                    placeholder="Enter meter serial number"
+                                    placeholder={t("meters-serial-placeholder")}
                                     disabled={*submitting}
                                     required=true
                                 />
@@ -305,13 +316,13 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
                     </FormGroup>
 
                     <FormGroup
-                        title="Dates (Optional)"
-                        description="Set installation and calibration dates"
+                        title={t("meters-dates-title")}
+                        description={t("meters-dates-desc")}
                     >
                         <div class="row">
                             <div class="col-md-6">
                                 <DateTimeInput
-                                    label="Installation Date"
+                                    label={t("meters-installation-date")}
                                     value={(*installation_date).clone()}
                                     on_change={on_installation_change}
                                     input_type="date"
@@ -320,7 +331,7 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
                             </div>
                             <div class="col-md-6">
                                 <DateTimeInput
-                                    label="Calibration Due Date"
+                                    label={t("meters-calibration-due")}
                                     value={(*calibration_due).clone()}
                                     on_change={on_calibration_change}
                                     input_type="date"
@@ -334,7 +345,7 @@ pub fn meter_register_form(props: &MeterRegisterFormProps) -> Html {
                         if *submitting {
                             <span class="spinner-border spinner-border-sm me-2"></span>
                         }
-                        {"Register Meter"}
+                        {t("meters-register-meter")}
                     </button>
                 </form>
             </div>

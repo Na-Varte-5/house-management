@@ -1,4 +1,5 @@
 use super::types::{InvitationInfo, UserInfo};
+use crate::i18n::{t, t_with_args};
 use serde::{Deserialize, Serialize};
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
@@ -47,7 +48,7 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
         return html! {
             <div class="alert alert-info small mb-0">
                 <i class="bi bi-info-circle me-2"></i>
-                {"Select an apartment to manage its renters"}
+                {t("renters-select-apartment")}
             </div>
         };
     }
@@ -84,16 +85,16 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
 
     html! {
         <div>
-            <h6 class="small fw-semibold mb-2">{"Current Renters"}</h6>
+            <h6 class="small fw-semibold mb-2">{t("renters-current")}</h6>
             if props.loading {
                 <div class="text-center py-2">
                     <div class="spinner-border spinner-border-sm" role="status">
-                        <span class="visually-hidden">{"Loading..."}</span>
+                        <span class="visually-hidden">{t("loading")}</span>
                     </div>
                 </div>
             } else if active_renters.is_empty() {
                 <div class="alert alert-warning small mb-3">
-                    {"No active renters for this apartment"}
+                    {t("renters-no-active")}
                 </div>
             } else {
                 <ul class="list-group list-group-flush mb-3">
@@ -116,22 +117,22 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
                                     <div class="flex-grow-1">
                                         <div class="d-flex align-items-center mb-1">
                                             <strong class="small me-2">{&renter.user_name}</strong>
-                                            <span class="badge bg-success">{"Active"}</span>
+                                            <span class="badge bg-success">{t("renters-active")}</span>
                                         </div>
                                         <span class="text-muted" style="font-size: 0.75rem;">{&renter.user_email}</span>
                                         <div class="mt-1" style="font-size: 0.75rem;">
                                             if let Some(start) = &renter.start_date {
                                                 <span class="text-muted">
-                                                    {"Start: "}<strong>{start}</strong>
+                                                    {t("renters-start")}{" "}<strong>{start}</strong>
                                                 </span>
                                             }
                                             if let Some(end) = &renter.end_date {
                                                 <span class="text-muted ms-2">
-                                                    {"End: "}<strong>{end}</strong>
+                                                    {t("renters-end")}{" "}<strong>{end}</strong>
                                                 </span>
                                             } else if renter.start_date.is_some() {
                                                 <span class="text-muted ms-2">
-                                                    <span class="badge bg-info text-dark">{"Ongoing"}</span>
+                                                    <span class="badge bg-info text-dark">{t("renters-ongoing")}</span>
                                                 </span>
                                             }
                                         </div>
@@ -160,7 +161,7 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
             }
 
             if !past_renters.is_empty() {
-                <h6 class="small fw-semibold mb-2 mt-3">{"Past Renters"}</h6>
+                <h6 class="small fw-semibold mb-2 mt-3">{t("renters-past")}</h6>
                 <ul class="list-group list-group-flush mb-3">
                     { for past_renters.iter().map(|renter| {
                         let user_id = renter.user_id;
@@ -181,22 +182,22 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
                                     <div class="flex-grow-1">
                                         <div class="d-flex align-items-center mb-1">
                                             <strong class="small me-2 text-muted">{&renter.user_name}</strong>
-                                            <span class="badge bg-secondary">{"Inactive"}</span>
+                                            <span class="badge bg-secondary">{t("renters-inactive")}</span>
                                         </div>
                                         <span class="text-muted" style="font-size: 0.75rem;">{&renter.user_email}</span>
                                         <div class="mt-1" style="font-size: 0.75rem;">
                                             if let Some(start) = &renter.start_date {
                                                 <span class="text-muted">
-                                                    {"Start: "}<strong>{start}</strong>
+                                                    {t("renters-start")}{" "}<strong>{start}</strong>
                                                 </span>
                                             }
                                             if let Some(end) = &renter.end_date {
                                                 <span class="text-muted ms-2">
-                                                    {"End: "}<strong>{end}</strong>
+                                                    {t("renters-end")}{" "}<strong>{end}</strong>
                                                 </span>
                                             } else if renter.start_date.is_some() {
                                                 <span class="text-muted ms-2">
-                                                    <span class="badge bg-info text-dark">{"Ongoing"}</span>
+                                                    <span class="badge bg-info text-dark">{t("renters-ongoing")}</span>
                                                 </span>
                                             }
                                         </div>
@@ -224,11 +225,11 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
                 </ul>
             }
 
-            <h6 class="small fw-semibold mb-2 mt-3">{"Assign New Renter"}</h6>
+            <h6 class="small fw-semibold mb-2 mt-3">{t("renters-assign-new")}</h6>
 
             <div class="row g-2 mb-2">
                 <div class="col-md-6">
-                    <label class="form-label small mb-1">{"Start Date"}</label>
+                    <label class="form-label small mb-1">{t("renters-start-date")}</label>
                     <input
                         type="date"
                         class="form-control form-control-sm"
@@ -244,7 +245,7 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
                     />
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label small mb-1">{"End Date"}</label>
+                    <label class="form-label small mb-1">{t("renters-end-date")}</label>
                     <input
                         type="date"
                         class="form-control form-control-sm"
@@ -276,14 +277,14 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
                     }}
                 />
                 <label class="form-check-label small" for="renter-active-toggle">
-                    {"Active rental"}
+                    {t("renters-active-rental")}
                 </label>
             </div>
 
             <input
                 type="text"
                 class="form-control form-control-sm mb-2"
-                placeholder="Search users..."
+                placeholder={t("properties-search-users")}
                 value={props.user_query.clone()}
                 oninput={{
                     let on_query_change = props.on_query_change.clone();
@@ -326,22 +327,22 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
                 </ul>
             } else if !props.user_query.is_empty() && available_users.is_empty() {
                 <div class="alert alert-info small mb-0">
-                    {"No matching users found"}
+                    {t("renters-no-matching")}
                 </div>
             }
 
             if props.on_invite.is_some() {
                 <hr class="my-3" />
-                <h6 class="small fw-semibold mb-2">{"Invite by Email"}</h6>
+                <h6 class="small fw-semibold mb-2">{t("renters-invite-email")}</h6>
                 <p class="text-muted small mb-2">
-                    {"Send an invitation to someone who doesn't have an account yet."}
+                    {t("renters-invite-desc")}
                 </p>
                 <div class="row g-2 mb-2">
                     <div class="col-12">
                         <input
                             type="email"
                             class="form-control form-control-sm"
-                            placeholder="Email address"
+                            placeholder={t("properties-email-placeholder")}
                             value={(*invite_email).clone()}
                             oninput={{
                                 let invite_email = invite_email.clone();
@@ -405,13 +406,13 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
                     }}
                 >
                     <i class="bi bi-envelope me-1"></i>
-                    {"Send Invitation"}
+                    {t("renters-send-invitation")}
                 </button>
             }
 
             if !pending_invitations.is_empty() {
                 <hr class="my-3" />
-                <h6 class="small fw-semibold mb-2">{"Pending Invitations"}</h6>
+                <h6 class="small fw-semibold mb-2">{t("renters-pending")}</h6>
                 <ul class="list-group list-group-flush">
                     { for pending_invitations.iter().map(|inv| {
                         let inv_id = inv.id;
@@ -430,13 +431,13 @@ pub fn renter_management(props: &RenterManagementProps) -> Html {
                                     <div class="flex-grow-1">
                                         <div class="d-flex align-items-center mb-1">
                                             <strong class="small me-2">{&inv.email}</strong>
-                                            <span class="badge bg-warning text-dark">{"Pending"}</span>
+                                            <span class="badge bg-warning text-dark">{t("renters-pending-badge")}</span>
                                         </div>
                                         <div style="font-size: 0.75rem;" class="text-muted">
-                                            {"Invited by "}{&inv.invited_by_name}
+                                            {t_with_args("renters-invited-by", &[("name", &inv.invited_by_name)])}
                                         </div>
                                         <div style="font-size: 0.75rem;" class="text-muted">
-                                            {"Expires: "}{&inv.expires_at}
+                                            {t_with_args("renters-expires", &[("date", &inv.expires_at)])}
                                         </div>
                                     </div>
                                     if props.on_cancel_invitation.is_some() {

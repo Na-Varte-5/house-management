@@ -3,7 +3,9 @@ use yew_router::prelude::*;
 
 use frontend::components::app_layout::AppLayout;
 use frontend::components::navbar::Navbar;
+use frontend::components::toast::ToastProvider;
 use frontend::contexts::{AuthContext, AuthProvider};
+use frontend::i18n::t;
 use frontend::pages::admin::AdminAnnouncementsPage;
 use frontend::pages::admin::AdminPage;
 use frontend::pages::admin::AdminPropertiesPage;
@@ -15,7 +17,6 @@ use frontend::pages::login::LoginPage;
 use frontend::pages::maintenance::{
     MaintenanceDetailPage, MaintenanceListPage, MaintenanceNewPage,
 };
-use frontend::pages::manage::ManagePage;
 use frontend::pages::meters::{
     MeterCalibrationPage, MeterDetailPage, MeterListPage, MeterManagementPage, MeterNewPage,
 };
@@ -28,16 +29,19 @@ use frontend::routes::Route;
 fn app_content() -> Html {
     let auth = use_context::<AuthContext>().expect("AuthContext not found");
     let is_authenticated = auth.is_authenticated();
+    let current_route = use_route::<Route>();
 
     html! {
         <>
-            <Navbar />
+            if !matches!(current_route, Some(Route::Login)) {
+                <Navbar />
+            }
             <Switch<Route> render={move |route| {
                 // Routes that don't need AppLayout (public/login)
                 if matches!(route, Route::Login) {
                     return match route {
                         Route::Login => html!{<LoginPage />},
-                        _ => html!{<div>{"Not found"}</div>},
+                        _ => html!{<div>{t("page-not-found")}</div>},
                     };
                 }
 
@@ -63,7 +67,6 @@ fn app_content() -> Html {
                             Route::Admin => html!{<AdminPage />},
                             Route::AdminAnnouncements => html!{<AdminAnnouncementsPage />},
                             Route::AdminProperties => html!{<AdminPropertiesPage />},
-                            Route::Manage => html!{<ManagePage />},
                             Route::Health => html!{<HealthPage />},
                             Route::Maintenance => html!{<MaintenanceListPage />},
                             Route::MaintenanceNew => html!{<MaintenanceNewPage />},
@@ -78,7 +81,7 @@ fn app_content() -> Html {
                             Route::MeterCalibration => html!{<MeterCalibrationPage />},
                             Route::MyProperties => html!{<MyProperties />},
                             Route::MyPropertyDetail { apartment_id } => html!{<MyPropertyDetailPage apartment_id={apartment_id} />},
-                            _ => html!{<div>{"Not found"}</div>},
+                            _ => html!{<div>{t("page-not-found")}</div>},
                         }}
                     </AppLayout>
                 }
@@ -91,9 +94,11 @@ fn app_content() -> Html {
 pub fn app() -> Html {
     html! {
         <AuthProvider>
-            <BrowserRouter>
-                <AppContent />
-            </BrowserRouter>
+            <ToastProvider>
+                <BrowserRouter>
+                    <AppContent />
+                </BrowserRouter>
+            </ToastProvider>
         </AuthProvider>
     }
 }

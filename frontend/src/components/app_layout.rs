@@ -15,18 +15,13 @@ pub struct AppLayoutProps {
 pub fn app_layout(props: &AppLayoutProps) -> Html {
     html! {
         <div class="d-flex">
-            // Fixed left sidebar
             <MainSidebar active_route={props.active_route.clone()} />
 
-            // Main content area with left margin to account for fixed sidebar
-            <div class="flex-grow-1" style="margin-left: 250px; padding-top: 56px;">
+            <div class="main-content flex-grow-1" style="margin-left: 250px; padding-top: 56px;">
                 <div class="container-fluid p-4">
-                    // Optional breadcrumbs
                     if let Some(breadcrumbs) = &props.breadcrumbs {
                         <Breadcrumb items={breadcrumbs.clone()} />
                     }
-
-                    // Page content
                     {for props.children.iter()}
                 </div>
             </div>

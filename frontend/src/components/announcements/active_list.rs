@@ -1,4 +1,5 @@
 use crate::components::spinner::Spinner;
+use crate::i18n::t;
 use yew::prelude::*;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -45,7 +46,7 @@ pub fn active_announcements_list(props: &ActiveAnnouncementsListProps) -> Html {
     html! {
         <div>
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="mb-0">{"Active"}</h6>
+                <h6 class="mb-0">{t("announcement-active")}</h6>
             </div>
             { if props.loading {
                 html!{<Spinner center={true} />}
@@ -67,16 +68,16 @@ pub fn active_announcements_list(props: &ActiveAnnouncementsListProps) -> Html {
                             let status_badges: Html = {
                                 let mut nodes: Vec<Html> = Vec::new();
                                 if item_pinned {
-                                    nodes.push(html!{<span class="badge bg-warning text-dark me-1">{"Pinned"}</span>});
+                                    nodes.push(html!{<span class="badge bg-warning text-dark me-1">{t("announcement-status-pinned")}</span>});
                                 }
                                 if let Some(p) = &item_publish_at {
                                     if p > &now_iso {
-                                        nodes.push(html!{<span class="badge bg-info text-dark me-1">{"Scheduled"}</span>});
+                                        nodes.push(html!{<span class="badge bg-info text-dark me-1">{t("announcement-status-scheduled")}</span>});
                                     }
                                 }
                                 if let Some(e) = &item_expire_at {
                                     if e < &now_iso {
-                                        nodes.push(html!{<span class="badge bg-dark me-1">{"Expired"}</span>});
+                                        nodes.push(html!{<span class="badge bg-dark me-1">{t("announcement-status-expired")}</span>});
                                     }
                                 }
                                 html!{<>{ for nodes }</>}
@@ -86,9 +87,9 @@ pub fn active_announcements_list(props: &ActiveAnnouncementsListProps) -> Html {
                             let scope_badges: Html = {
                                 let mut badges: Vec<Html> = Vec::new();
                                 if item_public {
-                                    badges.push(html!{<span class="badge bg-success me-1">{"Public"}</span>});
+                                    badges.push(html!{<span class="badge bg-success me-1">{t("announcement-public-label")}</span>});
                                 } else {
-                                    badges.push(html!{<span class="badge bg-secondary me-1">{"Private"}</span>});
+                                    badges.push(html!{<span class="badge bg-secondary me-1">{t("announcement-private-label")}</span>});
                                 }
                                 if let Some(csv) = &item_roles {
                                     for role in csv.split(',').map(|r| r.trim()).filter(|r| !r.is_empty()) {
@@ -119,7 +120,7 @@ pub fn active_announcements_list(props: &ActiveAnnouncementsListProps) -> Html {
                                             {status_badges}
                                             <h6 class="d-inline fw-bold mb-0 ms-1">{item_title.clone()}</h6>
                                             { if item_publish_at.is_none() {
-                                                html!{<span class="badge bg-secondary ms-1">{"Draft"}</span>}
+                                                html!{<span class="badge bg-secondary ms-1">{t("announcement-status-draft")}</span>}
                                             } else {
                                                 html!{}
                                             } }
@@ -133,7 +134,7 @@ pub fn active_announcements_list(props: &ActiveAnnouncementsListProps) -> Html {
                                                         class="btn btn-outline-success"
                                                         onclick={Callback::from(move |_| on_publish.emit(item_id))}
                                                     >
-                                                        {"Publish Now"}
+                                                        {t("announcement-publish-now-btn")}
                                                     </button>
                                                 }
                                             } else {
@@ -146,25 +147,25 @@ pub fn active_announcements_list(props: &ActiveAnnouncementsListProps) -> Html {
                                                     move |_| on_edit.emit(item.clone())
                                                 })}
                                             >
-                                                {"Edit"}
+                                                {t("announcement-edit-btn")}
                                             </button>
                                             <button
                                                 class="btn btn-outline-secondary"
                                                 onclick={Callback::from(move |_| on_pin.emit(item_id))}
                                             >
-                                                {"Pin"}
+                                                {t("announcement-pin-btn")}
                                             </button>
                                             <button
                                                 class="btn btn-outline-warning"
                                                 onclick={Callback::from(move |_| on_comments.emit((item_id, item_comments)))}
                                             >
-                                                { if item_comments { "Disable Comments" } else { "Enable Comments" } }
+                                                { if item_comments { t("announcement-disable-comments") } else { t("announcement-enable-comments") } }
                                             </button>
                                             <button
                                                 class="btn btn-outline-danger"
                                                 onclick={Callback::from(move |_| on_del.emit(item_id))}
                                             >
-                                                {"Delete"}
+                                                {t("announcement-delete-btn")}
                                             </button>
                                         </div>
                                     </div>

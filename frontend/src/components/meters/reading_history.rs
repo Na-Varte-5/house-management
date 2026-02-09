@@ -1,3 +1,4 @@
+use crate::i18n::t;
 use serde::Deserialize;
 use yew::prelude::*;
 
@@ -25,25 +26,25 @@ pub fn reading_history(props: &ReadingHistoryProps) -> Html {
     html! {
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">{"Reading History"}</h5>
+                <h5 class="mb-0">{t("meters-reading-history")}</h5>
                 <button class="btn btn-outline-primary btn-sm" onclick={props.on_export.reform(|_| ())}>
-                    <i class="bi bi-download"></i> {"Export CSV"}
+                    <i class="bi bi-download"></i> {t("meters-export-csv")}
                 </button>
             </div>
             <div class="card-body">
                 if props.readings.is_empty() {
                     <div class="alert alert-info">
-                        {"No readings recorded yet."}
+                        {t("meters-no-readings-yet")}
                     </div>
                 } else {
                     <div class="table-responsive">
                         <table class="table table-striped">
                             <thead>
                                 <tr>
-                                    <th>{"Timestamp"}</th>
-                                    <th>{"Value"}</th>
-                                    <th>{"Unit"}</th>
-                                    <th>{"Source"}</th>
+                                    <th>{t("meters-reading-timestamp")}</th>
+                                    <th>{t("meters-reading-value")}</th>
+                                    <th>{t("meters-reading-unit")}</th>
+                                    <th>{t("meters-reading-source")}</th>
                                 </tr>
                             </thead>
                             <tbody>

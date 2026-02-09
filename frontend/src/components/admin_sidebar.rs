@@ -42,7 +42,7 @@ pub fn admin_sidebar(props: &AdminSidebarProps) -> Html {
                 if is_manager_or_admin {
                     <Link<Route> to={Route::AdminAnnouncements} classes={nav_link_classes(&Route::AdminAnnouncements)}>{ t("sidebar-admin-announcements") }</Link<Route>>
                     <Link<Route> to={Route::AdminProperties} classes={nav_link_classes(&Route::AdminProperties)}>{ t("sidebar-admin-properties") }</Link<Route>>
-                    <Link<Route> to={Route::MeterManagement} classes={nav_link_classes(&Route::MeterManagement)}>{"Meters"}</Link<Route>>
+                    <Link<Route> to={Route::MeterManagement} classes={nav_link_classes(&Route::MeterManagement)}>{ t("sidebar-meters") }</Link<Route>>
                 }
             </div>
         </div>

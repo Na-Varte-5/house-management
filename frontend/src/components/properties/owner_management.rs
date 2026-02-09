@@ -1,4 +1,5 @@
 use super::types::UserInfo;
+use crate::i18n::t;
 use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
@@ -19,7 +20,7 @@ pub fn owner_management(props: &OwnerManagementProps) -> Html {
         return html! {
             <div class="alert alert-info small mb-0">
                 <i class="bi bi-info-circle me-2"></i>
-                {"Select an apartment to manage its owners"}
+                {t("properties-select-apartment")}
             </div>
         };
     }
@@ -49,16 +50,16 @@ pub fn owner_management(props: &OwnerManagementProps) -> Html {
 
     html! {
         <div>
-            <h6 class="small fw-semibold mb-2">{"Current Owners"}</h6>
+            <h6 class="small fw-semibold mb-2">{t("properties-current-owners")}</h6>
             if props.loading {
                 <div class="text-center py-2">
                     <div class="spinner-border spinner-border-sm" role="status">
-                        <span class="visually-hidden">{"Loading..."}</span>
+                        <span class="visually-hidden">{t("loading")}</span>
                     </div>
                 </div>
             } else if props.owners.is_empty() {
                 <div class="alert alert-warning small mb-3">
-                    {"No owners assigned to this apartment"}
+                    {t("properties-no-owners")}
                 </div>
             } else {
                 <ul class="list-group list-group-flush mb-3">
@@ -89,11 +90,11 @@ pub fn owner_management(props: &OwnerManagementProps) -> Html {
                 </ul>
             }
 
-            <h6 class="small fw-semibold mb-2">{"Assign New Owner"}</h6>
+            <h6 class="small fw-semibold mb-2">{t("properties-assign-owner")}</h6>
             <input
                 type="text"
                 class="form-control form-control-sm mb-2"
-                placeholder="Search users..."
+                placeholder={t("properties-search-users")}
                 value={props.user_query.clone()}
                 oninput={{
                     let on_query_change = props.on_query_change.clone();
@@ -130,7 +131,7 @@ pub fn owner_management(props: &OwnerManagementProps) -> Html {
                 </ul>
             } else if !props.user_query.is_empty() && available_users.is_empty() {
                 <div class="alert alert-info small mb-0">
-                    {"No matching users found"}
+                    {t("properties-no-matching-users")}
                 </div>
             }
         </div>

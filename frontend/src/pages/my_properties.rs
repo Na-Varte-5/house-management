@@ -1,5 +1,6 @@
 use crate::components::ErrorAlert;
 use crate::contexts::AuthContext;
+use crate::i18n::{t, t_with_args};
 use crate::routes::Route;
 use crate::services::api_client;
 use serde::Deserialize;
@@ -59,7 +60,10 @@ pub fn my_properties() -> Html {
                     .await
                 {
                     Ok(response) => data.set(Some(response)),
-                    Err(e) => error.set(Some(format!("Failed to load properties: {}", e))),
+                    Err(e) => error.set(Some(t_with_args(
+                        "properties-failed-load",
+                        &[("error", &e.to_string())],
+                    ))),
                 }
                 loading.set(false);
             });
@@ -73,7 +77,7 @@ pub fn my_properties() -> Html {
             <div class="container mt-4">
                 <div class="text-center py-5">
                     <div class="spinner-border" role="status">
-                        <span class="visually-hidden">{"Loading..."}</span>
+                        <span class="visually-hidden">{t("loading")}</span>
                     </div>
                 </div>
             </div>
@@ -100,7 +104,7 @@ pub fn my_properties() -> Html {
         None => {
             return html! {
                 <div class="container mt-4">
-                    <div class="alert alert-warning">{"No data available"}</div>
+                    <div class="alert alert-warning">{t("no-data")}</div>
                 </div>
             };
         }
@@ -108,14 +112,14 @@ pub fn my_properties() -> Html {
 
     html! {
         <div class="container mt-4">
-            <h1 class="mb-4">{"My Properties"}</h1>
+            <h1 class="mb-4">{t("properties-my-title")}</h1>
 
             // Statistics cards
             <div class="row mb-4">
                 <div class="col-md-4 mb-3">
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title text-muted">{"Total Properties"}</h5>
+                            <h5 class="card-title text-muted">{t("properties-total")}</h5>
                             <h2 class="mb-0">{response.stats.total_properties}</h2>
                         </div>
                     </div>
@@ -123,7 +127,7 @@ pub fn my_properties() -> Html {
                 <div class="col-md-4 mb-3">
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title text-muted">{"Active Maintenance Requests"}</h5>
+                            <h5 class="card-title text-muted">{t("properties-active-maintenance")}</h5>
                             <h2 class="mb-0">{response.stats.active_maintenance_requests}</h2>
                         </div>
                     </div>
@@ -131,7 +135,7 @@ pub fn my_properties() -> Html {
                 <div class="col-md-4 mb-3">
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title text-muted">{"Pending Votes"}</h5>
+                            <h5 class="card-title text-muted">{t("properties-pending-votes")}</h5>
                             <h2 class="mb-0">{response.stats.pending_votes}</h2>
                         </div>
                     </div>
@@ -141,14 +145,14 @@ pub fn my_properties() -> Html {
             // Properties list
             <div class="card">
                 <div class="card-header">
-                    <h4 class="mb-0">{"Your Properties"}</h4>
+                    <h4 class="mb-0">{t("properties-your-properties")}</h4>
                 </div>
                 <div class="card-body">
                     {
                         if response.properties.is_empty() {
                             html! {
                                 <div class="alert alert-info">
-                                    {"You don't have any properties yet. Contact your building administrator to get access."}
+                                    {t("properties-no-properties")}
                                 </div>
                             }
                         } else {
@@ -182,7 +186,7 @@ fn render_property_card(property: &UserProperty, navigator: &Navigator) -> Html 
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <h5 class="card-title mb-0">
-                            {"Apartment "}{&property.apartment_number}
+                            {t("properties-apartment-label")}{" "}{&property.apartment_number}
                         </h5>
                         <span class={format!("badge {}",
                             if property.relationship == "owner" {
@@ -194,11 +198,11 @@ fn render_property_card(property: &UserProperty, navigator: &Navigator) -> Html 
                             }
                         )}>
                             {if property.relationship == "owner" {
-                                "Owner"
+                                t("properties-owner")
                             } else if property.is_active {
-                                "Active Renter"
+                                t("properties-active-renter")
                             } else {
-                                "Past Renter"
+                                t("properties-past-renter")
                             }}
                         </span>
                     </div>
@@ -230,7 +234,7 @@ fn render_property_card(property: &UserProperty, navigator: &Navigator) -> Html 
                                             html! {
                                                 <>
                                                     <i class="bi bi-door-closed me-1"></i>
-                                                    {format!("{} bed", beds)}
+                                                    {t_with_args("properties-bed", &[("count", &beds.to_string())])}
                                                 </>
                                             }
                                         } else {
@@ -249,7 +253,7 @@ fn render_property_card(property: &UserProperty, navigator: &Navigator) -> Html 
                                             html! {
                                                 <>
                                                     <i class="bi bi-droplet me-1"></i>
-                                                    {format!("{} bath", baths)}
+                                                    {t_with_args("properties-bath", &[("count", &baths.to_string())])}
                                                 </>
                                             }
                                         } else {
@@ -271,7 +275,7 @@ fn render_property_card(property: &UserProperty, navigator: &Navigator) -> Html 
                                         if let Some(start) = &property.start_date {
                                             html! {
                                                 <small class="text-muted d-block">
-                                                    {"Start: "}{start}
+                                                    {t("properties-start-date")}{" "}{start}
                                                 </small>
                                             }
                                         } else {
@@ -282,7 +286,7 @@ fn render_property_card(property: &UserProperty, navigator: &Navigator) -> Html 
                                         if let Some(end) = &property.end_date {
                                             html! {
                                                 <small class="text-muted d-block">
-                                                    {"End: "}{end}
+                                                    {t("properties-end-date")}{" "}{end}
                                                 </small>
                                             }
                                         } else {
@@ -297,7 +301,7 @@ fn render_property_card(property: &UserProperty, navigator: &Navigator) -> Html 
                     }
                 </div>
                 <div class="card-footer bg-transparent">
-                    <small class="text-muted">{"Click to view details"}</small>
+                    <small class="text-muted">{t("properties-click-to-view")}</small>
                 </div>
             </div>
         </div>
