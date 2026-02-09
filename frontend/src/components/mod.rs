@@ -11,6 +11,7 @@ pub mod comment_list; // comments component
 pub mod confirm_modal;
 pub mod error_alert;
 pub mod forms; // reusable form input components
+pub mod language_switcher;
 pub mod main_sidebar;
 pub mod maintenance;
 pub mod meters; // meters management components
@@ -28,6 +29,7 @@ pub use error_alert::{ErrorAlert, SuccessAlert};
 pub use forms::{
     Checkbox, DateTimeInput, FormGroup, NumberInput, Select, SelectOption, TextInput, Textarea,
 };
+pub use language_switcher::LanguageSwitcher;
 pub use main_sidebar::MainSidebar;
 pub use pagination::Pagination;
 pub use search_input::SearchInput;

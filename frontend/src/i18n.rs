@@ -112,5 +112,7 @@ pub fn current_language() -> String {
     CURRENT_LANG_CODE.with(|c| c.borrow().clone())
 }
 pub fn available_languages() -> Vec<String> {
-    BUNDLES.with(|b| b.keys().cloned().collect())
+    let mut langs: Vec<String> = BUNDLES.with(|b| b.keys().cloned().collect());
+    langs.sort();
+    langs
 }

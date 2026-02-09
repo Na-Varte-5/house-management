@@ -4,7 +4,7 @@ use yew_router::prelude::*;
 use frontend::components::app_layout::AppLayout;
 use frontend::components::navbar::Navbar;
 use frontend::components::toast::ToastProvider;
-use frontend::contexts::{AuthContext, AuthProvider};
+use frontend::contexts::{AuthContext, AuthProvider, LanguageContext, LanguageProvider};
 use frontend::i18n::t;
 use frontend::pages::admin::AdminAnnouncementsPage;
 use frontend::pages::admin::AdminPage;
@@ -28,16 +28,16 @@ use frontend::routes::Route;
 #[function_component(AppContent)]
 fn app_content() -> Html {
     let auth = use_context::<AuthContext>().expect("AuthContext not found");
+    let lang_ctx = use_context::<LanguageContext>().expect("LanguageContext not found");
     let is_authenticated = auth.is_authenticated();
     let current_route = use_route::<Route>();
 
     html! {
-        <>
+        <div key={lang_ctx.language.clone()}>
             if !matches!(current_route, Some(Route::Login)) {
                 <Navbar />
             }
             <Switch<Route> render={move |route| {
-                // Routes that don't need AppLayout (public/login)
                 if matches!(route, Route::Login) {
                     return match route {
                         Route::Login => html!{<LoginPage />},
@@ -45,7 +45,6 @@ fn app_content() -> Html {
                     };
                 }
 
-                // Home page: use layout only if authenticated
                 if matches!(route, Route::Home) {
                     return if is_authenticated {
                         html!{
@@ -58,7 +57,6 @@ fn app_content() -> Html {
                     };
                 }
 
-                // All other routes: wrap with AppLayout
                 html!{
                     <AppLayout active_route={route.clone()}>
                         {match route {
@@ -86,7 +84,7 @@ fn app_content() -> Html {
                     </AppLayout>
                 }
             }} />
-        </>
+        </div>
     }
 }
 
@@ -94,11 +92,13 @@ fn app_content() -> Html {
 pub fn app() -> Html {
     html! {
         <AuthProvider>
-            <ToastProvider>
-                <BrowserRouter>
-                    <AppContent />
-                </BrowserRouter>
-            </ToastProvider>
+            <LanguageProvider>
+                <ToastProvider>
+                    <BrowserRouter>
+                        <AppContent />
+                    </BrowserRouter>
+                </ToastProvider>
+            </LanguageProvider>
         </AuthProvider>
     }
 }

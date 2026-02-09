@@ -1,8 +1,9 @@
 use yew::prelude::*;
 use yew_router::prelude::*;
 
+use crate::components::language_switcher::LanguageSwitcher;
 use crate::contexts::AuthContext;
-use crate::i18n::{available_languages, current_language, set_language, t};
+use crate::i18n::t;
 use crate::routes::Route;
 
 #[function_component(Navbar)]
@@ -15,19 +16,7 @@ pub fn navbar() -> Html {
         let navigator = navigator.clone();
         Callback::from(move |_| {
             auth.logout.emit(());
-            // Navigate to home instead of reloading to avoid 401 errors
             navigator.push(&Route::Home);
-        })
-    };
-
-    let lang_state = use_state(|| current_language());
-    let on_lang_change = {
-        let lang_state = lang_state.clone();
-        Callback::from(move |e: Event| {
-            let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
-            let val = select.value();
-            set_language(&val);
-            lang_state.set(val);
         })
     };
 
@@ -42,12 +31,9 @@ pub fn navbar() -> Html {
                 }
                 <Link<Route> to={Route::Home} classes="navbar-brand">{ t("app-name") }</Link<Route>>
 
-                // Right side: language selector and user dropdown
                 <div class="d-flex ms-auto">
                     <div class="me-2">
-                        <select class="form-select form-select-sm bg-dark text-light border-secondary" onchange={on_lang_change.clone()} value={(*lang_state).clone()}>
-                            { for available_languages().into_iter().map(|code| html!{<option value={code.clone()} selected={code==*lang_state}>{code.to_uppercase()}</option>}) }
-                        </select>
+                        <LanguageSwitcher />
                     </div>
                     if auth.is_authenticated() {
                         if let Some(u) = auth.user() {
